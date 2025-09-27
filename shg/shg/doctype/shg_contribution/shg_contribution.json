@@ -1,0 +1,155 @@
+ {
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "naming_series:",
+    "creation": "2025-09-25 10:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "naming_series",
+        "member_section",
+        "member",
+        "member_name",
+        "contribution_date",
+        "column_break_4",
+        "contribution_type",
+        "amount",
+        "payment_method",
+        "reference_section",
+        "reference_number",
+        "notes",
+        "accounting_section",
+        "journal_entry",
+        "posted_to_gl"
+    ],
+    "fields": [
+        {
+            "fieldname": "naming_series",
+            "fieldtype": "Select",
+            "label": "Naming Series",
+            "options": "CONT-.####",
+            "reqd": 1
+        },
+        {
+            "fieldname": "member_section",
+            "fieldtype": "Section Break",
+            "label": "Member Information"
+        },
+        {
+            "fieldname": "member",
+            "fieldtype": "Link",
+            "label": "Member",
+            "options": "SHG Member",
+            "reqd": 1
+        },
+        {
+            "fieldname": "member_name",
+            "fieldtype": "Data",
+            "label": "Member Name",
+            "read_only": 1,
+            "fetch_from": "member.member_name"
+        },
+        {
+            "fieldname": "contribution_date",
+            "fieldtype": "Date",
+            "label": "Contribution Date",
+            "reqd": 1,
+            "default": "Today"
+        },
+        {
+            "fieldname": "column_break_4",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "contribution_type",
+            "fieldtype": "Select",
+            "label": "Contribution Type",
+            "options": "Regular Weekly\nRegular Monthly\nVoluntary\nSpecial Assessment",
+            "reqd": 1
+        },
+        {
+            "fieldname": "amount",
+            "fieldtype": "Currency",
+            "label": "Amount (KES)",
+            "reqd": 1,
+            "precision": 2
+        },
+        {
+            "fieldname": "payment_method",
+            "fieldtype": "Select",
+            "label": "Payment Method",
+            "options": "Cash\nMobile Money\nBank Transfer\nCheque"
+        },
+        {
+            "fieldname": "reference_section",
+            "fieldtype": "Section Break",
+            "label": "Payment Reference"
+        },
+        {
+            "fieldname": "reference_number",
+            "fieldtype": "Data",
+            "label": "Reference Number"
+        },
+        {
+            "fieldname": "notes",
+            "fieldtype": "Text",
+            "label": "Notes"
+        },
+        {
+            "fieldname": "accounting_section",
+            "fieldtype": "Section Break",
+            "label": "Accounting"
+        },
+        {
+            "fieldname": "journal_entry",
+            "fieldtype": "Link",
+            "label": "Journal Entry",
+            "options": "Journal Entry",
+            "read_only": 1
+        },
+        {
+            "fieldname": "posted_to_gl",
+            "fieldtype": "Check",
+            "label": "Posted to GL",
+            "read_only": 1
+        }
+    ],
+    "is_submittable": 1,
+    "links": [],
+    "modified": "2025-09-25 10:00:00",
+    "modified_by": "Administrator",
+    "module": "SHG",
+    "name": "SHG Contribution",
+    "naming_rule": "By \"Naming Series\" field",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Admin",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Treasurer",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "track_changes": 1
+}

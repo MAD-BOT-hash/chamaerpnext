@@ -1,0 +1,59 @@
+ {
+    "actions": [],
+    "creation": "2025-09-25 10:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "member",
+        "member_name",
+        "attendance_status",
+        "arrival_time",
+        "fine_amount"
+    ],
+    "fields": [
+        {
+            "fieldname": "member",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Member",
+            "options": "SHG Member",
+            "reqd": 1
+        },
+        {
+            "fieldname": "member_name",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Member Name",
+            "read_only": 1,
+            "fetch_from": "member.member_name"
+        },
+        {
+            "fieldname": "attendance_status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "label": "Attendance Status",
+            "options": "Present\nAbsent\nLate",
+            "default": "Present",
+            "reqd": 1
+        },
+        {
+            "fieldname": "arrival_time",
+            "fieldtype": "Time",
+            "label": "Arrival Time"
+        },
+        {
+            "fieldname": "fine_amount",
+            "fieldtype": "Currency",
+            "label": "Fine Amount",
+            "precision": 2,
+            "read_only": 1
+        }
+    ],
+    "istable": 1,
+    "links": [],
+    "modified": "2025-09-25 10:00:00",
+    "modified_by": "Administrator",
+    "module": "SHG",
+    "name": "SHG Meeting Attendance",
+    "owner": "Administrator"
+}

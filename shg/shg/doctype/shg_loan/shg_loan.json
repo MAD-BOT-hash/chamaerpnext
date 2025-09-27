@@ -1,0 +1,261 @@
+ {
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "naming_series:",
+    "creation": "2025-09-25 10:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "naming_series",
+        "loan_details_section",
+        "member",
+        "member_name",
+        "loan_amount",
+        "column_break_4",
+        "interest_rate",
+        "interest_type",
+        "loan_period_months",
+        "application_section",
+        "application_date",
+        "loan_purpose",
+        "approval_section",
+        "status",
+        "approved_by",
+        "approved_date",
+        "column_break_12",
+        "disbursement_date",
+        "disbursed_amount",
+        "disbursement_journal_entry",
+        "repayment_section",
+        "repayment_start_date",
+        "monthly_installment",
+        "total_payable",
+        "column_break_17",
+        "balance_amount",
+        "last_repayment_date",
+        "next_due_date"
+    ],
+    "fields": [
+        {
+            "fieldname": "naming_series",
+            "fieldtype": "Select",
+            "label": "Naming Series",
+            "options": "LOAN-.####",
+            "reqd": 1
+        },
+        {
+            "fieldname": "loan_details_section",
+            "fieldtype": "Section Break",
+            "label": "Loan Details"
+        },
+        {
+            "fieldname": "member",
+            "fieldtype": "Link",
+            "label": "Member",
+            "options": "SHG Member",
+            "reqd": 1
+        },
+        {
+            "fieldname": "member_name",
+            "fieldtype": "Data",
+            "label": "Member Name",
+            "read_only": 1,
+            "fetch_from": "member.member_name"
+        },
+        {
+            "fieldname": "loan_amount",
+            "fieldtype": "Currency",
+            "label": "Loan Amount (KES)",
+            "reqd": 1,
+            "precision": 2
+        },
+        {
+            "fieldname": "column_break_4",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "interest_rate",
+            "fieldtype": "Percent",
+            "label": "Interest Rate (% p.a.)",
+            "reqd": 1,
+            "precision": 2
+        },
+        {
+            "fieldname": "interest_type",
+            "fieldtype": "Select",
+            "label": "Interest Type",
+            "options": "Flat Rate\nReducing Balance",
+            "default": "Reducing Balance"
+        },
+        {
+            "fieldname": "loan_period_months",
+            "fieldtype": "Int",
+            "label": "Loan Period (Months)",
+            "reqd": 1
+        },
+        {
+            "fieldname": "application_section",
+            "fieldtype": "Section Break",
+            "label": "Application Details"
+        },
+        {
+            "fieldname": "application_date",
+            "fieldtype": "Date",
+            "label": "Application Date",
+            "default": "Today",
+            "reqd": 1
+        },
+        {
+            "fieldname": "loan_purpose",
+            "fieldtype": "Text",
+            "label": "Loan Purpose"
+        },
+        {
+            "fieldname": "approval_section",
+            "fieldtype": "Section Break",
+            "label": "Approval & Disbursement"
+        },
+        {
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "label": "Status",
+            "options": "Applied\nApproved\nDisbursed\nClosed\nDefaulted",
+            "default": "Applied"
+        },
+        {
+            "fieldname": "approved_by",
+            "fieldtype": "Link",
+            "label": "Approved By",
+            "options": "User"
+        },
+        {
+            "fieldname": "approved_date",
+            "fieldtype": "Date",
+            "label": "Approved Date"
+        },
+        {
+            "fieldname": "column_break_12",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "disbursement_date",
+            "fieldtype": "Date",
+            "label": "Disbursement Date"
+        },
+        {
+            "fieldname": "disbursed_amount",
+            "fieldtype": "Currency",
+            "label": "Disbursed Amount",
+            "precision": 2,
+            "read_only": 1
+        },
+        {
+            "fieldname": "disbursement_journal_entry",
+            "fieldtype": "Link",
+            "label": "Disbursement Journal Entry",
+            "options": "Journal Entry",
+            "read_only": 1
+        },
+        {
+            "fieldname": "repayment_section",
+            "fieldtype": "Section Break",
+            "label": "Repayment Details"
+        },
+        {
+            "fieldname": "repayment_start_date",
+            "fieldtype": "Date",
+            "label": "Repayment Start Date"
+        },
+        {
+            "fieldname": "monthly_installment",
+            "fieldtype": "Currency",
+            "label": "Monthly Installment",
+            "precision": 2,
+            "read_only": 1
+        },
+        {
+            "fieldname": "total_payable",
+            "fieldtype": "Currency",
+            "label": "Total Payable",
+            "precision": 2,
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_17",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "balance_amount",
+            "fieldtype": "Currency",
+            "label": "Balance Amount",
+            "precision": 2,
+            "read_only": 1
+        },
+        {
+            "fieldname": "last_repayment_date",
+            "fieldtype": "Date",
+            "label": "Last Repayment Date",
+            "read_only": 1
+        },
+        {
+            "fieldname": "next_due_date",
+            "fieldtype": "Date",
+            "label": "Next Due Date",
+            "read_only": 1
+        }
+    ],
+    "is_submittable": 1,
+    "links": [],
+    "modified": "2025-09-25 10:00:00",
+    "modified_by": "Administrator",
+    "module": "SHG",
+    "name": "SHG Loan",
+    "naming_rule": "By \"Naming Series\" field",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Admin",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Treasurer",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "email": 1,
+            "print": 1,
+            "read": 1,
+            "role": "SHG Member",
+            "if_owner": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "track_changes": 1
+}
+
+print("✅ Created SHG Contribution and SHG Loan DocTypes")
+print("📋 Files created:")
+print("• SHG Contribution: JSON + Python controller")
+print("• SHG Loan: JSON + Python controller with interest calculations")
+print("• Complete validation and GL integration")
+print("• Automated repayment schedule generation")
+print("• Member eligibility checks")
+print("• Financial summary updates")

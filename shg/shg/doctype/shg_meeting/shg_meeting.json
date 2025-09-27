@@ -1,0 +1,212 @@
+ {
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "naming_series:",
+    "creation": "2025-09-25 10:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "naming_series",
+        "meeting_details_section",
+        "meeting_date",
+        "meeting_time",
+        "venue",
+        "column_break_4",
+        "meeting_type",
+        "chairperson",
+        "secretary",
+        "agenda_section",
+        "agenda",
+        "attendance_section",
+        "attendance",
+        "attendance_summary_section",
+        "total_members",
+        "members_present",
+        "members_late",
+        "column_break_12",
+        "members_absent",
+        "attendance_percentage",
+        "quorum_met",
+        "resolutions_section",
+        "resolutions",
+        "notes"
+    ],
+    "fields": [
+        {
+            "fieldname": "naming_series",
+            "fieldtype": "Select",
+            "label": "Naming Series",
+            "options": "MEET-.####",
+            "reqd": 1
+        },
+        {
+            "fieldname": "meeting_details_section",
+            "fieldtype": "Section Break",
+            "label": "Meeting Details"
+        },
+        {
+            "fieldname": "meeting_date",
+            "fieldtype": "Date",
+            "label": "Meeting Date",
+            "reqd": 1
+        },
+        {
+            "fieldname": "meeting_time",
+            "fieldtype": "Time",
+            "label": "Meeting Time"
+        },
+        {
+            "fieldname": "venue",
+            "fieldtype": "Data",
+            "label": "Venue"
+        },
+        {
+            "fieldname": "column_break_4",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "meeting_type",
+            "fieldtype": "Select",
+            "label": "Meeting Type",
+            "options": "Regular Weekly\nRegular Monthly\nSpecial\nAGM\nCommittee",
+            "default": "Regular Weekly"
+        },
+        {
+            "fieldname": "chairperson",
+            "fieldtype": "Link",
+            "label": "Chairperson",
+            "options": "SHG Member"
+        },
+        {
+            "fieldname": "secretary",
+            "fieldtype": "Link",
+            "label": "Secretary",
+            "options": "SHG Member"
+        },
+        {
+            "fieldname": "agenda_section",
+            "fieldtype": "Section Break",
+            "label": "Agenda"
+        },
+        {
+            "fieldname": "agenda",
+            "fieldtype": "Text Editor",
+            "label": "Meeting Agenda"
+        },
+        {
+            "fieldname": "attendance_section",
+            "fieldtype": "Section Break",
+            "label": "Attendance"
+        },
+        {
+            "fieldname": "attendance",
+            "fieldtype": "Table",
+            "label": "Member Attendance",
+            "options": "SHG Meeting Attendance"
+        },
+        {
+            "fieldname": "attendance_summary_section",
+            "fieldtype": "Section Break",
+            "label": "Attendance Summary"
+        },
+        {
+            "fieldname": "total_members",
+            "fieldtype": "Int",
+            "label": "Total Members",
+            "read_only": 1
+        },
+        {
+            "fieldname": "members_present",
+            "fieldtype": "Int",
+            "label": "Members Present",
+            "read_only": 1
+        },
+        {
+            "fieldname": "members_late",
+            "fieldtype": "Int",
+            "label": "Members Late",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_12",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "members_absent",
+            "fieldtype": "Int",
+            "label": "Members Absent",
+            "read_only": 1
+        },
+        {
+            "fieldname": "attendance_percentage",
+            "fieldtype": "Percent",
+            "label": "Attendance %",
+            "read_only": 1,
+            "precision": 2
+        },
+        {
+            "fieldname": "quorum_met",
+            "fieldtype": "Check",
+            "label": "Quorum Met",
+            "read_only": 1
+        },
+        {
+            "fieldname": "resolutions_section",
+            "fieldtype": "Section Break",
+            "label": "Resolutions & Notes"
+        },
+        {
+            "fieldname": "resolutions",
+            "fieldtype": "Text Editor",
+            "label": "Meeting Resolutions"
+        },
+        {
+            "fieldname": "notes",
+            "fieldtype": "Text",
+            "label": "Additional Notes"
+        }
+    ],
+    "is_submittable": 1,
+    "links": [],
+    "modified": "2025-09-25 10:00:00",
+    "modified_by": "Administrator",
+    "module": "SHG",
+    "name": "SHG Meeting",
+    "naming_rule": "By \"Naming Series\" field",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Admin",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Treasurer",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "email": 1,
+            "print": 1,
+            "read": 1,
+            "role": "SHG Member"
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC"
+}

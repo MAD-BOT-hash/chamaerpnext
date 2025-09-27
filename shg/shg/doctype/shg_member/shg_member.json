@@ -1,0 +1,246 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "field:member_name",
+    "creation": "2025-09-25 10:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "member_details_section",
+        "member_name",
+        "id_number",
+        "phone_number", 
+        "email",
+        "date_of_birth",
+        "gender",
+        "column_break_7",
+        "membership_date",
+        "membership_status",
+        "member_id",
+        "customer_link",
+        "next_of_kin_section",
+        "next_of_kin_name",
+        "next_of_kin_phone",
+        "next_of_kin_relationship",
+        "column_break_14",
+        "next_of_kin_id_number",
+        "next_of_kin_address",
+        "financial_section",
+        "total_contributions",
+        "total_loans_taken",
+        "current_loan_balance",
+        "column_break_19",
+        "last_contribution_date",
+        "last_loan_date",
+        "credit_score"
+    ],
+    "fields": [
+        {
+            "fieldname": "member_details_section",
+            "fieldtype": "Section Break",
+            "label": "Member Details"
+        },
+        {
+            "fieldname": "member_name",
+            "fieldtype": "Data",
+            "label": "Full Name",
+            "reqd": 1,
+            "unique": 1
+        },
+        {
+            "fieldname": "id_number",
+            "fieldtype": "Data",
+            "label": "ID Number",
+            "reqd": 1,
+            "unique": 1
+        },
+        {
+            "fieldname": "phone_number",
+            "fieldtype": "Data",
+            "label": "Phone Number",
+            "reqd": 1
+        },
+        {
+            "fieldname": "email",
+            "fieldtype": "Data",
+            "label": "Email Address"
+        },
+        {
+            "fieldname": "date_of_birth",
+            "fieldtype": "Date",
+            "label": "Date of Birth"
+        },
+        {
+            "fieldname": "gender",
+            "fieldtype": "Select",
+            "label": "Gender",
+            "options": "Male\nFemale\nOther"
+        },
+        {
+            "fieldname": "column_break_7",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "membership_date",
+            "fieldtype": "Date",
+            "label": "Membership Date",
+            "reqd": 1,
+            "default": "Today"
+        },
+        {
+            "fieldname": "membership_status",
+            "fieldtype": "Select",
+            "label": "Membership Status",
+            "options": "Active\nDormant\nExited",
+            "default": "Active"
+        },
+        {
+            "fieldname": "member_id",
+            "fieldtype": "Data",
+            "label": "Member ID",
+            "read_only": 1
+        },
+        {
+            "fieldname": "customer_link",
+            "fieldtype": "Link",
+            "label": "Customer",
+            "options": "Customer",
+            "read_only": 1
+        },
+        {
+            "fieldname": "next_of_kin_section",
+            "fieldtype": "Section Break",
+            "label": "Next of Kin Details"
+        },
+        {
+            "fieldname": "next_of_kin_name",
+            "fieldtype": "Data",
+            "label": "Next of Kin Name"
+        },
+        {
+            "fieldname": "next_of_kin_phone",
+            "fieldtype": "Data",
+            "label": "Next of Kin Phone"
+        },
+        {
+            "fieldname": "next_of_kin_relationship",
+            "fieldtype": "Select",
+            "label": "Relationship",
+            "options": "Spouse\nChild\nParent\nSibling\nOther"
+        },
+        {
+            "fieldname": "column_break_14",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "next_of_kin_id_number",
+            "fieldtype": "Data",
+            "label": "Next of Kin ID Number"
+        },
+        {
+            "fieldname": "next_of_kin_address",
+            "fieldtype": "Text",
+            "label": "Next of Kin Address"
+        },
+        {
+            "fieldname": "financial_section",
+            "fieldtype": "Section Break",
+            "label": "Financial Summary"
+        },
+        {
+            "fieldname": "total_contributions",
+            "fieldtype": "Currency",
+            "label": "Total Contributions",
+            "read_only": 1,
+            "precision": 2
+        },
+        {
+            "fieldname": "total_loans_taken",
+            "fieldtype": "Currency",
+            "label": "Total Loans Taken",
+            "read_only": 1,
+            "precision": 2
+        },
+        {
+            "fieldname": "current_loan_balance",
+            "fieldtype": "Currency",
+            "label": "Current Loan Balance",
+            "read_only": 1,
+            "precision": 2
+        },
+        {
+            "fieldname": "column_break_19",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "last_contribution_date",
+            "fieldtype": "Date",
+            "label": "Last Contribution Date",
+            "read_only": 1
+        },
+        {
+            "fieldname": "last_loan_date",
+            "fieldtype": "Date",
+            "label": "Last Loan Date",
+            "read_only": 1
+        },
+        {
+            "fieldname": "credit_score",
+            "fieldtype": "Int",
+            "label": "Credit Score",
+            "read_only": 1
+        }
+    ],
+    "is_submittable": 1,
+    "links": [],
+    "modified": "2025-09-25 10:00:00",
+    "modified_by": "Administrator",
+    "module": "SHG",
+    "name": "SHG Member",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Admin",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Treasurer",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "email": 1,
+            "print": 1,
+            "read": 1,
+            "role": "SHG Member",
+            "if_owner": 1
+        },
+        {
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Auditor"
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "track_changes": 1
+}

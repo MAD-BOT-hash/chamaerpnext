@@ -1,0 +1,147 @@
+# shg/shg/doctype/shg_notification_log/shg_notification_log.json
+shg_notification_log_json = {
+    "actions": [],
+    "allow_rename": 1,
+    "creation": "2025-09-25 10:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "notification_details_section",
+        "member",
+        "member_name",
+        "notification_type",
+        "column_break_4",
+        "channel",
+        "status",
+        "sent_date",
+        "message_section",
+        "message",
+        "reference_section",
+        "reference_document",
+        "reference_name",
+        "response_section",
+        "delivery_status",
+        "error_message"
+    ],
+    "fields": [
+        {
+            "fieldname": "notification_details_section",
+            "fieldtype": "Section Break",
+            "label": "Notification Details"
+        },
+        {
+            "fieldname": "member",
+            "fieldtype": "Link",
+            "label": "Member",
+            "options": "SHG Member",
+            "reqd": 1
+        },
+        {
+            "fieldname": "member_name",
+            "fieldtype": "Data",
+            "label": "Member Name",
+            "read_only": 1
+        },
+        {
+            "fieldname": "notification_type",
+            "fieldtype": "Select",
+            "label": "Notification Type",
+            "options": "Contribution Reminder\nLoan Reminder\nOverdue Reminder\nMeeting Reminder\nPayment Receipt\nGeneral Announcement",
+            "reqd": 1
+        },
+        {
+            "fieldname": "column_break_4",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "channel",
+            "fieldtype": "Select",
+            "label": "Channel",
+            "options": "SMS\nEmail\nWhatsApp\nPush Notification",
+            "default": "SMS"
+        },
+        {
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "label": "Status",
+            "options": "Pending\nSent\nDelivered\nFailed",
+            "default": "Pending"
+        },
+        {
+            "fieldname": "sent_date",
+            "fieldtype": "Datetime",
+            "label": "Sent Date"
+        },
+        {
+            "fieldname": "message_section",
+            "fieldtype": "Section Break",
+            "label": "Message"
+        },
+        {
+            "fieldname": "message",
+            "fieldtype": "Text",
+            "label": "Message Content",
+            "reqd": 1
+        },
+        {
+            "fieldname": "reference_section",
+            "fieldtype": "Section Break",
+            "label": "Reference Document"
+        },
+        {
+            "fieldname": "reference_document",
+            "fieldtype": "Data",
+            "label": "Reference Document Type"
+        },
+        {
+            "fieldname": "reference_name",
+            "fieldtype": "Data",
+            "label": "Reference Document Name"
+        },
+        {
+            "fieldname": "response_section",
+            "fieldtype": "Section Break",
+            "label": "Delivery Response"
+        },
+        {
+            "fieldname": "delivery_status",
+            "fieldtype": "Data",
+            "label": "Delivery Status"
+        },
+        {
+            "fieldname": "error_message",
+            "fieldtype": "Text",
+            "label": "Error Message"
+        }
+    ],
+    "links": [],
+    "modified": "2025-09-25 10:00:00",
+    "modified_by": "Administrator",
+    "module": "SHG",
+    "name": "SHG Notification Log",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Admin",
+            "share": 1,
+            "write": 1
+        },
+        {
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Treasurer"
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC"
+}

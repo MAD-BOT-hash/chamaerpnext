@@ -1,0 +1,202 @@
+{
+    "actions": [],
+    "creation": "2025-09-25 10:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "contribution_settings_section",
+        "default_contribution_amount",
+        "contribution_frequency",
+        "minimum_contribution",
+        "column_break_4",
+        "allow_voluntary_contributions",
+        "voluntary_contribution_limit",
+        "loan_settings_section",
+        "default_interest_rate",
+        "interest_calculation_method",
+        "maximum_loan_amount",
+        "column_break_9",
+        "loan_tenure_months",
+        "penalty_rate",
+        "penalty_calculation_method",
+        "meeting_settings_section",
+        "meeting_frequency",
+        "absentee_fine",
+        "lateness_fine",
+        "column_break_14",
+        "meeting_quorum_percentage",
+        "notification_settings_section",
+        "sms_enabled",
+        "sms_api_key",
+        "sms_username",
+        "column_break_18",
+        "sms_sender_id",
+        "email_enabled",
+        "smtp_server",
+        "system_settings_section",
+        "currency",
+        "fiscal_year_start_month",
+        "backup_frequency"
+    ],
+    "fields": [
+        {
+            "fieldname": "contribution_settings_section",
+            "fieldtype": "Section Break",
+            "label": "Contribution Settings"
+        },
+        {
+            "default": "500",
+            "fieldname": "default_contribution_amount",
+            "fieldtype": "Currency",
+            "label": "Default Weekly Contribution (KES)",
+            "precision": 2,
+            "reqd": 1
+        },
+        {
+            "default": "Weekly",
+            "fieldname": "contribution_frequency",
+            "fieldtype": "Select",
+            "label": "Default Frequency",
+            "options": "Weekly\nBi-weekly\nMonthly"
+        },
+        {
+            "fieldname": "column_break_4",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "1",
+            "fieldname": "allow_voluntary_contributions",
+            "fieldtype": "Check",
+            "label": "Allow Voluntary Contributions"
+        },
+        {
+            "fieldname": "loan_settings_section",
+            "fieldtype": "Section Break",
+            "label": "Loan Settings"
+        },
+        {
+            "default": "12",
+            "fieldname": "default_interest_rate",
+            "fieldtype": "Percent",
+            "label": "Default Interest Rate (%)",
+            "precision": 2,
+            "reqd": 1
+        },
+        {
+            "default": "Reducing Balance",
+            "fieldname": "interest_calculation_method",
+            "fieldtype": "Select",
+            "label": "Interest Calculation",
+            "options": "Flat Rate\nReducing Balance"
+        },
+        {
+            "fieldname": "column_break_9",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "5",
+            "fieldname": "penalty_rate",
+            "fieldtype": "Percent",
+            "label": "Penalty Rate (%)",
+            "precision": 2
+        },
+        {
+            "fieldname": "meeting_settings_section",
+            "fieldtype": "Section Break",
+            "label": "Meeting Settings"
+        },
+        {
+            "default": "Weekly",
+            "fieldname": "meeting_frequency",
+            "fieldtype": "Select",
+            "label": "Meeting Frequency",
+            "options": "Weekly\nBi-weekly\nMonthly"
+        },
+        {
+            "default": "50",
+            "fieldname": "absentee_fine",
+            "fieldtype": "Currency",
+            "label": "Absentee Fine (KES)",
+            "precision": 2
+        },
+        {
+            "default": "20",
+            "fieldname": "lateness_fine",
+            "fieldtype": "Currency",
+            "label": "Lateness Fine (KES)",
+            "precision": 2
+        },
+        {
+            "fieldname": "column_break_14",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "60",
+            "fieldname": "meeting_quorum_percentage",
+            "fieldtype": "Percent",
+            "label": "Quorum Percentage"
+        },
+        {
+            "fieldname": "notification_settings_section",
+            "fieldtype": "Section Break",
+            "label": "Notification Settings"
+        },
+        {
+            "fieldname": "sms_enabled",
+            "fieldtype": "Check",
+            "label": "Enable SMS Notifications"
+        },
+        {
+            "depends_on": "sms_enabled",
+            "fieldname": "sms_api_key",
+            "fieldtype": "Password",
+            "label": "SMS API Key"
+        },
+        {
+            "depends_on": "sms_enabled",
+            "fieldname": "sms_username",
+            "fieldtype": "Data",
+            "label": "SMS Username"
+        },
+        {
+            "fieldname": "column_break_18",
+            "fieldtype": "Column Break"
+        },
+        {
+            "depends_on": "sms_enabled",
+            "default": "SHG",
+            "fieldname": "sms_sender_id",
+            "fieldtype": "Data",
+            "label": "SMS Sender ID"
+        },
+        {
+            "fieldname": "system_settings_section",
+            "fieldtype": "Section Break",
+            "label": "System Settings"
+        },
+        {
+            "default": "KES",
+            "fieldname": "currency",
+            "fieldtype": "Link",
+            "label": "Default Currency",
+            "options": "Currency"
+        }
+    ],
+    "issingle": 1,
+    "links": [],
+    "modified": "2025-09-25 10:00:00",
+    "modified_by": "Administrator",
+    "module": "SHG",
+    "name": "SHG Settings",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "read": 1,
+            "role": "SHG Admin",
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC"
+}
