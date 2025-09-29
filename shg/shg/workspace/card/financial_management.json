@@ -1,0 +1,49 @@
+{
+ "creation": "2025-09-29 12:00:00",
+ "docstatus": 0,
+ "doctype": "Workspace Card",
+ "idx": 0,
+ "label": "Financial Management",
+ "modified": "2025-09-29 12:00:00",
+ "module": "SHG",
+ "name": "Financial Management",
+ "owner": "Administrator",
+ "parent_workspace": "SHG",
+ "sections": [
+  {
+   "section_type": "Links",
+   "links": [
+    {
+     "label": "Contributions",
+     "type": "DocType",
+     "name": "SHG Contribution",
+     "is_query_report": 0
+    },
+    {
+     "label": "Loans",
+     "type": "DocType",
+     "name": "SHG Loan",
+     "is_query_report": 0
+    },
+    {
+     "label": "Loan Repayments",
+     "type": "DocType",
+     "name": "SHG Loan Repayment",
+     "is_query_report": 0
+    },
+    {
+     "label": "Loan Statements",
+     "type": "Report",
+     "name": "Loan Statement",
+     "is_query_report": 1
+    },
+    {
+     "label": "Loan Portfolio",
+     "type": "Report",
+     "name": "Loan Portfolio",
+     "is_query_report": 1
+    }
+   ]
+  }
+ ]
+}

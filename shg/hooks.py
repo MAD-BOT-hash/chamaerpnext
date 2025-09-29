@@ -65,5 +65,6 @@ custom_fields = {
 doctype_js = {
     "SHG Member": "public/js/shg_member.js",
     "SHG Contribution": "public/js/shg_contribution.js",
-    "SHG Loan": "public/js/shg_loan.js"
+    "SHG Loan": "public/js/shg_loan.js",
+    "SHG Meeting": "public/js/shg_meeting.js"
 }

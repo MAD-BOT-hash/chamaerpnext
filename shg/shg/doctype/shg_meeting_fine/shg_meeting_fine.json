@@ -1,0 +1,139 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "naming_series:",
+    "creation": "2025-09-25 10:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "naming_series",
+        "member",
+        "member_name",
+        "meeting",
+        "fine_date",
+        "column_break_4",
+        "fine_amount",
+        "fine_reason",
+        "status",
+        "payment_section",
+        "paid_date",
+        "journal_entry"
+    ],
+    "fields": [
+        {
+            "fieldname": "naming_series",
+            "fieldtype": "Select",
+            "label": "Naming Series",
+            "options": "FINE-.####",
+            "reqd": 1
+        },
+        {
+            "fieldname": "member",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Member",
+            "options": "SHG Member",
+            "reqd": 1
+        },
+        {
+            "fieldname": "member_name",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Member Name",
+            "read_only": 1,
+            "fetch_from": "member.member_name"
+        },
+        {
+            "fieldname": "meeting",
+            "fieldtype": "Link",
+            "label": "Meeting",
+            "options": "SHG Meeting"
+        },
+        {
+            "fieldname": "fine_date",
+            "fieldtype": "Date",
+            "label": "Fine Date",
+            "reqd": 1,
+            "default": "Today"
+        },
+        {
+            "fieldname": "column_break_4",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "fine_amount",
+            "fieldtype": "Currency",
+            "label": "Fine Amount (KES)",
+            "reqd": 1,
+            "precision": 2
+        },
+        {
+            "fieldname": "fine_reason",
+            "fieldtype": "Text",
+            "label": "Fine Reason"
+        },
+        {
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "label": "Status",
+            "options": "Pending\nPaid\nWaived",
+            "default": "Pending",
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "payment_section",
+            "fieldtype": "Section Break",
+            "label": "Payment Details"
+        },
+        {
+            "fieldname": "paid_date",
+            "fieldtype": "Date",
+            "label": "Paid Date",
+            "read_only": 1
+        },
+        {
+            "fieldname": "journal_entry",
+            "fieldtype": "Link",
+            "label": "Journal Entry",
+            "options": "Journal Entry",
+            "read_only": 1
+        }
+    ],
+    "is_submittable": 1,
+    "links": [],
+    "modified": "2025-09-25 10:00:00",
+    "modified_by": "Administrator",
+    "module": "SHG",
+    "name": "SHG Meeting Fine",
+    "naming_rule": "By \"Naming Series\" field",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Admin",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Treasurer",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC"
+}

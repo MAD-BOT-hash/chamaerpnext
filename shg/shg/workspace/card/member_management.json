@@ -1,0 +1,37 @@
+{
+ "creation": "2025-09-29 12:00:00",
+ "docstatus": 0,
+ "doctype": "Workspace Card",
+ "idx": 0,
+ "label": "Member Management",
+ "modified": "2025-09-29 12:00:00",
+ "module": "SHG",
+ "name": "Member Management",
+ "owner": "Administrator",
+ "parent_workspace": "SHG",
+ "sections": [
+  {
+   "section_type": "Links",
+   "links": [
+    {
+     "label": "Members",
+     "type": "DocType",
+     "name": "SHG Member",
+     "is_query_report": 0
+    },
+    {
+     "label": "Member Statements",
+     "type": "Report",
+     "name": "Member Statement",
+     "is_query_report": 1
+    },
+    {
+     "label": "Member Summary",
+     "type": "Report",
+     "name": "Member Summary",
+     "is_query_report": 1
+    }
+   ]
+  }
+ ]
+}

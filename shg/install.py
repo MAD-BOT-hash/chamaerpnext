@@ -27,13 +27,11 @@ def create_custom_fields_for_existing_doctypes():
             }
         ]
     }
-    
     create_custom_fields(custom_fields, update=True)
 
 def create_default_accounts():
     """Create default GL accounts for SHG operations"""
     company = frappe.defaults.get_user_default("Company")
-    
     if not company:
         companies = frappe.get_all("Company", limit=1)
         if companies:
@@ -81,33 +79,48 @@ def create_default_accounts():
                     "is_group": account_data["is_group"]
                 })
                 account.insert()
-            
-    def update_financial_summary(self):
-        """Update member's financial summary"""
-        # Calculate total contributions
-        total_contributions = frappe.db.sql("""
-            SELECT SUM(amount) FROM `tabSHG Contribution` 
-            WHERE member = %s AND docstatus = 1
-        """, self.name)[0][0] or 0
-        
-        # Calculate total loans taken
-        total_loans = frappe.db.sql("""
-            SELECT SUM(loan_amount) FROM `tabSHG Loan` 
-            WHERE member = %s AND docstatus = 1
-        """, self.name)[0][0] or 0
-        
-        # Calculate current loan balance
-        current_balance = frappe.db.sql("""
-            SELECT SUM(balance_amount) FROM `tabSHG Loan` 
-            WHERE member = %s AND status = 'Disbursed'
-        """, self.name)[0][0] or 0
-        
-        # Update fields
-        frappe.db.set_value("SHG Member", self.name, {
-            "total_contributions": total_contributions,
-            "total_loans_taken": total_loans,
-            "current_loan_balance": current_balance
-        })
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), "SHG Install - Account Creation Failed")
+
+def create_default_settings():
+    """Create default SHG settings"""
+    if not frappe.db.exists("SHG Settings", "SHG Settings"):
+        try:
+            settings = frappe.get_doc({
+                "doctype": "SHG Settings",
+                "default_contribution_amount": 500,
+                "contribution_frequency": "Weekly",
+                "allow_voluntary_contributions": 1,
+                "default_interest_rate": 12,
+                "interest_calculation_method": "Reducing Balance",
+                "penalty_rate": 5,
+                "meeting_frequency": "Weekly",
+                "absentee_fine": 50,
+                "lateness_fine": 20,
+                "meeting_quorum_percentage": 60,
+                "currency": "KES"
+            })
+            settings.insert()
+            frappe.db.commit()
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Install - Settings Creation Failed")
+
+def setup_user_roles():
+    """Setup default user roles for SHG"""
+    roles_to_create = ["SHG Admin", "SHG Treasurer", "SHG Member", "SHG Auditor"]
+    
+    for role_name in roles_to_create:
+        if not frappe.db.exists("Role", role_name):
+            try:
+                role = frappe.get_doc({
+                    "doctype": "Role",
+                    "role_name": role_name,
+                    "desk_access": 1
+                })
+                role.insert()
+                frappe.db.commit()
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), f"SHG Install - Role Creation Failed: {role_name}")
 
 # Hook functions
 def validate_member(doc, method):

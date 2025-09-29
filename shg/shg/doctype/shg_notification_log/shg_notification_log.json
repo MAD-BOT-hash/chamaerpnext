@@ -1,5 +1,4 @@
-# shg/shg/doctype/shg_notification_log/shg_notification_log.json
-shg_notification_log_json = {
+{
     "actions": [],
     "allow_rename": 1,
     "creation": "2025-09-25 10:00:00",
@@ -40,13 +39,14 @@ shg_notification_log_json = {
             "fieldname": "member_name",
             "fieldtype": "Data",
             "label": "Member Name",
-            "read_only": 1
+            "read_only": 1,
+            "fetch_from": "member.member_name"
         },
         {
             "fieldname": "notification_type",
             "fieldtype": "Select",
             "label": "Notification Type",
-            "options": "Contribution Reminder\nLoan Reminder\nOverdue Reminder\nMeeting Reminder\nPayment Receipt\nGeneral Announcement",
+            "options": "Contribution Reminder\nLoan Reminder\nOverdue Reminder\nMeeting Reminder\nPayment Receipt\nGeneral Announcement\nLoan Approval\nMeeting Fine",
             "reqd": 1
         },
         {

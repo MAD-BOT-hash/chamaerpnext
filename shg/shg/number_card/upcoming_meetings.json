@@ -1,0 +1,34 @@
+{
+ "aggregate_function_based_on": "",
+ "creation": "2025-09-29 12:00:00",
+ "docstatus": 0,
+ "doctype": "Number Card",
+ "document_type": "SHG Meeting",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"SHG Meeting\",\"meeting_date\",\">=\",\"Today\"]]",
+ "function": "Count",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "label": "Upcoming Meetings",
+ "modified": "2025-09-29 12:00:00",
+ "module": "SHG",
+ "name": "Upcoming Meetings",
+ "owner": "Administrator",
+ "parent_document_type": "",
+ "report_function": "",
+ "roles": [
+  {
+   "role": "SHG Admin"
+  },
+  {
+   "role": "SHG Treasurer"
+  },
+  {
+   "role": "SHG Member"
+  }
+ ],
+ "show_percentage_stats": 0,
+ "stats_time_interval": "Daily",
+ "type": "Document Type"
+}

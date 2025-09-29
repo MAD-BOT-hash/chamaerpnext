@@ -1,0 +1,49 @@
+{
+ "creation": "2025-09-29 12:00:00",
+ "docstatus": 0,
+ "doctype": "Workspace Card",
+ "idx": 0,
+ "label": "Reports & Analytics",
+ "modified": "2025-09-29 12:00:00",
+ "module": "SHG",
+ "name": "Reports & Analytics",
+ "owner": "Administrator",
+ "parent_workspace": "SHG",
+ "sections": [
+  {
+   "section_type": "Links",
+   "links": [
+    {
+     "label": "Member Summary",
+     "type": "Report",
+     "name": "Member Summary",
+     "is_query_report": 1
+    },
+    {
+     "label": "Loan Portfolio",
+     "type": "Report",
+     "name": "Loan Portfolio",
+     "is_query_report": 1
+    },
+    {
+     "label": "Financial Summary",
+     "type": "Report",
+     "name": "Financial Summary",
+     "is_query_report": 1
+    },
+    {
+     "label": "Member Statement",
+     "type": "Report",
+     "name": "Member Statement",
+     "is_query_report": 1
+    },
+    {
+     "label": "Loan Statement",
+     "type": "Report",
+     "name": "Loan Statement",
+     "is_query_report": 1
+    }
+   ]
+  }
+ ]
+}

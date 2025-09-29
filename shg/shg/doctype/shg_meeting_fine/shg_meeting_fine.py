@@ -1,40 +1,43 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import nowdate, getdate
+from frappe.utils import today, getdate
 
-class SHGContribution(Document):
+class SHGMeetingFine(Document):
     def validate(self):
         self.validate_amount()
         self.validate_duplicate()
         
     def validate_amount(self):
-        """Validate contribution amount"""
-        if self.amount <= 0:
-            frappe.throw(_("Contribution amount must be greater than zero"))
+        """Validate fine amount"""
+        if self.fine_amount <= 0:
+            frappe.throw(_("Fine amount must be greater than zero"))
             
     def validate_duplicate(self):
-        """Check for duplicate contributions on same date"""
-        existing = frappe.db.exists("SHG Contribution", {
+        """Check for duplicate fines"""
+        existing = frappe.db.exists("SHG Meeting Fine", {
             "member": self.member,
-            "contribution_date": self.contribution_date,
+            "meeting": self.meeting,
+            "fine_reason": self.fine_reason,
             "docstatus": 1,
             "name": ["!=", self.name]
         })
         if existing:
-            frappe.throw(_("A contribution already exists for this member on this date"))
+            frappe.throw(_("A fine already exists for this member for the same reason"))
             
     def on_submit(self):
-        self.post_to_general_ledger()
-        self.update_member_summary()
-        
-    def on_cancel(self):
-        self.cancel_journal_entry()
-        self.update_member_summary()
-        
+        if self.status == "Paid":
+            self.post_to_general_ledger()
+            
+    def on_update(self):
+        """Update status when paid date is set"""
+        if self.paid_date and self.status != "Paid":
+            self.status = "Paid"
+            self.save()
+            
     def post_to_general_ledger(self):
-        """Post contribution to General Ledger using Journal Entry"""
-        if self.posted_to_gl:
+        """Post fine to General Ledger using Journal Entry"""
+        if self.journal_entry:
             return
             
         company = frappe.defaults.get_user_default("Company")
@@ -50,32 +53,32 @@ class SHGContribution(Document):
         if not member_account:
             frappe.throw(_("Member account not found"))
             
-        # Get contribution account
-        contribution_account = frappe.db.get_value("Account", 
-            {"account_name": "SHG Contributions", "company": company})
-        if not contribution_account:
-            frappe.throw(_("SHG Contributions account not found"))
+        # Get fine income account
+        fine_account = frappe.db.get_value("Account", 
+            {"account_name": "SHG Penalty Income", "company": company})
+        if not fine_account:
+            frappe.throw(_("SHG Penalty Income account not found"))
             
         # Create Journal Entry
         je = frappe.get_doc({
             "doctype": "Journal Entry",
             "voucher_type": "Journal Entry",
-            "posting_date": self.contribution_date,
+            "posting_date": self.fine_date,
             "company": company,
-            "remark": f"Contribution from {self.member_name} - {self.contribution_type}",
+            "remark": f"Meeting fine from {self.member_name} - {self.fine_reason}",
             "accounts": [
                 {
                     "account": member_account,
-                    "debit_in_account_currency": self.amount,
+                    "debit_in_account_currency": self.fine_amount,
                     "party_type": "Customer",
                     "party": self.get_member_customer(),
-                    "reference_type": "SHG Contribution",
+                    "reference_type": "SHG Meeting Fine",
                     "reference_name": self.name
                 },
                 {
-                    "account": contribution_account,
-                    "credit_in_account_currency": self.amount,
-                    "reference_type": "SHG Contribution",
+                    "account": fine_account,
+                    "credit_in_account_currency": self.fine_amount,
+                    "reference_type": "SHG Meeting Fine",
                     "reference_name": self.name
                 }
             ]
@@ -84,18 +87,13 @@ class SHGContribution(Document):
         je.insert()
         je.submit()
         
-        # Update contribution record
+        # Update fine record
         self.journal_entry = je.name
-        self.posted_to_gl = 1
         self.save()
         
-    def cancel_journal_entry(self):
-        """Cancel the associated journal entry"""
-        if self.journal_entry:
-            je = frappe.get_doc("Journal Entry", self.journal_entry)
-            if je.docstatus == 1:
-                je.cancel()
-                
+        # Send notification to member
+        self.send_fine_notification()
+        
     def get_member_account(self):
         """Get member's ledger account"""
         member = frappe.get_doc("SHG Member", self.member)
@@ -113,7 +111,22 @@ class SHGContribution(Document):
         member = frappe.get_doc("SHG Member", self.member)
         return member.customer_link
         
-    def update_member_summary(self):
-        """Update member's financial summary"""
+    def send_fine_notification(self):
+        """Send fine notification to member"""
         member = frappe.get_doc("SHG Member", self.member)
-        member.update_financial_summary()
+        
+        message = f"Dear {member.member_name}, a fine of KES {self.fine_amount:,.2f} has been applied for {self.fine_reason.lower()}."
+        
+        notification = frappe.get_doc({
+            "doctype": "SHG Notification Log",
+            "member": self.member,
+            "notification_type": "Meeting Fine",
+            "message": message,
+            "channel": "SMS",
+            "reference_document": "SHG Meeting Fine",
+            "reference_name": self.name
+        })
+        notification.insert()
+        
+        # Send SMS (would be implemented in actual system)
+        # send_sms(member.phone_number, message)

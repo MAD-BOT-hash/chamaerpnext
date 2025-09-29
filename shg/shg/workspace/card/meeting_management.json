@@ -1,0 +1,37 @@
+{
+ "creation": "2025-09-29 12:00:00",
+ "docstatus": 0,
+ "doctype": "Workspace Card",
+ "idx": 0,
+ "label": "Meeting Management",
+ "modified": "2025-09-29 12:00:00",
+ "module": "SHG",
+ "name": "Meeting Management",
+ "owner": "Administrator",
+ "parent_workspace": "SHG",
+ "sections": [
+  {
+   "section_type": "Links",
+   "links": [
+    {
+     "label": "Meetings",
+     "type": "DocType",
+     "name": "SHG Meeting",
+     "is_query_report": 0
+    },
+    {
+     "label": "Meeting Attendance",
+     "type": "DocType",
+     "name": "SHG Meeting Attendance",
+     "is_query_report": 0
+    },
+    {
+     "label": "Meeting Fines",
+     "type": "DocType",
+     "name": "SHG Meeting Fine",
+     "is_query_report": 0
+    }
+   ]
+  }
+ ]
+}

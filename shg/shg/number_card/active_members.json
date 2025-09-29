@@ -1,0 +1,37 @@
+{
+ "aggregate_function_based_on": "",
+ "creation": "2025-09-29 12:00:00",
+ "docstatus": 0,
+ "doctype": "Number Card",
+ "document_type": "SHG Member",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"SHG Member\",\"membership_status\",\"=\",\"Active\"]]",
+ "function": "Count",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "label": "Active Members",
+ "modified": "2025-09-29 12:00:00",
+ "module": "SHG",
+ "name": "Active Members",
+ "owner": "Administrator",
+ "parent_document_type": "",
+ "report_function": "",
+ "roles": [
+  {
+   "role": "SHG Admin"
+  },
+  {
+   "role": "SHG Treasurer"
+  },
+  {
+   "role": "SHG Member"
+  },
+  {
+   "role": "SHG Auditor"
+  }
+ ],
+ "show_percentage_stats": 1,
+ "stats_time_interval": "Daily",
+ "type": "Document Type"
+}

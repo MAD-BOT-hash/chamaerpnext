@@ -1,0 +1,31 @@
+{
+ "creation": "2025-09-29 12:00:00",
+ "docstatus": 0,
+ "doctype": "Workspace Card",
+ "idx": 0,
+ "label": "Settings",
+ "modified": "2025-09-29 12:00:00",
+ "module": "SHG",
+ "name": "Settings",
+ "owner": "Administrator",
+ "parent_workspace": "SHG",
+ "sections": [
+  {
+   "section_type": "Links",
+   "links": [
+    {
+     "label": "SHG Settings",
+     "type": "DocType",
+     "name": "SHG Settings",
+     "is_query_report": 0
+    },
+    {
+     "label": "Notification Logs",
+     "type": "DocType",
+     "name": "SHG Notification Log",
+     "is_query_report": 0
+    }
+   ]
+  }
+ ]
+}
