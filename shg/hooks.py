@@ -68,3 +68,97 @@ doctype_js = {
     "SHG Loan": "public/js/shg_loan.js",
     "SHG Meeting": "public/js/shg_meeting.js"
 }
+
+# Register workspace components
+desk_pages = [
+    {
+        "module_name": "SHG",
+        "workspace_name": "SHG",
+        "parent": "Workspace",
+        "idx": 1,
+        "icon": "organization",
+        "label": "SHG",
+        "restrict_to_domain": "",
+        "link_to": "",
+        "type": "Workspace",
+        "public": 1
+    }
+]
+
+# Register number cards
+number_cards = [
+    {
+        "module_name": "SHG",
+        "name": "Active Members",
+        "label": "Active Members",
+        "doctype": "Number Card"
+    },
+    {
+        "module_name": "SHG",
+        "name": "Monthly Contributions",
+        "label": "Monthly Contributions",
+        "doctype": "Number Card"
+    },
+    {
+        "module_name": "SHG",
+        "name": "Outstanding Loans",
+        "label": "Outstanding Loans",
+        "doctype": "Number Card"
+    },
+    {
+        "module_name": "SHG",
+        "name": "Upcoming Meetings",
+        "label": "Upcoming Meetings",
+        "doctype": "Number Card"
+    }
+]
+
+# Register dashboard charts
+dashboard_charts = [
+    {
+        "module_name": "SHG",
+        "name": "Members Overview",
+        "label": "Members Overview",
+        "doctype": "Dashboard Chart"
+    },
+    {
+        "module_name": "SHG",
+        "name": "Financial Summary",
+        "label": "Financial Summary",
+        "doctype": "Dashboard Chart"
+    }
+]
+
+# Register workspace cards
+workspace_cards = [
+    {
+        "module_name": "SHG",
+        "name": "Member Management",
+        "label": "Member Management",
+        "doctype": "Workspace Card"
+    },
+    {
+        "module_name": "SHG",
+        "name": "Financial Management",
+        "label": "Financial Management",
+        "doctype": "Workspace Card"
+    },
+    {
+        "module_name": "SHG",
+        "name": "Meeting Management",
+        "label": "Meeting Management",
+        "doctype": "Workspace Card"
+    },
+    {
+        "module_name": "SHG",
+        "name": "Reports & Analytics",
+        "label": "Reports & Analytics",
+        "doctype": "Workspace Card"
+    },
+    {
+        "module_name": "SHG",
+        "name": "Settings",
+        "label": "Settings",
+        "doctype": "Workspace Card"
+    }
+]
