@@ -250,12 +250,3 @@
     "sort_order": "DESC",
     "track_changes": 1
 }
-
-print("✅ Created SHG Contribution and SHG Loan DocTypes")
-print("📋 Files created:")
-print("• SHG Contribution: JSON + Python controller")
-print("• SHG Loan: JSON + Python controller with interest calculations")
-print("• Complete validation and GL integration")
-print("• Automated repayment schedule generation")
-print("• Member eligibility checks")
-print("• Financial summary updates")
