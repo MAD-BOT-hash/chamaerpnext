@@ -181,6 +181,45 @@ class SHGMember(Document):
         
         self.save()
         
+    def on_update_after_submit(self):
+        """Handle updates to member information after submission"""
+        # Re-validate the member data when fields are updated after submission
+        self.validate_id_number()
+        self.validate_phone_number()
+        self.validate_next_of_kin()
+        # Update customer link if member name changed
+        if self.has_value_changed('member_name') and self.customer_link:
+            customer = frappe.get_doc("Customer", self.customer_link)
+            customer.customer_name = self.member_name
+            customer.save()
+        # Update financial summary
+        self.update_financial_summary()
+        
+    def validate_next_of_kin(self):
+        """Validate next of kin information"""
+        if self.next_of_kin_id_number:
+            # Remove any spaces or dashes
+            id_number = ''.join(filter(str.isdigit, self.next_of_kin_id_number))
+            
+            # Check if it's exactly 8 digits
+            if len(id_number) != 8:
+                frappe.throw(_("Next of Kin ID Number must be exactly 8 digits"))
+            
+            # Update the field with cleaned ID number
+            self.next_of_kin_id_number = id_number
+            
+        if self.next_of_kin_phone:
+            # Remove any spaces or dashes
+            phone = ''.join(filter(str.isdigit, self.next_of_kin_phone))
+            
+            # Format for Kenya
+            if phone.startswith('0'):
+                self.next_of_kin_phone = '+254' + phone[1:]
+            elif phone.startswith('254'):
+                self.next_of_kin_phone = '+' + phone
+            else:
+                frappe.throw(_("Please enter a valid Kenyan phone number for Next of Kin"))
+        
     def handle_member_amendment(self):
         """Handle member amendment to ensure data consistency"""
         # Re-validate the member data
@@ -203,3 +242,7 @@ def handle_member_amendment(doc, method):
     doc.validate()
     # Update financial summary if needed
     doc.update_financial_summary()
+
+def handle_member_update_after_submit(doc, method):
+    """Handle member updates after submission"""
+    doc.on_update_after_submit()

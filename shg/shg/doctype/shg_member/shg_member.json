@@ -47,36 +47,42 @@
             "fieldtype": "Data",
             "label": "Full Name",
             "reqd": 1,
-            "unique": 1
+            "unique": 1,
+            "allow_on_submit": 1
         },
         {
             "fieldname": "id_number",
             "fieldtype": "Data",
             "label": "ID Number",
             "reqd": 1,
-            "unique": 1
+            "unique": 1,
+            "allow_on_submit": 1
         },
         {
             "fieldname": "phone_number",
             "fieldtype": "Data",
             "label": "Phone Number",
-            "reqd": 1
+            "reqd": 1,
+            "allow_on_submit": 1
         },
         {
             "fieldname": "email",
             "fieldtype": "Data",
-            "label": "Email Address"
+            "label": "Email Address",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "date_of_birth",
             "fieldtype": "Date",
-            "label": "Date of Birth"
+            "label": "Date of Birth",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "gender",
             "fieldtype": "Select",
             "label": "Gender",
-            "options": "Male\nFemale\nOther"
+            "options": "Male\nFemale\nOther",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "column_break_7",
@@ -87,14 +93,16 @@
             "fieldtype": "Date",
             "label": "Membership Date",
             "reqd": 1,
-            "default": "Today"
+            "default": "Today",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "membership_status",
             "fieldtype": "Select",
             "label": "Membership Status",
             "options": "Active\nDormant\nExited",
-            "default": "Active"
+            "default": "Active",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "member_id",
@@ -123,18 +131,21 @@
         {
             "fieldname": "next_of_kin_name",
             "fieldtype": "Data",
-            "label": "Next of Kin Name"
+            "label": "Next of Kin Name",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "next_of_kin_phone",
             "fieldtype": "Data",
-            "label": "Next of Kin Phone"
+            "label": "Next of Kin Phone",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "next_of_kin_relationship",
             "fieldtype": "Select",
             "label": "Relationship",
-            "options": "Spouse\nChild\nParent\nSibling\nOther"
+            "options": "Spouse\nChild\nParent\nSibling\nOther",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "column_break_14",
@@ -143,12 +154,14 @@
         {
             "fieldname": "next_of_kin_id_number",
             "fieldtype": "Data",
-            "label": "Next of Kin ID Number"
+            "label": "Next of Kin ID Number",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "next_of_kin_address",
             "fieldtype": "Text",
-            "label": "Next of Kin Address"
+            "label": "Next of Kin Address",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "financial_section",
