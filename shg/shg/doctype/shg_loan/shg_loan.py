@@ -179,7 +179,7 @@ class SHGLoan(Document):
     def get_member_customer(self):
         """Get member's customer link"""
         member = frappe.get_doc("SHG Member", self.member)
-        return member.customer_link
+        return member.customer
                 
     def generate_repayment_schedule(self):
         """Generate repayment schedule based on frequency"""

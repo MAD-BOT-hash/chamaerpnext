@@ -118,7 +118,7 @@ class SHGLoanRepayment(Document):
                 "account": member_account,
                 "credit_in_account_currency": self.principal_amount,
                 "party_type": "Customer",
-                "party": frappe.db.get_value("SHG Member", self.member, "customer_link"),
+                "party": self.get_member_customer(),
                 "reference_type": self.doctype,
                 "reference_name": self.name
             }
@@ -173,6 +173,11 @@ class SHGLoanRepayment(Document):
                 
         from shg.shg.utils.account_utils import get_or_create_member_account
         return get_or_create_member_account(member, company)
+
+    def get_member_customer(self):
+        """Get member's customer link"""
+        member = frappe.get_doc("SHG Member", self.member)
+        return member.customer
 
     def update_member_totals(self):
         """Update member's totals"""

@@ -19,7 +19,7 @@
         "membership_status",
         "member_id",
         "account_number",
-        "customer_link",
+        "customer",
         "next_of_kin_section",
         "next_of_kin_name",
         "next_of_kin_phone",
@@ -117,7 +117,7 @@
             "read_only": 1
         },
         {
-            "fieldname": "customer_link",
+            "fieldname": "customer",
             "fieldtype": "Link",
             "label": "Customer",
             "options": "Customer",

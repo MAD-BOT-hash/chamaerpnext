@@ -125,7 +125,7 @@ class SHGContribution(Document):
     def get_member_customer(self):
         """Get member's customer link"""
         member = frappe.get_doc("SHG Member", self.member)
-        return member.customer_link
+        return member.customer
         
     def update_member_summary(self):
         """Update member's financial summary"""
