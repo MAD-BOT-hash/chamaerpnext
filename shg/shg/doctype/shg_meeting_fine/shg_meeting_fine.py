@@ -53,11 +53,9 @@ class SHGMeetingFine(Document):
         if not member_account:
             frappe.throw(_("Member account not found"))
             
-        # Get fine income account
-        fine_account = frappe.db.get_value("Account", 
-            {"account_name": "SHG Penalty Income", "company": company})
-        if not fine_account:
-            frappe.throw(_("SHG Penalty Income account not found"))
+        # Get fine income account using the new utility function
+        from shg.shg.utils.account_utils import get_or_create_shg_penalty_income_account
+        fine_account = get_or_create_shg_penalty_income_account(company)
             
         # Create Journal Entry
         je = frappe.get_doc({
@@ -103,29 +101,8 @@ class SHGMeetingFine(Document):
             if companies:
                 company = companies[0].name
                 
-        # Try to get existing account using member's account number
-        account_name = f"{member.account_number} - {company}"
-        account = frappe.db.get_value("Account", {"account_name": account_name, "company": company})
-        
-        # If account doesn't exist, create it
-        if not account:
-            try:
-                account_doc = frappe.get_doc({
-                    "doctype": "Account",
-                    "company": company,
-                    "account_name": member.account_number,
-                    "parent_account": f"SHG Members - {company}",
-                    "account_type": "Receivable",
-                    "is_group": 0,
-                    "root_type": "Asset"
-                })
-                account_doc.insert()
-                account = account_doc.name
-            except Exception as e:
-                frappe.log_error(frappe.get_traceback(), "SHG Meeting Fine - Member Account Creation Failed")
-                frappe.throw(_(f"Failed to create member account: {str(e)}"))
-                
-        return account
+        from shg.shg.utils.account_utils import get_or_create_member_account
+        return get_or_create_member_account(member, company)
         
     def get_member_customer(self):
         """Get member's customer link"""

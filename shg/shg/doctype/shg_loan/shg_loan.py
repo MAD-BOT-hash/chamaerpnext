@@ -123,12 +123,12 @@ class SHGLoan(Document):
             else:
                 frappe.throw(_("Please create a company first"))
                 
-        # Get configured accounts or use defaults
-        settings = frappe.get_single("SHG Settings")
-        loan_account = settings.default_loan_account if settings.default_loan_account else f"Loans Disbursed - {company}"
-        
         # Get member's account (auto-created if not exists)
         member_account = self.get_member_account()
+            
+        # Get loan account using the new utility function
+        from shg.shg.utils.account_utils import get_or_create_shg_loans_account
+        loan_account = get_or_create_shg_loans_account(company)
             
         # Create Journal Entry
         je = frappe.get_doc({
@@ -173,29 +173,8 @@ class SHGLoan(Document):
             else:
                 frappe.throw(_("Please create a company first"))
                 
-        # Try to get existing account using member's account number
-        account_name = f"{member.account_number} - {company}"
-        account = frappe.db.get_value("Account", {"account_name": account_name, "company": company})
-        
-        # If account doesn't exist, create it
-        if not account:
-            try:
-                account_doc = frappe.get_doc({
-                    "doctype": "Account",
-                    "company": company,
-                    "account_name": member.account_number,
-                    "parent_account": f"SHG Members - {company}",
-                    "account_type": "Receivable",
-                    "is_group": 0,
-                    "root_type": "Asset"
-                })
-                account_doc.insert()
-                account = account_doc.name
-            except Exception as e:
-                frappe.log_error(frappe.get_traceback(), "SHG Loan - Member Account Creation Failed")
-                frappe.throw(_(f"Failed to create member account: {str(e)}"))
-                
-        return account
+        from shg.shg.utils.account_utils import get_or_create_member_account
+        return get_or_create_member_account(member, company)
         
     def get_member_customer(self):
         """Get member's customer link"""

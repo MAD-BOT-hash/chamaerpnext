@@ -97,21 +97,8 @@ class SHGMember(Document):
             self.save()
                 
         # Create member's receivable account using account number
-        account_name = f"{self.account_number} - {company}"
-        if not frappe.db.exists("Account", {"account_name": account_name, "company": company}):
-            try:
-                account = frappe.get_doc({
-                    "doctype": "Account",
-                    "company": company,
-                    "account_name": self.account_number,
-                    "parent_account": f"SHG Members - {company}",
-                    "account_type": "Receivable",
-                    "is_group": 0,
-                    "root_type": "Asset"
-                })
-                account.insert()
-            except Exception as e:
-                frappe.log_error(frappe.get_traceback(), "SHG Member - Account Creation Failed")
+        from shg.shg.utils.account_utils import get_or_create_member_account
+        get_or_create_member_account(self, company)
                 
     def update_financial_summary(self):
         """Update member's financial summary"""

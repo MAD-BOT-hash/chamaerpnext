@@ -43,66 +43,23 @@ def create_default_accounts():
         else:
             frappe.throw("No company found. Please create a company first.")
     
+    # Use the new utility functions to create accounts
+    from shg.shg.utils.account_utils import (
+        get_or_create_shg_parent_account,
+        get_or_create_shg_contributions_account,
+        get_or_create_shg_interest_income_account,
+        get_or_create_shg_penalty_income_account,
+        get_or_create_shg_loans_account
+    )
+    
     # Create parent account for SHG Members
-    parent_account_name = f"SHG Members - {company}"
-    if not frappe.db.exists("Account", parent_account_name):
-        try:
-            parent_account = frappe.get_doc({
-                "doctype": "Account",
-                "company": company,
-                "account_name": "SHG Members",
-                "parent_account": f"Accounts Receivable - {company}",
-                "account_type": "Receivable",
-                "is_group": 1,
-                "root_type": "Asset"
-            })
-            parent_account.insert()
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "SHG Install - Parent Account Creation Failed")
+    get_or_create_shg_parent_account(company)
     
-    accounts_to_create = [
-        {
-            "account_name": "SHG Contributions",
-            "parent_account": f"Income - {company}",
-            "account_type": "Income Account",
-            "is_group": 0
-        },
-        {
-            "account_name": "SHG Interest Income",
-            "parent_account": f"Income - {company}",
-            "account_type": "Income Account", 
-            "is_group": 0
-        },
-        {
-            "account_name": "SHG Penalty Income",
-            "parent_account": f"Income - {company}",
-            "account_type": "Income Account",
-            "is_group": 0
-        },
-        {
-            "account_name": "Loans Disbursed",
-            "parent_account": f"Loans and Advances (Assets) - {company}",
-            "account_type": "Bank",
-            "is_group": 0
-        }
-    ]
-    
-    for account_data in accounts_to_create:
-        account_name = f"{account_data['account_name']} - {company}"
-        if not frappe.db.exists("Account", account_name):
-            try:
-                account = frappe.get_doc({
-                    "doctype": "Account",
-                    "company": company,
-                    "account_name": account_data["account_name"],
-                    "parent_account": account_data["parent_account"],
-                    "account_type": account_data.get("account_type"),
-                    "is_group": account_data["is_group"],
-                    "root_type": "Income" if account_data.get("account_type") == "Income Account" else "Asset"
-                })
-                account.insert()
-            except Exception as e:
-                frappe.log_error(frappe.get_traceback(), "SHG Install - Account Creation Failed")
+    # Create other accounts
+    get_or_create_shg_contributions_account(company)
+    get_or_create_shg_interest_income_account(company)
+    get_or_create_shg_penalty_income_account(company)
+    get_or_create_shg_loans_account(company)
 
 def create_default_settings():
     """Create default SHG settings"""
@@ -253,66 +210,23 @@ def register_workspace_components():
 
 def create_accounts_for_company(company):
     """Create default accounts for a specific company"""
+    # Use the new utility functions to create accounts
+    from shg.shg.utils.account_utils import (
+        get_or_create_shg_parent_account,
+        get_or_create_shg_contributions_account,
+        get_or_create_shg_interest_income_account,
+        get_or_create_shg_penalty_income_account,
+        get_or_create_shg_loans_account
+    )
+    
     # Create parent account for SHG Members
-    parent_account_name = f"SHG Members - {company}"
-    if not frappe.db.exists("Account", parent_account_name):
-        try:
-            parent_account = frappe.get_doc({
-                "doctype": "Account",
-                "company": company,
-                "account_name": "SHG Members",
-                "parent_account": f"Accounts Receivable - {company}",
-                "account_type": "Receivable",
-                "is_group": 1,
-                "root_type": "Asset"
-            })
-            parent_account.insert()
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), f"SHG - Parent Account Creation Failed for {company}")
+    get_or_create_shg_parent_account(company)
     
-    accounts_to_create = [
-        {
-            "account_name": "SHG Contributions",
-            "parent_account": f"Income - {company}",
-            "account_type": "Income Account",
-            "is_group": 0
-        },
-        {
-            "account_name": "SHG Interest Income",
-            "parent_account": f"Income - {company}",
-            "account_type": "Income Account", 
-            "is_group": 0
-        },
-        {
-            "account_name": "SHG Penalty Income",
-            "parent_account": f"Income - {company}",
-            "account_type": "Income Account",
-            "is_group": 0
-        },
-        {
-            "account_name": "Loans Disbursed",
-            "parent_account": f"Loans and Advances (Assets) - {company}",
-            "account_type": "Bank",
-            "is_group": 0
-        }
-    ]
-    
-    for account_data in accounts_to_create:
-        account_name = f"{account_data['account_name']} - {company}"
-        if not frappe.db.exists("Account", account_name):
-            try:
-                account = frappe.get_doc({
-                    "doctype": "Account",
-                    "company": company,
-                    "account_name": account_data["account_name"],
-                    "parent_account": account_data["parent_account"],
-                    "account_type": account_data.get("account_type"),
-                    "is_group": account_data["is_group"],
-                    "root_type": "Income" if account_data.get("account_type") == "Income Account" else "Asset"
-                })
-                account.insert()
-            except Exception as e:
-                frappe.log_error(frappe.get_traceback(), f"SHG - Account Creation Failed for {company}: {account_data['account_name']}")
+    # Create other accounts
+    get_or_create_shg_contributions_account(company)
+    get_or_create_shg_interest_income_account(company)
+    get_or_create_shg_penalty_income_account(company)
+    get_or_create_shg_loans_account(company)
 
 # Hook functions
 def validate_member(doc, method):
