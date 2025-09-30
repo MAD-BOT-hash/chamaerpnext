@@ -209,7 +209,7 @@
             "fieldname": "credit_score",
             "fieldtype": "Int",
             "label": "Credit Score",
-            "read_only": 1
+            "allow_on_submit": 1
         }
     ],
     "is_submittable": 1,

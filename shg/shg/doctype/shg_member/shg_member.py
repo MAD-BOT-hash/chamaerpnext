@@ -137,31 +137,35 @@ class SHGMember(Document):
             WHERE member = %s AND status = 'Disbursed'
         """, self.name)[0][0]
         
-        # Calculate credit score (simplified)
-        credit_score = 50  # Base score
-        
-        # Add points for contributions
-        if total_contributions > 0:
-            credit_score += min(20, total_contributions / 1000)  # Up to 20 points
+        # Calculate credit score (simplified) only if it hasn't been manually set
+        if not hasattr(self, '_credit_score_manually_updated') or not self._credit_score_manually_updated:
+            credit_score = 50  # Base score
             
-        # Add points for timely repayments (if any loans)
-        if total_loans > 0:
-            # Get repayment history
-            timely_repayments = frappe.db.sql("""
-                SELECT COUNT(*) 
-                FROM `tabSHG Loan Repayment` 
-                WHERE member = %s AND docstatus = 1 AND payment_date <= due_date
-            """, self.name)[0][0] or 0
+            # Add points for contributions
+            if total_contributions > 0:
+                credit_score += min(20, total_contributions / 1000)  # Up to 20 points
+                
+            # Add points for timely repayments (if any loans)
+            if total_loans > 0:
+                # Get repayment history
+                timely_repayments = frappe.db.sql("""
+                    SELECT COUNT(*) 
+                    FROM `tabSHG Loan Repayment` 
+                    WHERE member = %s AND docstatus = 1 AND payment_date <= due_date
+                """, self.name)[0][0] or 0
+                
+                total_repayments = frappe.db.sql("""
+                    SELECT COUNT(*) 
+                    FROM `tabSHG Loan Repayment` 
+                    WHERE member = %s AND docstatus = 1
+                """, self.name)[0][0] or 0
+                
+                if total_repayments > 0:
+                    repayment_rate = timely_repayments / total_repayments
+                    credit_score += min(30, repayment_rate * 30)  # Up to 30 points
             
-            total_repayments = frappe.db.sql("""
-                SELECT COUNT(*) 
-                FROM `tabSHG Loan Repayment` 
-                WHERE member = %s AND docstatus = 1
-            """, self.name)[0][0] or 0
-            
-            if total_repayments > 0:
-                repayment_rate = timely_repayments / total_repayments
-                credit_score += min(30, repayment_rate * 30)  # Up to 30 points
+            self.credit_score = int(credit_score)
+        # If credit score was manually updated, keep the manually set value
         
         # Update document
         self.total_contributions = total_contributions
@@ -169,7 +173,6 @@ class SHGMember(Document):
         self.current_loan_balance = loan_balance
         self.last_contribution_date = last_contribution
         self.last_loan_date = last_loan
-        self.credit_score = int(credit_score)
         
         self.save()
         
