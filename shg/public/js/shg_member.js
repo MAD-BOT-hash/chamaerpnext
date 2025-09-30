@@ -2,6 +2,10 @@ frappe.ui.form.on('SHG Member', {
     refresh: function(frm) {
         // Add custom buttons
         if (frm.doc.docstatus === 1) {
+            frm.add_custom_button(__('Amend'), function() {
+                frm.amend_doc();
+            }, __('Actions'));
+            
             frm.add_custom_button(__('View Statement'), function() {
                 frappe.route_options = {
                     "member": frm.doc.name

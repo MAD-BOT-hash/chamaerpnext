@@ -180,6 +180,13 @@ class SHGMember(Document):
         self.credit_score = int(credit_score)
         
         self.save()
+        
+    def handle_member_amendment(self):
+        """Handle member amendment to ensure data consistency"""
+        # Re-validate the member data
+        self.validate()
+        # Update financial summary if needed
+        self.update_financial_summary()
 
 # --- Hook functions ---
 def validate_member(doc, method):
@@ -189,3 +196,10 @@ def validate_member(doc, method):
 def create_member_ledger(doc, method):
     """Hook function called from hooks.py"""
     doc.create_member_ledger()
+
+def handle_member_amendment(doc, method):
+    """Handle member amendment to ensure data consistency"""
+    # Re-validate the member data
+    doc.validate()
+    # Update financial summary if needed
+    doc.update_financial_summary()

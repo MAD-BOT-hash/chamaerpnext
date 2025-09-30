@@ -1,6 +1,7 @@
 {
     "actions": [],
     "allow_rename": 1,
+    "allow_import": 1,
     "autoname": "field:member_name",
     "creation": "2025-09-25 10:00:00",
     "doctype": "DocType",
@@ -217,7 +218,8 @@
             "role": "SHG Admin",
             "share": 1,
             "submit": 1,
-            "write": 1
+            "write": 1,
+            "amend": 1
         },
         {
             "create": 1,
@@ -229,7 +231,8 @@
             "role": "SHG Treasurer",
             "share": 1,
             "submit": 1,
-            "write": 1
+            "write": 1,
+            "amend": 1
         },
         {
             "email": 1,

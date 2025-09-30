@@ -13,7 +13,8 @@ app_license = "MIT"
 doc_events = {
     "SHG Member": {
         "validate": "shg.shg.doctype.shg_member.shg_member.validate_member",
-        "on_submit": "shg.shg.doctype.shg_member.shg_member.create_member_ledger"
+        "on_submit": "shg.shg.doctype.shg_member.shg_member.create_member_ledger",
+        "on_amend": "shg.shg.doctype.shg_member.shg_member.handle_member_amendment"
     },
     "SHG Contribution": {
         "validate": "shg.shg.doctype.shg_contribution.shg_contribution.validate_contribution",
