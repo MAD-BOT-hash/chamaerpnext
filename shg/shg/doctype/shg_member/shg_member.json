@@ -17,6 +17,7 @@
         "membership_date",
         "membership_status",
         "member_id",
+        "account_number",
         "customer_link",
         "next_of_kin_section",
         "next_of_kin_name",
@@ -98,6 +99,12 @@
             "fieldname": "member_id",
             "fieldtype": "Data",
             "label": "Member ID",
+            "read_only": 1
+        },
+        {
+            "fieldname": "account_number",
+            "fieldtype": "Data",
+            "label": "Account Number",
             "read_only": 1
         },
         {

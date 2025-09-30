@@ -1,4 +1,4 @@
- {
+{
     "actions": [],
     "allow_rename": 1,
     "autoname": "naming_series:",
@@ -13,6 +13,7 @@
         "contribution_date",
         "column_break_4",
         "contribution_type",
+        "contribution_type_link",
         "amount",
         "payment_method",
         "reference_section",
@@ -64,8 +65,13 @@
             "fieldname": "contribution_type",
             "fieldtype": "Select",
             "label": "Contribution Type",
-            "options": "Regular Weekly\nRegular Monthly\nVoluntary\nSpecial Assessment",
-            "reqd": 1
+            "options": "Regular Weekly\nRegular Monthly\nBi-Monthly\nVoluntary\nSpecial Assessment"
+        },
+        {
+            "fieldname": "contribution_type_link",
+            "fieldtype": "Link",
+            "label": "Contribution Type (Configurable)",
+            "options": "SHG Contribution Type"
         },
         {
             "fieldname": "amount",
@@ -78,7 +84,7 @@
             "fieldname": "payment_method",
             "fieldtype": "Select",
             "label": "Payment Method",
-            "options": "Cash\nMobile Money\nBank Transfer\nCheque"
+            "options": "Cash\nMobile Money\nMpesa\nBank Transfer\nCheque"
         },
         {
             "fieldname": "reference_section",

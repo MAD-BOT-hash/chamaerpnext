@@ -2,9 +2,9 @@
 Configuration for docs
 """
 
-# source_link = "https://github.com/[org_name]/shg"
-# headline = "App that does everything"
-# sub_heading = "Yes, you got that right the first time, everything"
+source_link = "https://github.com/your-username/shg-erpnext"
+headline = "Comprehensive SHG Management System"
+sub_heading = "Complete solution for Self Help Group management with Kenyan localization"
 
 def get_context(context):
 	context.brand_html = "Self Help Group Management"

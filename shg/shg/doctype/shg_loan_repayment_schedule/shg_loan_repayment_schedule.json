@@ -1,0 +1,67 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-09-29 12:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "payment_date",
+  "principal_amount",
+  "interest_amount",
+  "total_payment",
+  "balance_amount"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "payment_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Payment Date"
+  },
+  {
+   "columns": 2,
+   "fieldname": "principal_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Principal Amount",
+   "precision": 2
+  },
+  {
+   "columns": 2,
+   "fieldname": "interest_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Interest Amount",
+   "precision": 2
+  },
+  {
+   "columns": 2,
+   "fieldname": "total_payment",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Total Payment",
+   "precision": 2
+  },
+  {
+   "columns": 2,
+   "fieldname": "balance_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Balance Amount",
+   "precision": 2
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2025-09-29 12:00:00",
+ "modified_by": "Administrator",
+ "module": "SHG",
+ "name": "SHG Loan Repayment Schedule",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

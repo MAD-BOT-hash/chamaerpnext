@@ -8,11 +8,20 @@ class SHGMember(Document):
         self.validate_id_number()
         self.validate_phone_number()
         self.set_member_id()
+        self.set_account_number()
         
     def validate_id_number(self):
         """Validate Kenyan ID number format"""
-        if self.id_number and not len(self.id_number) == 8:
-            frappe.throw(_("Kenyan ID Number must be 8 digits"))
+        if self.id_number:
+            # Remove any spaces or dashes
+            id_number = ''.join(filter(str.isdigit, self.id_number))
+            
+            # Check if it's exactly 8 digits
+            if len(id_number) != 8:
+                frappe.throw(_("Kenyan ID Number must be exactly 8 digits"))
+            
+            # Update the field with cleaned ID number
+            self.id_number = id_number
             
     def validate_phone_number(self):
         """Validate and format phone number"""
@@ -32,6 +41,29 @@ class SHGMember(Document):
         """Set member ID if not already set"""
         if not self.member_id:
             self.member_id = self.name
+            
+    def set_account_number(self):
+        """Generate unique account number in format MN001, MN002, etc."""
+        if not self.account_number:
+            # Get the last member's account number
+            last_member = frappe.db.sql("""
+                SELECT account_number 
+                FROM `tabSHG Member` 
+                WHERE account_number IS NOT NULL 
+                ORDER BY creation DESC 
+                LIMIT 1
+            """, as_dict=True)
+            
+            if last_member:
+                # Extract the number part and increment
+                last_number = int(last_member[0].account_number[2:])  # Remove "MN" prefix
+                new_number = last_number + 1
+            else:
+                # First member
+                new_number = 1
+                
+            # Format as MN001, MN002, etc.
+            self.account_number = f"MN{new_number:03d}"
             
     def create_customer_link(self):
         """Create link to ERPNext Customer"""
@@ -148,3 +180,12 @@ class SHGMember(Document):
         self.credit_score = int(credit_score)
         
         self.save()
+
+# --- Hook functions ---
+def validate_member(doc, method):
+    """Hook function called from hooks.py"""
+    doc.validate()
+
+def create_member_ledger(doc, method):
+    """Hook function called from hooks.py"""
+    doc.create_member_ledger()

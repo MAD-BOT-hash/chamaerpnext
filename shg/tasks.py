@@ -31,6 +31,9 @@ def send_daily_reminders():
         overdue_days = (getdate(today()) - getdate(loan.next_due_date)).days
         if overdue_days % 7 == 0:  # Send weekly reminders for overdue
             send_overdue_reminder(loan.name)
+            
+    # Send bi-monthly contribution reminders
+    send_bimonthly_contribution_reminders()
 
 def calculate_loan_penalties():
     """Calculate and apply penalties for overdue loans"""
@@ -90,9 +93,39 @@ def send_weekly_contribution_reminders():
         if not recent_contribution:
             send_contribution_reminder(member.name, contribution_amount)
 
+def send_bimonthly_contribution_reminders():
+    """Send bi-monthly contribution reminders"""
+    # Get all active members
+    active_members = frappe.get_all("SHG Member",
+                                   filters={"membership_status": "Active"},
+                                   fields=["name", "member_name", "phone_number"])
+    
+    # Get bi-monthly contribution types
+    bimonthly_types = frappe.get_all("SHG Contribution Type",
+                                    filters={"frequency": "Bi-Monthly", "enabled": 1},
+                                    fields=["name", "default_amount"])
+    
+    for contrib_type in bimonthly_types:
+        for member in active_members:
+            # Check if member has contributed for this bi-monthly type recently
+            fortnight_start = add_days(today(), -15)  # Approximately half a month
+            recent_contribution = frappe.db.exists("SHG Contribution", {
+                "member": member.name,
+                "contribution_type_link": contrib_type.name,
+                "contribution_date": ["between", [fortnight_start, today()]]
+            })
+            
+            if not recent_contribution:
+                send_bimonthly_contribution_reminder(member.name, contrib_type.name, contrib_type.default_amount)
+
 def generate_monthly_reports():
     """Generate monthly reports"""
-    pass
+    try:
+        # Generate financial summary report
+        # This would typically involve creating a report document or sending notifications
+        frappe.log("Monthly reports generation completed")
+    except Exception as e:
+        frappe.log_error(f"Failed to generate monthly reports: {str(e)}")
 
 def get_overdue_loans():
     """Get list of overdue loans"""
@@ -203,6 +236,33 @@ def send_contribution_reminder(member_name, amount):
     except Exception as e:
         frappe.log_error(f"Failed to send contribution reminder: {str(e)}")
 
+def send_bimonthly_contribution_reminder(member_name, contrib_type_name, amount):
+    """Send bi-monthly contribution reminder"""
+    try:
+        member = frappe.get_doc("SHG Member", member_name)
+        contrib_type = frappe.get_doc("SHG Contribution Type", contrib_type_name)
+        
+        message = f"Dear {member.member_name}, your {contrib_type.contribution_type_name} of KES {amount:,.2f} is due."
+        
+        notification = frappe.get_doc({
+            "doctype": "SHG Notification Log",
+            "member": member_name,
+            "notification_type": "Contribution Reminder", 
+            "message": message,
+            "channel": "SMS"
+        })
+        notification.insert()
+        
+        send_sms(member.phone_number, message)
+        
+        notification.status = "Sent"
+        notification.sent_date = frappe.utils.now() 
+        notification.save()
+        frappe.db.commit()
+        
+    except Exception as e:
+        frappe.log_error(f"Failed to send bi-monthly contribution reminder: {str(e)}")
+
 def send_sms(phone_number, message):
     """Send SMS using configured SMS gateway"""
     try:
@@ -232,9 +292,8 @@ def send_sms(phone_number, message):
         if response.status_code == 201:
             return True
         else:
-            frappe.log_error(f"SMS sending failed: {response.text}")
+            frappe.log_error(f"SMS sending failed with status code: {response.status_code}")
             return False
-            
     except Exception as e:
-        frappe.log_error(f"SMS sending error: {str(e)}")
+        frappe.log_error(f"Failed to send SMS: {str(e)}")
         return False

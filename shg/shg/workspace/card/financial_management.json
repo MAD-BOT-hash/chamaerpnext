@@ -32,6 +32,18 @@
      "is_query_report": 0
     },
     {
+     "label": "Loan Types",
+     "type": "DocType",
+     "name": "SHG Loan Type",
+     "is_query_report": 0
+    },
+    {
+     "label": "Contribution Types",
+     "type": "DocType",
+     "name": "SHG Contribution Type",
+     "is_query_report": 0
+    },
+    {
      "label": "Loan Statements",
      "type": "Report",
      "name": "Loan Statement",

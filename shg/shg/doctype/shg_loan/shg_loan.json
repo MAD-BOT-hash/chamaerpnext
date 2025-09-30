@@ -1,4 +1,4 @@
- {
+{
     "actions": [],
     "allow_rename": 1,
     "autoname": "naming_series:",
@@ -10,11 +10,13 @@
         "loan_details_section",
         "member",
         "member_name",
+        "loan_type",
         "loan_amount",
         "column_break_4",
         "interest_rate",
         "interest_type",
         "loan_period_months",
+        "repayment_frequency",
         "application_section",
         "application_date",
         "loan_purpose",
@@ -33,7 +35,9 @@
         "column_break_17",
         "balance_amount",
         "last_repayment_date",
-        "next_due_date"
+        "next_due_date",
+        "repayment_schedule_section",
+        "repayment_schedule"
     ],
     "fields": [
         {
@@ -61,6 +65,12 @@
             "label": "Member Name",
             "read_only": 1,
             "fetch_from": "member.member_name"
+        },
+        {
+            "fieldname": "loan_type",
+            "fieldtype": "Link",
+            "label": "Loan Type",
+            "options": "SHG Loan Type"
         },
         {
             "fieldname": "loan_amount",
@@ -92,6 +102,13 @@
             "fieldtype": "Int",
             "label": "Loan Period (Months)",
             "reqd": 1
+        },
+        {
+            "fieldname": "repayment_frequency",
+            "fieldtype": "Select",
+            "label": "Repayment Frequency",
+            "options": "Daily\nWeekly\nBi-Weekly\nMonthly\nBi-Monthly\nQuarterly\nYearly",
+            "default": "Monthly"
         },
         {
             "fieldname": "application_section",
@@ -202,6 +219,17 @@
             "fieldtype": "Date",
             "label": "Next Due Date",
             "read_only": 1
+        },
+        {
+            "fieldname": "repayment_schedule_section",
+            "fieldtype": "Section Break",
+            "label": "Repayment Schedule"
+        },
+        {
+            "fieldname": "repayment_schedule",
+            "fieldtype": "Table",
+            "label": "Repayment Schedule",
+            "options": "SHG Loan Repayment Schedule"
         }
     ],
     "is_submittable": 1,
@@ -237,13 +265,6 @@
             "share": 1,
             "submit": 1,
             "write": 1
-        },
-        {
-            "email": 1,
-            "print": 1,
-            "read": 1,
-            "role": "SHG Member",
-            "if_owner": 1
         }
     ],
     "sort_field": "modified",

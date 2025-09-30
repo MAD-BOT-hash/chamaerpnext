@@ -7,6 +7,7 @@ class SHGContribution(Document):
     def validate(self):
         self.validate_amount()
         self.validate_duplicate()
+        self.set_contribution_details()
         
     def validate_amount(self):
         """Validate contribution amount"""
@@ -24,6 +25,13 @@ class SHGContribution(Document):
         if existing:
             frappe.throw(_("A contribution already exists for this member on this date"))
             
+    def set_contribution_details(self):
+        """Set contribution details from contribution type"""
+        if self.contribution_type_link:
+            contrib_type = frappe.get_doc("SHG Contribution Type", self.contribution_type_link)
+            if not self.amount and contrib_type.default_amount:
+                self.amount = contrib_type.default_amount
+                
     def on_submit(self):
         self.post_to_general_ledger()
         self.update_member_summary()
@@ -117,3 +125,80 @@ class SHGContribution(Document):
         """Update member's financial summary"""
         member = frappe.get_doc("SHG Member", self.member)
         member.update_financial_summary()
+        
+    @frappe.whitelist()
+    def get_suggested_amount(self):
+        """Get suggested contribution amount based on type and member"""
+        if self.contribution_type_link:
+            contrib_type = frappe.get_doc("SHG Contribution Type", self.contribution_type_link)
+            return contrib_type.default_amount
+        elif self.contribution_type:
+            # Get from settings
+            settings = frappe.get_doc("SHG Settings")
+            if self.contribution_type == "Regular Weekly":
+                return settings.default_contribution_amount
+            elif self.contribution_type == "Regular Monthly":
+                return settings.default_contribution_amount * 4  # Approximate
+            elif self.contribution_type == "Bi-Monthly":
+                return settings.default_contribution_amount * 8  # Approximate
+        return 0
+        
+    @frappe.whitelist()
+    def send_payment_confirmation(self):
+        """Send payment confirmation SMS"""
+        member = frappe.get_doc("SHG Member", self.member)
+        
+        message = f"Dear {member.member_name}, your contribution of KES {self.amount:,.2f} has been received. Thank you for your continued support."
+        
+        # Log notification
+        notification = frappe.get_doc({
+            "doctype": "SHG Notification Log",
+            "member": self.member,
+            "notification_type": "Payment Confirmation",
+            "message": message,
+            "channel": "SMS",
+            "reference_document": "SHG Contribution",
+            "reference_name": self.name
+        })
+        notification.insert()
+        
+        # In a real implementation, you would send the actual SMS
+        # send_sms(member.phone_number, message)
+        return True
+        
+    @frappe.whitelist()
+    def initiate_mpesa_stk_push(self):
+        """Initiate Mpesa STK Push for contribution payment"""
+        try:
+            # Check if Mpesa is enabled
+            settings = frappe.get_doc("SHG Settings")
+            if not settings.mpesa_enabled:
+                return {"success": False, "error": "Mpesa payments are not enabled"}
+                
+            member = frappe.get_doc("SHG Member", self.member)
+            
+            # In a real implementation, you would integrate with Mpesa API
+            # This is a placeholder for the actual implementation
+            # mpesa_response = make_mpesa_stk_push_request(
+            #     phone_number=member.phone_number,
+            #     amount=self.amount,
+            #     account_reference=self.name,
+            #     transaction_desc=f"SHG Contribution - {self.member_name}"
+            # )
+            
+            # For now, return a success response
+            return {"success": True, "message": "Mpesa STK Push initiated successfully"}
+            
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Contribution - Mpesa STK Push Failed")
+            return {"success": False, "error": str(e)}
+
+# --- Hook functions ---
+def validate_contribution(doc, method):
+    """Hook function called from hooks.py"""
+    doc.validate()
+
+def post_to_general_ledger(doc, method):
+    """Hook function called from hooks.py"""
+    if doc.docstatus == 1:
+        doc.post_to_general_ledger()

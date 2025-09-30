@@ -9,7 +9,7 @@ from shg import __version__ as version
 setup(
     name="shg",
     version=version,
-    description="Self Help Group Management System for ERPNext",
+    description="Comprehensive Self Help Group Management System for ERPNext with Kenyan localization, mobile integration, and financial automation",
     author="SHG Solutions",
     author_email="support@shgsolutions.co.ke",
     packages=find_packages(),
@@ -28,10 +28,11 @@ setup(
         "Topic :: Office/Business :: Financial",
         "Framework :: ERPNext",
     ],
-    keywords="erpnext shg kenya finance microfinance",
+    keywords="erpnext shg kenya finance microfinance self-help-group mobile-app mpesa",
     project_urls={
         "Bug Reports": "https://github.com/your-username/shg-erpnext/issues",
         "Source": "https://github.com/your-username/shg-erpnext",
         "Documentation": "https://github.com/your-username/shg-erpnext/wiki",
+        "Homepage": "https://github.com/your-username/shg-erpnext",
     },
 )

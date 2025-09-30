@@ -1,9 +1,14 @@
 import frappe
 from frappe import _
+from frappe.utils import flt
 
 def execute(filters=None):
+    if not filters:
+        filters = {}
+        
     columns = get_columns()
     data = get_data(filters)
+    
     return columns, data
 
 def get_columns():
@@ -12,29 +17,29 @@ def get_columns():
             "label": _("Date"),
             "fieldname": "date",
             "fieldtype": "Date",
-            "width": 120
+            "width": 100
         },
         {
             "label": _("Description"),
             "fieldname": "description",
             "fieldtype": "Data",
-            "width": 300
+            "width": 200
         },
         {
-            "label": _("Contribution"),
-            "fieldname": "contribution",
+            "label": _("Reference"),
+            "fieldname": "reference",
+            "fieldtype": "Data",
+            "width": 150
+        },
+        {
+            "label": _("Debit"),
+            "fieldname": "debit",
             "fieldtype": "Currency",
             "width": 120
         },
         {
-            "label": _("Loan Disbursement"),
-            "fieldname": "loan_disbursement",
-            "fieldtype": "Currency",
-            "width": 120
-        },
-        {
-            "label": _("Loan Repayment"),
-            "fieldname": "loan_repayment",
+            "label": _("Credit"),
+            "fieldname": "credit",
             "fieldtype": "Currency",
             "width": 120
         },
@@ -47,86 +52,113 @@ def get_columns():
     ]
 
 def get_data(filters):
-    if not filters.get("member"):
-        return [], []
+    member = filters.get("member")
+    if not member:
+        return []
+        
+    # Get member details
+    member_doc = frappe.get_doc("SHG Member", member)
     
-    result = []
-    running_balance = 0
+    data = []
+    
+    # Add opening balance (simplified)
+    opening_balance = 0
+    data.append({
+        "date": "",
+        "description": "Opening Balance",
+        "reference": "",
+        "debit": 0,
+        "credit": 0,
+        "balance": opening_balance
+    })
+    
+    balance = opening_balance
     
     # Get contributions
     contributions = frappe.db.sql("""
         SELECT 
             contribution_date as date,
-            amount as contribution,
-            CONCAT(contribution_type, ' Contribution') as description
+            contribution_type as description,
+            name as reference,
+            0 as debit,
+            amount as credit
         FROM `tabSHG Contribution`
-        WHERE member = %(member)s AND docstatus = 1
+        WHERE member = %s AND docstatus = 1
         ORDER BY contribution_date
-    """, filters, as_dict=1)
+    """, member, as_dict=1)
     
     # Get loan disbursements
     loans = frappe.db.sql("""
         SELECT 
             disbursement_date as date,
-            disbursed_amount as loan_disbursement,
-            CONCAT('Loan Disbursement (', name, ')') as description
+            CONCAT('Loan Disbursement - ', loan_purpose) as description,
+            name as reference,
+            loan_amount as debit,
+            0 as credit
         FROM `tabSHG Loan`
-        WHERE member = %(member)s AND docstatus = 1 AND status = 'Disbursed'
+        WHERE member = %s AND status = 'Disbursed'
         ORDER BY disbursement_date
-    """, filters, as_dict=1)
+    """, member, as_dict=1)
     
     # Get loan repayments
     repayments = frappe.db.sql("""
         SELECT 
             payment_date as date,
-            total_paid as loan_repayment,
-            CONCAT('Loan Repayment (', loan, ')') as description
+            'Loan Repayment' as description,
+            parent as reference,
+            0 as debit,
+            amount as credit
         FROM `tabSHG Loan Repayment`
-        WHERE member = %(member)s AND docstatus = 1
+        WHERE member = %s AND docstatus = 1
         ORDER BY payment_date
-    """, filters, as_dict=1)
+    """, member, as_dict=1)
     
-    # Combine and sort all transactions
-    all_transactions = []
-    all_transactions.extend(contributions)
-    all_transactions.extend(loans)
-    all_transactions.extend(repayments)
-    all_transactions.sort(key=lambda x: x['date'])
+    # Get fines
+    fines = frappe.db.sql("""
+        SELECT 
+            creation as date,
+            'Meeting Fine' as description,
+            name as reference,
+            0 as debit,
+            amount as credit
+        FROM `tabSHG Meeting Fine`
+        WHERE member = %s AND docstatus = 1
+        ORDER BY creation
+    """, member, as_dict=1)
+    
+    # Combine all transactions
+    transactions = contributions + loans + repayments + fines
+    
+    # Sort by date
+    transactions.sort(key=lambda x: x.date or frappe.utils.nowdate())
     
     # Process transactions
-    for transaction in all_transactions:
-        if transaction.get('contribution'):
-            # Contribution
-            running_balance += transaction.contribution
-            result.append({
-                'date': transaction.date,
-                'description': transaction.description,
-                'contribution': transaction.contribution,
-                'loan_disbursement': 0,
-                'loan_repayment': 0,
-                'balance': running_balance
-            })
-        elif transaction.get('loan_disbursement'):
-            # Loan disbursement
-            running_balance -= transaction.loan_disbursement
-            result.append({
-                'date': transaction.date,
-                'description': transaction.description,
-                'contribution': 0,
-                'loan_disbursement': transaction.loan_disbursement,
-                'loan_repayment': 0,
-                'balance': running_balance
-            })
-        else:
-            # Loan repayment
-            running_balance += transaction.loan_repayment
-            result.append({
-                'date': transaction.date,
-                'description': transaction.description,
-                'contribution': 0,
-                'loan_disbursement': 0,
-                'loan_repayment': transaction.loan_repayment,
-                'balance': running_balance
-            })
+    for transaction in transactions:
+        if transaction.debit:
+            balance -= transaction.debit
+        if transaction.credit:
+            balance += transaction.credit
+            
+        data.append({
+            "date": transaction.date,
+            "description": transaction.description,
+            "reference": transaction.reference,
+            "debit": transaction.debit,
+            "credit": transaction.credit,
+            "balance": balance
+        })
+        
+    # Add summary row
+    total_debit = sum(t.debit for t in transactions)
+    total_credit = sum(t.credit for t in transactions)
     
-    return result
+    data.append({
+        "date": "",
+        "description": "Total",
+        "reference": "",
+        "debit": total_debit,
+        "credit": total_credit,
+        "balance": balance
+    })
+    
+    return data

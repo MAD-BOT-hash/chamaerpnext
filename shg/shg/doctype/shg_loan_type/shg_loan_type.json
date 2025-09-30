@@ -1,0 +1,127 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:loan_type_name",
+ "creation": "2025-09-29 12:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "loan_type_name",
+  "description",
+  "interest_rate",
+  "interest_type",
+  "default_tenure_months",
+  "penalty_rate",
+  "penalty_calculation_method",
+  "minimum_amount",
+  "maximum_amount",
+  "repayment_frequency",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "loan_type_name",
+   "fieldtype": "Data",
+   "label": "Loan Type Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "interest_rate",
+   "fieldtype": "Percent",
+   "label": "Interest Rate (%)",
+   "precision": 2
+  },
+  {
+   "fieldname": "interest_type",
+   "fieldtype": "Select",
+   "label": "Interest Type",
+   "options": "Flat Rate\nReducing Balance"
+  },
+  {
+   "fieldname": "default_tenure_months",
+   "fieldtype": "Int",
+   "label": "Default Tenure (Months)"
+  },
+  {
+   "fieldname": "penalty_rate",
+   "fieldtype": "Percent",
+   "label": "Penalty Rate (%)",
+   "precision": 2
+  },
+  {
+   "fieldname": "penalty_calculation_method",
+   "fieldtype": "Select",
+   "label": "Penalty Calculation Method",
+   "options": "Flat Rate\nReducing Balance"
+  },
+  {
+   "fieldname": "minimum_amount",
+   "fieldtype": "Currency",
+   "label": "Minimum Amount (KES)",
+   "precision": 2
+  },
+  {
+   "fieldname": "maximum_amount",
+   "fieldtype": "Currency",
+   "label": "Maximum Amount (KES)",
+   "precision": 2
+  },
+  {
+   "fieldname": "repayment_frequency",
+   "fieldtype": "Select",
+   "label": "Repayment Frequency",
+   "options": "Daily\nWeekly\nBi-Weekly\nMonthly\nBi-Monthly\nQuarterly\nYearly"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  }
+ ],
+ "links": [],
+ "modified": "2025-09-29 12:00:00",
+ "modified_by": "Administrator",
+ "module": "SHG",
+ "name": "SHG Loan Type",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "SHG Admin",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "SHG Treasurer"
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "SHG Auditor"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

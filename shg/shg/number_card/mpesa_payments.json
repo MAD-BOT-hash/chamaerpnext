@@ -1,0 +1,34 @@
+{
+ "aggregate_function_based_on": "amount",
+ "creation": "2025-09-29 12:00:00",
+ "docstatus": 0,
+ "doctype": "Number Card",
+ "document_type": "SHG Contribution",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"SHG Contribution\",\"payment_method\",\"=\",\"Mpesa\"]]",
+ "function": "Sum",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "label": "Mpesa Payments",
+ "modified": "2025-09-29 12:00:00",
+ "module": "SHG",
+ "name": "Mpesa Payments",
+ "owner": "Administrator",
+ "parent_document_type": "",
+ "report_function": "",
+ "roles": [
+  {
+   "role": "SHG Admin"
+  },
+  {
+   "role": "SHG Treasurer"
+  },
+  {
+   "role": "SHG Auditor"
+  }
+ ],
+ "show_percentage_stats": 1,
+ "stats_time_interval": "Daily",
+ "type": "Document Type"
+}

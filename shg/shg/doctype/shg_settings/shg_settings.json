@@ -25,6 +25,15 @@
         "lateness_fine",
         "column_break_14",
         "meeting_quorum_percentage",
+        "mpesa_settings_section",
+        "mpesa_enabled",
+        "mpesa_consumer_key",
+        "mpesa_consumer_secret",
+        "mpesa_shortcode",
+        "column_break_20",
+        "mpesa_passkey",
+        "mpesa_initiator_name",
+        "mpesa_security_credential",
         "notification_settings_section",
         "sms_enabled",
         "sms_api_key",
@@ -57,7 +66,7 @@
             "fieldname": "contribution_frequency",
             "fieldtype": "Select",
             "label": "Default Frequency",
-            "options": "Weekly\nBi-weekly\nMonthly"
+            "options": "Weekly\nBi-weekly\nMonthly\nBi-Monthly"
         },
         {
             "fieldname": "column_break_4",
@@ -135,6 +144,56 @@
             "fieldname": "meeting_quorum_percentage",
             "fieldtype": "Percent",
             "label": "Quorum Percentage"
+        },
+        {
+            "fieldname": "mpesa_settings_section",
+            "fieldtype": "Section Break",
+            "label": "Mpesa Payment Settings"
+        },
+        {
+            "fieldname": "mpesa_enabled",
+            "fieldtype": "Check",
+            "label": "Enable Mpesa Payments"
+        },
+        {
+            "depends_on": "mpesa_enabled",
+            "fieldname": "mpesa_consumer_key",
+            "fieldtype": "Data",
+            "label": "Consumer Key"
+        },
+        {
+            "depends_on": "mpesa_enabled",
+            "fieldname": "mpesa_consumer_secret",
+            "fieldtype": "Password",
+            "label": "Consumer Secret"
+        },
+        {
+            "depends_on": "mpesa_enabled",
+            "fieldname": "mpesa_shortcode",
+            "fieldtype": "Data",
+            "label": "Shortcode"
+        },
+        {
+            "fieldname": "column_break_20",
+            "fieldtype": "Column Break"
+        },
+        {
+            "depends_on": "mpesa_enabled",
+            "fieldname": "mpesa_passkey",
+            "fieldtype": "Data",
+            "label": "Passkey"
+        },
+        {
+            "depends_on": "mpesa_enabled",
+            "fieldname": "mpesa_initiator_name",
+            "fieldtype": "Data",
+            "label": "Initiator Name"
+        },
+        {
+            "depends_on": "mpesa_enabled",
+            "fieldname": "mpesa_security_credential",
+            "fieldtype": "Password",
+            "label": "Security Credential"
         },
         {
             "fieldname": "notification_settings_section",

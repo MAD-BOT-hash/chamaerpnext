@@ -53,11 +53,22 @@ frappe.ui.form.on('SHG Member', {
     
     id_number: function(frm) {
         if (frm.doc.id_number) {
-            // Validate ID number format (8 digits)
-            if (!/^\d{8}$/.test(frm.doc.id_number)) {
-                frappe.msgprint(__('Kenyan ID Number must be 8 digits'));
-                frm.set_value('id_number', '');
+            // Clean the ID number by removing non-digit characters
+            let cleanId = frm.doc.id_number.replace(/\D/g, '');
+            
+            // If the cleaned ID is different from the current value, update it
+            if (cleanId !== frm.doc.id_number) {
+                frm.set_value('id_number', cleanId);
             }
+            
+            // Only validate when we have 8 digits
+            if (cleanId.length === 8) {
+                // Valid - do nothing
+            } else if (cleanId.length > 8) {
+                // Too long - show warning
+                frappe.msgprint(__('Kenyan ID Number must be exactly 8 digits'));
+            }
+            // If less than 8 digits, we're still typing - don't interfere
         }
     },
     

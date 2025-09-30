@@ -7,6 +7,8 @@ def after_install():
     create_default_accounts()
     create_default_settings()
     setup_user_roles()
+    create_default_loan_types()
+    create_default_contribution_types()
     # Register workspace components
     register_workspace_components()
 
@@ -107,6 +109,100 @@ def create_default_settings():
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), "SHG Install - Settings Creation Failed")
 
+def create_default_loan_types():
+    """Create default loan types"""
+    # Emergency Loan
+    if not frappe.db.exists("SHG Loan Type", "Emergency Loan"):
+        try:
+            emergency_loan = frappe.get_doc({
+                "doctype": "SHG Loan Type",
+                "loan_type_name": "Emergency Loan",
+                "description": "Short-term emergency loan for urgent needs",
+                "interest_rate": 15,
+                "interest_type": "Reducing Balance",
+                "default_tenure_months": 6,
+                "penalty_rate": 10,
+                "repayment_frequency": "Monthly",
+                "minimum_amount": 1000,
+                "maximum_amount": 50000,
+                "enabled": 1
+            })
+            emergency_loan.insert()
+            frappe.db.commit()
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Install - Emergency Loan Creation Failed")
+    
+    # Development Loan
+    if not frappe.db.exists("SHG Loan Type", "Development Loan"):
+        try:
+            development_loan = frappe.get_doc({
+                "doctype": "SHG Loan Type",
+                "loan_type_name": "Development Loan",
+                "description": "Long-term development loan for business or personal development",
+                "interest_rate": 12,
+                "interest_type": "Reducing Balance",
+                "default_tenure_months": 12,
+                "penalty_rate": 8,
+                "repayment_frequency": "Monthly",
+                "minimum_amount": 5000,
+                "maximum_amount": 200000,
+                "enabled": 1
+            })
+            development_loan.insert()
+            frappe.db.commit()
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Install - Development Loan Creation Failed")
+
+def create_default_contribution_types():
+    """Create default contribution types"""
+    # Monthly Contribution
+    if not frappe.db.exists("SHG Contribution Type", "Monthly Contribution"):
+        try:
+            monthly_contrib = frappe.get_doc({
+                "doctype": "SHG Contribution Type",
+                "contribution_type_name": "Monthly Contribution",
+                "description": "Regular monthly contribution from members",
+                "default_amount": 500,
+                "frequency": "Monthly",
+                "enabled": 1
+            })
+            monthly_contrib.insert()
+            frappe.db.commit()
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Install - Monthly Contribution Creation Failed")
+    
+    # Welfare Contribution
+    if not frappe.db.exists("SHG Contribution Type", "Welfare Contribution"):
+        try:
+            welfare_contrib = frappe.get_doc({
+                "doctype": "SHG Contribution Type",
+                "contribution_type_name": "Welfare Contribution",
+                "description": "Special contribution for welfare purposes",
+                "default_amount": 1000,
+                "frequency": "Monthly",
+                "enabled": 1
+            })
+            welfare_contrib.insert()
+            frappe.db.commit()
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Install - Welfare Contribution Creation Failed")
+    
+    # Bi-Monthly Contribution
+    if not frappe.db.exists("SHG Contribution Type", "Bi-Monthly Contribution"):
+        try:
+            bimonthly_contrib = frappe.get_doc({
+                "doctype": "SHG Contribution Type",
+                "contribution_type_name": "Bi-Monthly Contribution",
+                "description": "Contribution collected every two months",
+                "default_amount": 1000,
+                "frequency": "Bi-Monthly",
+                "enabled": 1
+            })
+            bimonthly_contrib.insert()
+            frappe.db.commit()
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Install - Bi-Monthly Contribution Creation Failed")
+
 def setup_user_roles():
     """Setup default user roles for SHG"""
     roles_to_create = ["SHG Admin", "SHG Treasurer", "SHG Member", "SHG Auditor"]
@@ -131,8 +227,8 @@ def register_workspace_components():
         # Import all workspace components to ensure they're registered
         from shg.shg.workspace import shg
         from shg.shg.workspace.card import member_management, financial_management, meeting_management, reports_analytics, settings
-        from shg.shg.number_card import active_members, monthly_contributions, outstanding_loans, upcoming_meetings
-        from shg.shg.dashboard_chart import members_overview, financial_summary
+        from shg.shg.number_card import active_members, monthly_contributions, outstanding_loans, upcoming_meetings, bimonthly_contributions, loan_repayments, mpesa_payments
+        from shg.shg.dashboard_chart import members_overview, financial_summary, mpesa_payments, loan_types, contribution_types
         frappe.db.commit()
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "SHG Install - Workspace Component Registration Failed")

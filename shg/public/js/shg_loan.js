@@ -98,6 +98,38 @@ frappe.ui.form.on('SHG Loan', {
         }
     },
     
+    loan_type: function(frm) {
+        if (frm.doc.loan_type) {
+            // Auto-populate loan type details
+            frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'SHG Loan Type',
+                    name: frm.doc.loan_type
+                },
+                callback: function(r) {
+                    if (r.message) {
+                        let loan_type = r.message;
+                        
+                        // Set default values if not already set
+                        if (loan_type.interest_rate && !frm.doc.interest_rate) {
+                            frm.set_value('interest_rate', loan_type.interest_rate);
+                        }
+                        if (loan_type.interest_type && !frm.doc.interest_type) {
+                            frm.set_value('interest_type', loan_type.interest_type);
+                        }
+                        if (loan_type.default_tenure_months && !frm.doc.loan_period_months) {
+                            frm.set_value('loan_period_months', loan_type.default_tenure_months);
+                        }
+                        if (loan_type.repayment_frequency && !frm.doc.repayment_frequency) {
+                            frm.set_value('repayment_frequency', loan_type.repayment_frequency);
+                        }
+                    }
+                }
+            });
+        }
+    },
+    
     loan_amount: function(frm) {
         if (frm.doc.loan_amount) {
             // Validate against maximum loan amount setting
@@ -120,6 +152,36 @@ frappe.ui.form.on('SHG Loan', {
                     }
                 }
             });
+            
+            // Also check against loan type limits
+            if (frm.doc.loan_type) {
+                frappe.call({
+                    method: 'frappe.client.get',
+                    args: {
+                        doctype: 'SHG Loan Type',
+                        name: frm.doc.loan_type
+                    },
+                    callback: function(r) {
+                        if (r.message) {
+                            let loan_type = r.message;
+                            if (loan_type.minimum_amount && frm.doc.loan_amount < loan_type.minimum_amount) {
+                                frappe.msgprint({
+                                    title: __('Below Minimum'),
+                                    message: __('Loan amount is below the minimum of KES {0} for this loan type', [format_currency(loan_type.minimum_amount, 'KES')]),
+                                    indicator: 'orange'
+                                });
+                            }
+                            if (loan_type.maximum_amount && frm.doc.loan_amount > loan_type.maximum_amount) {
+                                frappe.msgprint({
+                                    title: __('Exceeds Limit'),
+                                    message: __('Loan amount exceeds the maximum of KES {0} for this loan type', [format_currency(loan_type.maximum_amount, 'KES')]),
+                                    indicator: 'orange'
+                                });
+                            }
+                        }
+                    }
+                });
+            }
         }
         // Recalculate repayment details
         frm.trigger('calculate_repayment_details');

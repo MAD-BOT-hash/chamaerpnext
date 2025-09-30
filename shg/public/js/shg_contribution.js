@@ -22,6 +22,13 @@ frappe.ui.form.on('SHG Contribution', {
                     }
                 });
             });
+            
+            // Mpesa STK Push button
+            if (frm.doc.payment_method === 'Mpesa' && !frm.doc.reference_number) {
+                frm.add_custom_button(__('Initiate Mpesa STK Push'), function() {
+                    initiate_mpesa_stk_push(frm);
+                });
+            }
         }
     },
     
@@ -55,6 +62,26 @@ frappe.ui.form.on('SHG Contribution', {
         }
     },
     
+    contribution_type_link: function(frm) {
+        if (frm.doc.contribution_type_link) {
+            // Fetch contribution type details
+            frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'SHG Contribution Type',
+                    name: frm.doc.contribution_type_link
+                },
+                callback: function(r) {
+                    if (r.message) {
+                        if (r.message.default_amount && !frm.doc.amount) {
+                            frm.set_value('amount', r.message.default_amount);
+                        }
+                    }
+                }
+            });
+        }
+    },
+    
     amount: function(frm) {
         if (frm.doc.amount && frm.doc.contribution_type === 'Regular Weekly') {
             // Validate against minimum contribution
@@ -82,16 +109,21 @@ frappe.ui.form.on('SHG Contribution', {
     
     payment_method: function(frm) {
         // Make reference number required for certain payment methods
-        if (frm.doc.payment_method === 'Mobile Money' || frm.doc.payment_method === 'Bank Transfer') {
+        if (frm.doc.payment_method === 'Mobile Money' || frm.doc.payment_method === 'Bank Transfer' || frm.doc.payment_method === 'Mpesa') {
             frm.toggle_reqd('reference_number', true);
         } else {
             frm.toggle_reqd('reference_number', false);
+        }
+        
+        // Show Mpesa STK Push button
+        if (frm.doc.payment_method === 'Mpesa') {
+            frm.refresh();
         }
     },
 });
 
 function get_suggested_contribution_amount(frm) {
-    if (!frm.doc.member || !frm.doc.contribution_type) return;
+    if (!frm.doc.member || (!frm.doc.contribution_type && !frm.doc.contribution_type_link)) return;
     
     frappe.call({
         method: 'get_suggested_amount',
@@ -99,6 +131,31 @@ function get_suggested_contribution_amount(frm) {
         callback: function(r) {
             if (r.message && !frm.doc.amount) {
                 frm.set_value('amount', r.message);
+            }
+        }
+    });
+}
+
+function initiate_mpesa_stk_push(frm) {
+    if (!frm.doc.member || !frm.doc.amount) {
+        frappe.msgprint(__('Please select a member and enter an amount'));
+        return;
+    }
+    
+    frappe.call({
+        method: 'initiate_mpesa_stk_push',
+        doc: frm.doc,
+        freeze: true,
+        freeze_message: __('Initiating Mpesa STK Push...'),
+        callback: function(r) {
+            if (r.message && r.message.success) {
+                frappe.msgprint(__('Mpesa STK Push initiated successfully. Please check your phone.'));
+            } else {
+                frappe.msgprint({
+                    title: __('Error'),
+                    message: r.message ? r.message.error : __('Failed to initiate Mpesa STK Push'),
+                    indicator: 'red'
+                });
             }
         }
     });
