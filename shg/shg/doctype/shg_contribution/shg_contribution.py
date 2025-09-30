@@ -53,10 +53,8 @@ class SHGContribution(Document):
             else:
                 frappe.throw(_("Please create a company first"))
                 
-        # Get member's account
+        # Get member's account (auto-created if not exists)
         member_account = self.get_member_account()
-        if not member_account:
-            frappe.throw(_("Member account not found"))
             
         # Get contribution account
         contribution_account = frappe.db.get_value("Account", 
@@ -105,16 +103,39 @@ class SHGContribution(Document):
                 je.cancel()
                 
     def get_member_account(self):
-        """Get member's ledger account"""
+        """Get member's ledger account, create if not exists"""
         member = frappe.get_doc("SHG Member", self.member)
         company = frappe.defaults.get_user_default("Company")
         if not company:
             companies = frappe.get_all("Company", limit=1)
             if companies:
                 company = companies[0].name
+            else:
+                frappe.throw(_("Please create a company first"))
                 
-        account_name = f"{member.member_name} - SHG Members - {company}"
-        return frappe.db.get_value("Account", {"name": account_name})
+        # Try to get existing account
+        account_name = f"{member.member_name} - SHG Members"
+        account = frappe.db.get_value("Account", {"account_name": account_name, "company": company})
+        
+        # If account doesn't exist, create it
+        if not account:
+            try:
+                account_doc = frappe.get_doc({
+                    "doctype": "Account",
+                    "company": company,
+                    "account_name": account_name,
+                    "parent_account": f"SHG Members - {company}",
+                    "account_type": "Receivable",
+                    "is_group": 0,
+                    "root_type": "Asset"
+                })
+                account_doc.insert()
+                account = account_doc.name
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), "SHG Contribution - Member Account Creation Failed")
+                frappe.throw(_(f"Failed to create member account: {str(e)}"))
+                
+        return account
         
     def get_member_customer(self):
         """Get member's customer link"""

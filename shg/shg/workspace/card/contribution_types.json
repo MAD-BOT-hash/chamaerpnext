@@ -1,0 +1,31 @@
+{
+ "creation": "2025-09-30 12:00:00",
+ "docstatus": 0,
+ "doctype": "Workspace Card",
+ "idx": 0,
+ "label": "Contribution Types",
+ "modified": "2025-09-30 12:00:00",
+ "module": "SHG",
+ "name": "Contribution Types",
+ "owner": "Administrator",
+ "parent_workspace": "SHG",
+ "sections": [
+  {
+   "section_type": "Links",
+   "links": [
+    {
+     "label": "Contribution Types",
+     "type": "DocType",
+     "name": "SHG Contribution Type",
+     "is_query_report": 0
+    },
+    {
+     "label": "Manage Contribution Types",
+     "type": "Page",
+     "name": "shg-contribution-type",
+     "is_query_report": 0
+    }
+   ]
+  }
+ ]
+}

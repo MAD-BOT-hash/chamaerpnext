@@ -17,6 +17,7 @@ The SHG Management System is a complete solution for managing Self Help Groups, 
 - **Savings & Contributions**: Automated weekly/bi-weekly/monthly/bi-monthly tracking with GL integration and Mpesa payments
 - **Loan Management**: Full lifecycle from application to closure with interest calculation and configurable loan types
 - **Meeting Management**: Attendance tracking with automated fine calculation
+- **Member Attendance Tracking**: Detailed attendance records with Present/Absent/Late/Excused status
 - **Notification System**: SMS/Email/WhatsApp reminders and alerts
 - **Financial Reporting**: Comprehensive statements and portfolio analysis including member statements
 - **Member Account Management**: Auto-generated unique account numbers for each member
@@ -79,7 +80,7 @@ bench --site [site-name] reinstall-app shg
    - Loan settings (interest rates, terms)
    - Meeting settings (fines, quorum)
    - Mpesa payment settings (API keys, credentials)
-   - Notification settings (SMS, Email)
+   - Notification settings (SMS, Email, WhatsApp)
    - Account numbering preferences
 
 2. Create Loan Types and Contribution Types as needed for your SHG
@@ -87,6 +88,32 @@ bench --site [site-name] reinstall-app shg
 3. Register members who will automatically receive account numbers
 
 4. Set up user roles (SHG Admin, SHG Treasurer, SHG Member, SHG Auditor) for proper access control
+
+### Email Notification Setup
+To enable monthly email statements:
+1. In SHG Settings, check "Enable Monthly Statements"
+2. Enter the sender email address
+3. Customize the email subject and template as needed
+4. Ensure the ERPNext Email Account is properly configured
+
+### WhatsApp Notification Setup
+To enable WhatsApp notifications:
+1. In SHG Settings, check "Enable SMS Notifications" (used for WhatsApp as well)
+2. Configure either:
+   - Twilio API credentials (Account SID, Auth Token, WhatsApp-enabled number)
+   - Or install the Frappe WhatsApp app and configure it
+3. Members will receive monthly statements via WhatsApp if they have phone numbers
+
+### Scheduler Job Configuration
+The app uses ERPNext's scheduler to send automatic notifications:
+- Daily: Loan reminders and penalty calculations
+- Weekly: Contribution reminders
+- Monthly: Monthly statements (email and WhatsApp)
+
+Ensure the scheduler is enabled in your ERPNext installation:
+```bash
+bench --site [site-name] enable-scheduler
+```
 
 ## API Endpoints
 The app provides REST API endpoints for mobile app integration:
@@ -104,6 +131,24 @@ The app provides REST API endpoints for mobile app integration:
 - Financial Summary: Organization-wide financial metrics
 - Member Summary: Member demographics and statistics
 - Loan Statement: Detailed loan information
+- Yearly Attendance Report: Monthly attendance summary by member
+
+## New Features
+
+### Member Attendance Tracking
+- New "SHG Member Attendance" doctype for recording meeting attendance
+- Auto-population of all active members when selecting a meeting date
+- Support for Present/Absent/Late/Excused attendance statuses
+- Yearly attendance report with monthly summaries by member
+
+### Enhanced Notifications
+- Monthly email statements for contributions and loan repayments
+- WhatsApp notifications using Twilio or Frappe WhatsApp connector
+- Configurable notification settings in SHG Settings
+
+### Scheduler Jobs
+- Automated monthly statement generation (email and WhatsApp)
+- Configurable via ERPNext scheduler events
 
 ## Testing and Verification
 
@@ -116,6 +161,8 @@ After installation, verify the following components are working:
 5. **Scheduled Tasks**: Daily, weekly, and monthly tasks should run
 6. **Member Accounts**: New members should receive auto-generated account numbers
 7. **Financial Integration**: Contributions and loans should post to General Ledger
+8. **Attendance Tracking**: Member attendance records can be created and reports generated
+9. **Notifications**: Email and WhatsApp notifications are sent correctly
 
 ## Troubleshooting
 

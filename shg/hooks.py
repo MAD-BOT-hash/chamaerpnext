@@ -35,7 +35,9 @@ scheduler_events = {
         "shg.tasks.send_weekly_contribution_reminders"
     ],
     "monthly": [
-        "shg.tasks.generate_monthly_reports"
+        "shg.tasks.generate_monthly_reports",
+        "shg.utils.email.send_monthly_statements",
+        "shg.utils.whatsapp.send_monthly_statements_whatsapp"
     ]
 }
 
@@ -66,7 +68,8 @@ doctype_js = {
     "SHG Member": "public/js/shg_member.js",
     "SHG Contribution": "public/js/shg_contribution.js",
     "SHG Loan": "public/js/shg_loan.js",
-    "SHG Meeting": "public/js/shg_meeting.js"
+    "SHG Meeting": "public/js/shg_meeting.js",
+    "SHG Member Attendance": "public/js/shg_member_attendance.js"
 }
 
 # Fix for workspace path issue

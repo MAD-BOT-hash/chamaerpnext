@@ -1,0 +1,25 @@
+{
+    "content": "[{\"name\":\"contribution_type_management\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Contribution Type Management</span>\",\"col\":12}},{\"name\":\"contribution_type_list\",\"type\":\"list\",\"data\":{\"doctype\":\"SHG Contribution Type\",\"col\":12}}]",
+    "creation": "2025-09-30 12:00:00",
+    "docstatus": 0,
+    "doctype": "Page",
+    "idx": 0,
+    "modified": "2025-09-30 12:00:00",
+    "module": "SHG",
+    "name": "shg-contribution-type",
+    "owner": "Administrator",
+    "page_name": "SHG Contribution Types",
+    "roles": [
+        {
+            "role": "SHG Admin"
+        },
+        {
+            "role": "SHG Treasurer"
+        }
+    ],
+    "script": "",
+    "standard": "Yes",
+    "style": "",
+    "system_page": 0,
+    "title": "SHG Contribution Types"
+}

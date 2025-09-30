@@ -42,6 +42,11 @@
         "sms_sender_id",
         "email_enabled",
         "smtp_server",
+        "enable_monthly_statements",
+        "statement_sender_email",
+        "statement_email_subject",
+        "column_break_22",
+        "statement_email_template",
         "system_settings_section",
         "currency",
         "fiscal_year_start_month",
@@ -227,6 +232,40 @@
             "fieldname": "sms_sender_id",
             "fieldtype": "Data",
             "label": "SMS Sender ID"
+        },
+        {
+            "fieldname": "column_break_22",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "1",
+            "fieldname": "enable_monthly_statements",
+            "fieldtype": "Check",
+            "label": "Enable Monthly Statements"
+        },
+        {
+            "depends_on": "enable_monthly_statements",
+            "fieldname": "statement_sender_email",
+            "fieldtype": "Data",
+            "label": "Statement Sender Email"
+        },
+        {
+            "depends_on": "enable_monthly_statements",
+            "fieldname": "statement_email_subject",
+            "fieldtype": "Data",
+            "label": "Statement Email Subject",
+            "default": "Monthly SHG Statement"
+        },
+        {
+            "fieldname": "column_break_22",
+            "fieldtype": "Column Break"
+        },
+        {
+            "depends_on": "enable_monthly_statements",
+            "fieldname": "statement_email_template",
+            "fieldtype": "Text Editor",
+            "label": "Statement Email Template",
+            "default": "Dear {member_name},\n\nPlease find your monthly statement attached.\n\nTotal Contributions: KES {total_contributions}\nTotal Loan Repayments: KES {total_repayments}\nOutstanding Loan Balance: KES {outstanding_balance}\n\nThank you for your continued support.\n\nSHG Management"
         },
         {
             "fieldname": "system_settings_section",

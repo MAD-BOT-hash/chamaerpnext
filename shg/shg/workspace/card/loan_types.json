@@ -1,0 +1,31 @@
+{
+ "creation": "2025-09-30 12:00:00",
+ "docstatus": 0,
+ "doctype": "Workspace Card",
+ "idx": 0,
+ "label": "Loan Types",
+ "modified": "2025-09-30 12:00:00",
+ "module": "SHG",
+ "name": "Loan Types",
+ "owner": "Administrator",
+ "parent_workspace": "SHG",
+ "sections": [
+  {
+   "section_type": "Links",
+   "links": [
+    {
+     "label": "Loan Types",
+     "type": "DocType",
+     "name": "SHG Loan Type",
+     "is_query_report": 0
+    },
+    {
+     "label": "Manage Loan Types",
+     "type": "Page",
+     "name": "shg-loan-type",
+     "is_query_report": 0
+    }
+   ]
+  }
+ ]
+}

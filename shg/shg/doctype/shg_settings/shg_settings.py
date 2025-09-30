@@ -23,3 +23,12 @@ class SHGSettings(Document):
                 frappe.throw("Mpesa Shortcode is required")
             if not self.mpesa_passkey:
                 frappe.throw("Mpesa Passkey is required")
+            
+        # Validate email settings if monthly statements are enabled
+        if self.enable_monthly_statements:
+            if not self.statement_sender_email:
+                frappe.throw("Statement Sender Email is required when monthly statements are enabled")
+            if not self.statement_email_subject:
+                frappe.throw("Statement Email Subject is required when monthly statements are enabled")
+            if not self.statement_email_template:
+                frappe.throw("Statement Email Template is required when monthly statements are enabled")

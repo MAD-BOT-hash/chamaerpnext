@@ -1,0 +1,168 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "naming_series:",
+    "creation": "2025-09-30 12:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "naming_series",
+        "meeting_details_section",
+        "meeting_date",
+        "meeting",
+        "column_break_4",
+        "total_members",
+        "attendance_summary_section",
+        "members_present",
+        "members_absent",
+        "members_late",
+        "members_excused",
+        "column_break_10",
+        "attendance_percentage",
+        "attendance_details_section",
+        "attendance",
+        "amended_from"
+    ],
+    "fields": [
+        {
+            "fieldname": "naming_series",
+            "fieldtype": "Select",
+            "label": "Naming Series",
+            "options": "ATT-.YYYY.-.####",
+            "reqd": 1
+        },
+        {
+            "fieldname": "meeting_details_section",
+            "fieldtype": "Section Break",
+            "label": "Meeting Details"
+        },
+        {
+            "fieldname": "meeting_date",
+            "fieldtype": "Date",
+            "label": "Meeting Date",
+            "reqd": 1,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "meeting",
+            "fieldtype": "Link",
+            "label": "Meeting",
+            "options": "SHG Meeting",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_4",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "total_members",
+            "fieldtype": "Int",
+            "label": "Total Members",
+            "read_only": 1
+        },
+        {
+            "fieldname": "attendance_summary_section",
+            "fieldtype": "Section Break",
+            "label": "Attendance Summary"
+        },
+        {
+            "fieldname": "members_present",
+            "fieldtype": "Int",
+            "label": "Members Present",
+            "read_only": 1
+        },
+        {
+            "fieldname": "members_absent",
+            "fieldtype": "Int",
+            "label": "Members Absent",
+            "read_only": 1
+        },
+        {
+            "fieldname": "members_late",
+            "fieldtype": "Int",
+            "label": "Members Late",
+            "read_only": 1
+        },
+        {
+            "fieldname": "members_excused",
+            "fieldtype": "Int",
+            "label": "Members Excused",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_10",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "attendance_percentage",
+            "fieldtype": "Percent",
+            "label": "Attendance Percentage",
+            "read_only": 1,
+            "precision": 2
+        },
+        {
+            "fieldname": "attendance_details_section",
+            "fieldtype": "Section Break",
+            "label": "Attendance Details"
+        },
+        {
+            "fieldname": "attendance",
+            "fieldtype": "Table",
+            "label": "Member Attendance",
+            "options": "SHG Member Attendance Detail"
+        },
+        {
+            "fieldname": "amended_from",
+            "fieldtype": "Link",
+            "label": "Amended From",
+            "no_copy": 1,
+            "options": "SHG Member Attendance",
+            "print_hide": 1,
+            "read_only": 1
+        }
+    ],
+    "is_submittable": 1,
+    "links": [],
+    "modified": "2025-09-30 12:00:00",
+    "modified_by": "Administrator",
+    "module": "SHG",
+    "name": "SHG Member Attendance",
+    "naming_rule": "By \"Naming Series\" field",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Admin",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Treasurer",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "email": 1,
+            "print": 1,
+            "read": 1,
+            "role": "SHG Member"
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "track_changes": 1
+}

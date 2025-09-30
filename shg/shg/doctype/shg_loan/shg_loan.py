@@ -8,6 +8,7 @@ class SHGLoan(Document):
     def validate(self):
         self.validate_amount()
         self.validate_interest_rate()
+        self.check_member_eligibility()
         self.calculate_repayment_details()
         # Load loan type settings if selected
         if self.loan_type:
@@ -22,6 +23,42 @@ class SHGLoan(Document):
         """Validate interest rate"""
         if self.interest_rate < 0:
             frappe.throw(_("Interest rate cannot be negative"))
+            
+    def check_member_eligibility(self):
+        """Check if member is eligible for loan"""
+        if not self.member:
+            frappe.throw(_("Member is required"))
+            
+        # Check if member exists
+        if not frappe.db.exists("SHG Member", self.member):
+            frappe.throw(_(f"Member {self.member} does not exist"))
+            
+        # Get member details
+        member = frappe.get_doc("SHG Member", self.member)
+        
+        # Check if member is active
+        if member.membership_status != "Active":
+            frappe.throw(_(f"Member {member.member_name} is not active"))
+            
+        # Check for overdue loans
+        overdue_loans = frappe.db.sql("""
+            SELECT COUNT(*) 
+            FROM `tabSHG Loan` 
+            WHERE member = %s 
+            AND status = 'Disbursed' 
+            AND next_due_date < %s
+            AND balance_amount > 0
+        """, (self.member, nowdate()))[0][0]
+        
+        if overdue_loans > 0:
+            frappe.throw(_(f"Member {member.member_name} has overdue loans and is not eligible for new loans"))
+            
+        # Check savings threshold (at least 3 months of contributions)
+        settings = frappe.get_single("SHG Settings")
+        required_savings = settings.default_contribution_amount * 12  # 12 weeks of contributions
+        
+        if member.total_contributions < required_savings:
+            frappe.throw(_(f"Member {member.member_name} does not meet the minimum savings requirement of KES {required_savings:,.2f}"))
             
     def load_loan_type_settings(self):
         """Load settings from selected loan type"""

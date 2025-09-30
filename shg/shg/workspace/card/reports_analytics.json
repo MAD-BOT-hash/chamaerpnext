@@ -42,6 +42,12 @@
      "type": "Report",
      "name": "Loan Statement",
      "is_query_report": 1
+    },
+    {
+     "label": "Yearly Attendance Report",
+     "type": "Report",
+     "name": "Yearly Attendance Report",
+     "is_query_report": 1
     }
    ]
   }
