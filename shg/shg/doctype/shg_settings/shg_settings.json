@@ -47,6 +47,11 @@
         "statement_email_subject",
         "column_break_22",
         "statement_email_template",
+        "accounting_settings_section",
+        "default_bank_account",
+        "default_cash_account",
+        "default_loan_account",
+        "default_interest_income_account",
         "system_settings_section",
         "currency",
         "fiscal_year_start_month",
@@ -266,6 +271,35 @@
             "fieldtype": "Text Editor",
             "label": "Statement Email Template",
             "default": "Dear {member_name},\n\nPlease find your monthly statement attached.\n\nTotal Contributions: KES {total_contributions}\nTotal Loan Repayments: KES {total_repayments}\nOutstanding Loan Balance: KES {outstanding_balance}\n\nThank you for your continued support.\n\nSHG Management"
+        },
+        {
+            "fieldname": "accounting_settings_section",
+            "fieldtype": "Section Break",
+            "label": "Accounting Settings"
+        },
+        {
+            "fieldname": "default_bank_account",
+            "fieldtype": "Link",
+            "label": "Default Bank Account",
+            "options": "Account"
+        },
+        {
+            "fieldname": "default_cash_account",
+            "fieldtype": "Link",
+            "label": "Default Cash Account",
+            "options": "Account"
+        },
+        {
+            "fieldname": "default_loan_account",
+            "fieldtype": "Link",
+            "label": "Default Loan Account",
+            "options": "Account"
+        },
+        {
+            "fieldname": "default_interest_income_account",
+            "fieldtype": "Link",
+            "label": "Default Interest Income Account",
+            "options": "Account"
         },
         {
             "fieldname": "system_settings_section",

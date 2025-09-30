@@ -53,6 +53,11 @@ class SHGContribution(Document):
             else:
                 frappe.throw(_("Please create a company first"))
                 
+        # Get configured accounts or use defaults
+        settings = frappe.get_single("SHG Settings")
+        bank_account = settings.default_bank_account if settings.default_bank_account else f"Bank - {company}"
+        cash_account = settings.default_cash_account if settings.default_cash_account else f"Cash - {company}"
+        
         # Get member's account (auto-created if not exists)
         member_account = self.get_member_account()
             
@@ -61,6 +66,9 @@ class SHGContribution(Document):
             {"account_name": "SHG Contributions", "company": company})
         if not contribution_account:
             frappe.throw(_("SHG Contributions account not found"))
+            
+        # Determine which account to debit (bank or cash)
+        debit_account = bank_account if frappe.db.exists("Account", bank_account) else cash_account
             
         # Create Journal Entry
         je = frappe.get_doc({
@@ -71,16 +79,16 @@ class SHGContribution(Document):
             "remark": f"Contribution from {self.member_name} - {self.contribution_type}",
             "accounts": [
                 {
-                    "account": member_account,
+                    "account": debit_account,
                     "debit_in_account_currency": self.amount,
-                    "party_type": "Customer",
-                    "party": self.get_member_customer(),
                     "reference_type": "SHG Contribution",
                     "reference_name": self.name
                 },
                 {
-                    "account": contribution_account,
+                    "account": member_account,
                     "credit_in_account_currency": self.amount,
+                    "party_type": "Customer",
+                    "party": self.get_member_customer(),
                     "reference_type": "SHG Contribution",
                     "reference_name": self.name
                 }
@@ -113,8 +121,8 @@ class SHGContribution(Document):
             else:
                 frappe.throw(_("Please create a company first"))
                 
-        # Try to get existing account
-        account_name = f"{member.member_name} - SHG Members"
+        # Try to get existing account using member's account number
+        account_name = f"{member.account_number} - {company}"
         account = frappe.db.get_value("Account", {"account_name": account_name, "company": company})
         
         # If account doesn't exist, create it
@@ -123,7 +131,7 @@ class SHGContribution(Document):
                 account_doc = frappe.get_doc({
                     "doctype": "Account",
                     "company": company,
-                    "account_name": account_name,
+                    "account_name": member.account_number,
                     "parent_account": f"SHG Members - {company}",
                     "account_type": "Receivable",
                     "is_group": 0,

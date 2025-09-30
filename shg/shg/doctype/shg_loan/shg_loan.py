@@ -98,6 +98,10 @@ class SHGLoan(Document):
             self.generate_repayment_schedule()
             self.update_member_summary()
             self.send_approval_notification()
+        elif self.status == "Disbursed":
+            self.generate_repayment_schedule()
+            self.update_member_summary()
+            self.post_disbursement_to_general_ledger()
             
     def on_update(self):
         """Update balance when status changes"""
@@ -106,6 +110,98 @@ class SHGLoan(Document):
             self.balance_amount = self.loan_amount
             self.save()
             
+    def post_disbursement_to_general_ledger(self):
+        """Post loan disbursement to General Ledger using Journal Entry"""
+        if self.disbursement_journal_entry:
+            return
+            
+        company = frappe.defaults.get_user_default("Company")
+        if not company:
+            companies = frappe.get_all("Company", limit=1)
+            if companies:
+                company = companies[0].name
+            else:
+                frappe.throw(_("Please create a company first"))
+                
+        # Get configured accounts or use defaults
+        settings = frappe.get_single("SHG Settings")
+        loan_account = settings.default_loan_account if settings.default_loan_account else f"Loans Disbursed - {company}"
+        
+        # Get member's account (auto-created if not exists)
+        member_account = self.get_member_account()
+            
+        # Create Journal Entry
+        je = frappe.get_doc({
+            "doctype": "Journal Entry",
+            "voucher_type": "Journal Entry",
+            "posting_date": self.disbursement_date,
+            "company": company,
+            "remark": f"Loan disbursement to {self.member_name} - {self.name}",
+            "accounts": [
+                {
+                    "account": member_account,
+                    "debit_in_account_currency": self.loan_amount,
+                    "party_type": "Customer",
+                    "party": self.get_member_customer(),
+                    "reference_type": "SHG Loan",
+                    "reference_name": self.name
+                },
+                {
+                    "account": loan_account,
+                    "credit_in_account_currency": self.loan_amount,
+                    "reference_type": "SHG Loan",
+                    "reference_name": self.name
+                }
+            ]
+        })
+        
+        je.insert()
+        je.submit()
+        
+        # Update loan record
+        self.disbursement_journal_entry = je.name
+        self.save()
+        
+    def get_member_account(self):
+        """Get member's ledger account, create if not exists"""
+        member = frappe.get_doc("SHG Member", self.member)
+        company = frappe.defaults.get_user_default("Company")
+        if not company:
+            companies = frappe.get_all("Company", limit=1)
+            if companies:
+                company = companies[0].name
+            else:
+                frappe.throw(_("Please create a company first"))
+                
+        # Try to get existing account using member's account number
+        account_name = f"{member.account_number} - {company}"
+        account = frappe.db.get_value("Account", {"account_name": account_name, "company": company})
+        
+        # If account doesn't exist, create it
+        if not account:
+            try:
+                account_doc = frappe.get_doc({
+                    "doctype": "Account",
+                    "company": company,
+                    "account_name": member.account_number,
+                    "parent_account": f"SHG Members - {company}",
+                    "account_type": "Receivable",
+                    "is_group": 0,
+                    "root_type": "Asset"
+                })
+                account_doc.insert()
+                account = account_doc.name
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), "SHG Loan - Member Account Creation Failed")
+                frappe.throw(_(f"Failed to create member account: {str(e)}"))
+                
+        return account
+        
+    def get_member_customer(self):
+        """Get member's customer link"""
+        member = frappe.get_doc("SHG Member", self.member)
+        return member.customer_link
+                
     def generate_repayment_schedule(self):
         """Generate repayment schedule based on frequency"""
         # Clear existing schedule

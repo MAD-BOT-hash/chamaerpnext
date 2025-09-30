@@ -32,3 +32,13 @@ class SHGSettings(Document):
                 frappe.throw("Statement Email Subject is required when monthly statements are enabled")
             if not self.statement_email_template:
                 frappe.throw("Statement Email Template is required when monthly statements are enabled")
+            
+        # Validate accounting settings
+        if self.default_bank_account and not frappe.db.exists("Account", self.default_bank_account):
+            frappe.throw("Default Bank Account does not exist")
+        if self.default_cash_account and not frappe.db.exists("Account", self.default_cash_account):
+            frappe.throw("Default Cash Account does not exist")
+        if self.default_loan_account and not frappe.db.exists("Account", self.default_loan_account):
+            frappe.throw("Default Loan Account does not exist")
+        if self.default_interest_income_account and not frappe.db.exists("Account", self.default_interest_income_account):
+            frappe.throw("Default Interest Income Account does not exist")

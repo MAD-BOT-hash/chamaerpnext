@@ -81,17 +81,33 @@ class SHGLoanRepayment(Document):
         """Create Journal Entry for repayment"""
         company = frappe.defaults.get_user_default("Company")
         if not company:
-            company = frappe.get_all("Company", limit=1)[0].name
+            companies = frappe.get_all("Company", limit=1)
+            if companies:
+                company = companies[0].name
+            else:
+                frappe.throw(_("Please create a company first"))
+
+        # Get configured accounts or use defaults
+        settings = frappe.get_single("SHG Settings")
+        bank_account = settings.default_bank_account if settings.default_bank_account else f"Bank - {company}"
+        cash_account = settings.default_cash_account if settings.default_cash_account else f"Cash - {company}"
+        interest_income_account = settings.default_interest_income_account if settings.default_interest_income_account else f"SHG Interest Income - {company}"
+        
+        # Get member's account (auto-created if not exists)
+        member_account = self.get_member_account()
+            
+        # Determine which account to debit (bank or cash)
+        debit_account = bank_account if frappe.db.exists("Account", bank_account) else cash_account
 
         accounts = [
             {
-                "account": f"Cash - {company}",
+                "account": debit_account,
                 "debit_in_account_currency": self.total_paid,
                 "reference_type": self.doctype,
                 "reference_name": self.name
             },
             {
-                "account": f"SHG Member - {self.member_name} - {company}",
+                "account": member_account,
                 "credit_in_account_currency": self.principal_amount,
                 "party_type": "Customer",
                 "party": frappe.db.get_value("SHG Member", self.member, "customer_link"),
@@ -102,7 +118,7 @@ class SHGLoanRepayment(Document):
 
         if self.interest_amount > 0:
             accounts.append({
-                "account": f"SHG Interest Income - {company}",
+                "account": interest_income_account,
                 "credit_in_account_currency": self.interest_amount,
                 "reference_type": self.doctype,
                 "reference_name": self.name
@@ -135,9 +151,44 @@ class SHGLoanRepayment(Document):
         except Exception as e:
             frappe.log_error(f"Failed to post repayment to GL: {str(e)}")
             frappe.throw(f"Failed to post to General Ledger: {str(e)}")
+            
+    def get_member_account(self):
+        """Get member's ledger account, create if not exists"""
+        member = frappe.get_doc("SHG Member", self.member)
+        company = frappe.defaults.get_user_default("Company")
+        if not company:
+            companies = frappe.get_all("Company", limit=1)
+            if companies:
+                company = companies[0].name
+            else:
+                frappe.throw(_("Please create a company first"))
+                
+        # Try to get existing account using member's account number
+        account_name = f"{member.account_number} - {company}"
+        account = frappe.db.get_value("Account", {"account_name": account_name, "company": company})
+        
+        # If account doesn't exist, create it
+        if not account:
+            try:
+                account_doc = frappe.get_doc({
+                    "doctype": "Account",
+                    "company": company,
+                    "account_name": member.account_number,
+                    "parent_account": f"SHG Members - {company}",
+                    "account_type": "Receivable",
+                    "is_group": 0,
+                    "root_type": "Asset"
+                })
+                account_doc.insert()
+                account = account_doc.name
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), "SHG Loan Repayment - Member Account Creation Failed")
+                frappe.throw(_(f"Failed to create member account: {str(e)}"))
+                
+        return account
 
     def update_member_totals(self):
-        """Update member’s totals"""
+        """Update member's totals"""
         try:
             member_doc = frappe.get_doc("SHG Member", self.member)
             member_doc.update_financial_summary()

@@ -91,14 +91,19 @@ class SHGMember(Document):
             else:
                 frappe.throw(_("Please create a company first"))
                 
-        # Create member's receivable account
-        account_name = f"{self.member_name} - SHG Members"
+        # Ensure account number is set
+        if not self.account_number:
+            self.set_account_number()
+            self.save()
+                
+        # Create member's receivable account using account number
+        account_name = f"{self.account_number} - {company}"
         if not frappe.db.exists("Account", {"account_name": account_name, "company": company}):
             try:
                 account = frappe.get_doc({
                     "doctype": "Account",
                     "company": company,
-                    "account_name": self.member_name,
+                    "account_name": self.account_number,
                     "parent_account": f"SHG Members - {company}",
                     "account_type": "Receivable",
                     "is_group": 0,
