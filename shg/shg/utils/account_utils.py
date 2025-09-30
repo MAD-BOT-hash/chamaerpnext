@@ -17,12 +17,15 @@ def get_or_create_account(account_name, company, parent_account=None, account_ty
     Returns:
         str: The name of the found or created account
     """
+    # Get company abbreviation
+    company_abbr = frappe.get_value("Company", company, "abbr")
+    
     # First, try to find the account with the plain name
     account = frappe.db.get_value("Account", {"account_name": account_name, "company": company})
     
-    # If not found, try with company suffix
+    # If not found, try with company suffix (using abbreviation)
     if not account:
-        suffixed_name = f"{account_name} - {company}"
+        suffixed_name = f"{account_name} - {company_abbr}"
         account = frappe.db.get_value("Account", {"account_name": suffixed_name, "company": company})
     
     # If still not found, create it
@@ -56,6 +59,9 @@ def get_or_create_member_account(member, company):
     Returns:
         str: The name of the member's account
     """
+    # Get company abbreviation
+    company_abbr = frappe.get_value("Company", company, "abbr")
+    
     # Ensure account number is set
     if not member.account_number:
         member.set_account_number()
@@ -65,7 +71,7 @@ def get_or_create_member_account(member, company):
     account = frappe.db.get_value("Account", {"account_name": member.account_number, "company": company})
     
     if not account:
-        suffixed_name = f"{member.account_number} - {company}"
+        suffixed_name = f"{member.account_number} - {company_abbr}"
         account = frappe.db.get_value("Account", {"account_name": suffixed_name, "company": company})
     
     # If account doesn't exist, create it
@@ -101,10 +107,18 @@ def get_or_create_shg_contributions_account(company):
     Returns:
         str: The name of the contributions account
     """
+    # Get company abbreviation
+    company_abbr = frappe.get_value("Company", company, "abbr")
+    
+    # Get parent account using frappe.db.get_value for robustness
+    income_parent = frappe.db.get_value("Account", {"account_name": "Income", "company": company}, "name")
+    if not income_parent:
+        income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": company}, "name")
+    
     return get_or_create_account(
         "SHG Contributions",
         company,
-        parent_account=get_income_account(company),
+        parent_account=income_parent,
         account_type="Income Account",
         is_group=0,
         root_type="Income"
@@ -120,11 +134,19 @@ def get_or_create_shg_loans_account(company):
     Returns:
         str: The name of the loans account
     """
+    # Get company abbreviation
+    company_abbr = frappe.get_value("Company", company, "abbr")
+    
+    # Get parent account using frappe.db.get_value for robustness
+    loans_parent = frappe.db.get_value("Account", {"account_name": "Loans and Advances (Assets)", "company": company}, "name")
+    if not loans_parent:
+        loans_parent = frappe.db.get_value("Account", {"account_name": f"Loans and Advances (Assets) - {company_abbr}", "company": company}, "name")
+    
     return get_or_create_account(
         "Loans Disbursed",
         company,
-        parent_account=get_loans_and_advances_account(company),
-        account_type="Bank",
+        parent_account=loans_parent,
+        account_type="Receivable",
         is_group=0,
         root_type="Asset"
     )
@@ -139,10 +161,18 @@ def get_or_create_shg_interest_income_account(company):
     Returns:
         str: The name of the interest income account
     """
+    # Get company abbreviation
+    company_abbr = frappe.get_value("Company", company, "abbr")
+    
+    # Get parent account using frappe.db.get_value for robustness
+    income_parent = frappe.db.get_value("Account", {"account_name": "Income", "company": company}, "name")
+    if not income_parent:
+        income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": company}, "name")
+    
     return get_or_create_account(
         "SHG Interest Income",
         company,
-        parent_account=get_income_account(company),
+        parent_account=income_parent,
         account_type="Income Account",
         is_group=0,
         root_type="Income"
@@ -158,10 +188,18 @@ def get_or_create_shg_penalty_income_account(company):
     Returns:
         str: The name of the penalty income account
     """
+    # Get company abbreviation
+    company_abbr = frappe.get_value("Company", company, "abbr")
+    
+    # Get parent account using frappe.db.get_value for robustness
+    income_parent = frappe.db.get_value("Account", {"account_name": "Income", "company": company}, "name")
+    if not income_parent:
+        income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": company}, "name")
+    
     return get_or_create_account(
         "SHG Penalty Income",
         company,
-        parent_account=get_income_account(company),
+        parent_account=income_parent,
         account_type="Income Account",
         is_group=0,
         root_type="Income"
@@ -177,32 +215,19 @@ def get_or_create_shg_parent_account(company):
     Returns:
         str: The name of the parent account
     """
+    # Get company abbreviation
+    company_abbr = frappe.get_value("Company", company, "abbr")
+    
+    # Get parent account using frappe.db.get_value for robustness
+    ar_parent = frappe.db.get_value("Account", {"account_name": "Accounts Receivable", "company": company}, "name")
+    if not ar_parent:
+        ar_parent = frappe.db.get_value("Account", {"account_name": f"Accounts Receivable - {company_abbr}", "company": company}, "name")
+    
     return get_or_create_account(
         "SHG Members",
         company,
-        parent_account=get_accounts_receivable_account(company),
+        parent_account=ar_parent,
         account_type="Receivable",
         is_group=1,
         root_type="Asset"
     )
-
-def get_income_account(company):
-    """Get the Income account for the company"""
-    income_account = frappe.db.get_value("Account", {"account_name": "Income", "company": company})
-    if not income_account:
-        income_account = frappe.db.get_value("Account", {"account_name": f"Income - {company}", "company": company})
-    return income_account
-
-def get_accounts_receivable_account(company):
-    """Get the Accounts Receivable account for the company"""
-    ar_account = frappe.db.get_value("Account", {"account_name": "Accounts Receivable", "company": company})
-    if not ar_account:
-        ar_account = frappe.db.get_value("Account", {"account_name": f"Accounts Receivable - {company}", "company": company})
-    return ar_account
-
-def get_loans_and_advances_account(company):
-    """Get the Loans and Advances account for the company"""
-    la_account = frappe.db.get_value("Account", {"account_name": "Loans and Advances (Assets)", "company": company})
-    if not la_account:
-        la_account = frappe.db.get_value("Account", {"account_name": f"Loans and Advances (Assets) - {company}", "company": company})
-    return la_account
