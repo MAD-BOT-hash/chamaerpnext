@@ -11,6 +11,7 @@ def execute():
     """
     
     # List of invalid reference types that need to be detected
+    # These are the old reference types that were used before the ERPNext v15 compliance fix
     invalid_reference_types = [
         "SHG Contribution",
         "SHG Loan", 

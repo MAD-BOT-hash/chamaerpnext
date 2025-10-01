@@ -212,75 +212,7 @@ class SHGContribution(Document):
         from shg.shg.utils.account_utils import get_or_create_shg_contributions_account
         return get_or_create_shg_contributions_account(company)
             
-        company = frappe.defaults.get_user_default("Company")
-        if not company:
-            companies = frappe.get_all("Company", limit=1)
-            if companies:
-                company = companies[0].name
-            else:
-                frappe.throw(_("Please create a company first"))
-                
-        # Get configured accounts or use defaults
-        settings = frappe.get_single("SHG Settings")
-        bank_account = settings.default_bank_account if settings.default_bank_account else f"Bank - {company}"
-        cash_account = settings.default_cash_account if settings.default_cash_account else f"Cash - {company}"
-        
-        # Get member's account (auto-created if not exists)
-        member_account = self.get_member_account()
-            
-        # Get contribution account
-        from shg.shg.utils.account_utils import get_or_create_shg_contributions_account
-        contribution_account = get_or_create_shg_contributions_account(company)
-        
-        # Use account mapping if available, otherwise use defaults
-        debit_account = bank_account
-        credit_account = member_account
-        
-        if self.account_mapping:
-            # Process account mapping
-            for mapping in self.account_mapping:
-                if mapping.account_type == "Bank Account":
-                    debit_account = mapping.account
-                elif mapping.account_type == "Member Account":
-                    credit_account = mapping.account
-                # Note: For contributions, we typically debit bank/cash and credit member account
-                # Other account types might be used for more complex scenarios
-        
-        # Determine which account to debit (bank or cash)
-        if not self.account_mapping:
-            debit_account = bank_account if frappe.db.exists("Account", bank_account) else cash_account
-            
-        # Create Journal Entry
-        je = frappe.get_doc({
-            "doctype": "Journal Entry",
-            "voucher_type": "Journal Entry",
-            "posting_date": self.contribution_date,
-            "company": company,
-            "user_remark": f"Contribution from {self.member_name} - {self.contribution_type}",
-            "accounts": [
-                {
-                    "account": debit_account,
-                    "debit_in_account_currency": self.amount,
-                    "reference_type": self.doctype,
-                    "reference_name": self.name
-                },
-                {
-                    "account": credit_account,
-                    "credit_in_account_currency": self.amount,
-                    "party_type": "Customer",
-                    "party": self.get_member_customer(),
-                    "reference_type": self.doctype,
-                    "reference_name": self.name
-                }
-            ]
-        })
-        
-        je.insert()
-        je.submit()
-        
-        # Update contribution record
-        self.journal_entry = je.name
-        self.save()
+
         
     def on_cancel(self):
         """Cancel the associated journal entry or payment entry"""

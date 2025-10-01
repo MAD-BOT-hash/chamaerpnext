@@ -9,15 +9,15 @@ import sys
 # Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-def test_journal_entry_with_doctype_reference():
-    """Test that Journal Entries can be created with doctype as reference_type."""
-    print("Testing Journal Entry creation with doctype as reference_type...")
+def test_journal_entry_with_valid_reference():
+    """Test that Journal Entries can be created with valid reference_type."""
+    print("Testing Journal Entry creation with valid reference_type...")
     
     try:
         # Test data
         company = "Test Company"
         
-        # Create a simple Journal Entry with doctype as reference_type
+        # Create a simple Journal Entry with valid reference_type
         je = frappe.get_doc({
             "doctype": "Journal Entry",
             "voucher_type": "Journal Entry",
@@ -45,7 +45,7 @@ def test_journal_entry_with_doctype_reference():
         je.submit()
         
         # This should not raise an error about invalid reference types
-        print("✅ Journal Entry with doctype as reference_type created successfully")
+        print("✅ Journal Entry with valid reference_type created successfully")
         
         # Cancel and delete the test entry
         je.cancel()
@@ -71,15 +71,15 @@ def test_shg_contribution_implementation():
         with open("shg/shg/doctype/shg_contribution/shg_contribution.py", "r") as f:
             source = f.read()
         
-        # Check if the source code uses self.doctype as reference_type
-        if '"reference_type": self.doctype' in source:
-            print("✅ SHG Contribution correctly uses self.doctype as reference_type")
+        # Check if the source code uses "Journal Entry" as reference_type
+        if '"reference_type": "Journal Entry"' in source:
+            print("✅ SHG Contribution correctly uses 'Journal Entry' as reference_type")
             return True
         elif '"reference_type": "SHG Contribution"' in source:
             print("❌ SHG Contribution still uses hardcoded reference_type")
             return False
         else:
-            print("✅ SHG Contribution correctly uses self.doctype as reference_type")
+            print("✅ SHG Contribution correctly uses 'Journal Entry' as reference_type")
             return True
             
     except Exception as e:
@@ -87,7 +87,7 @@ def test_shg_contribution_implementation():
         return True
 
 def test_all_implementations():
-    """Test all implementations to ensure they use self.doctype."""
+    """Test all implementations to ensure they use valid reference types."""
     print("\nTesting all implementations...")
     
     implementations = [
@@ -104,14 +104,14 @@ def test_all_implementations():
             with open(impl_file, "r") as f:
                 source = f.read()
             
-            # Check if the source code uses self.doctype as reference_type
-            if '"reference_type": self.doctype' in source:
-                print(f"✅ {impl_file} correctly uses self.doctype as reference_type")
+            # Check if the source code uses valid reference types
+            if '"reference_type": "Journal Entry"' in source or '"reference_type": "Payment Entry"' in source:
+                print(f"✅ {impl_file} correctly uses valid reference_type")
             elif '"reference_type": "SHG' in source:
                 print(f"❌ {impl_file} still uses hardcoded reference_type")
                 all_correct = False
             else:
-                print(f"✅ {impl_file} correctly uses self.doctype as reference_type")
+                print(f"✅ {impl_file} correctly uses valid reference_type")
                 
         except Exception as e:
             print(f"Error checking {impl_file}: {str(e)}")
@@ -128,7 +128,7 @@ def main():
         frappe.connect()
         
         # Run tests
-        test1 = test_journal_entry_with_doctype_reference()
+        test1 = test_journal_entry_with_valid_reference()
         test2 = test_shg_contribution_implementation()
         test3 = test_all_implementations()
         

@@ -164,9 +164,9 @@ def test_loan_journal_entry_creation():
                 print(f"ERROR: Expected debit party '{member.customer}', got '{debit_entry.party}'")
                 return False
                 
-            if debit_entry.reference_type != "SHG Loan":
-                # Note: Using doctype as reference_type is the correct approach
-                pass
+            if debit_entry.reference_type != "Journal Entry":
+                print(f"ERROR: Expected debit reference_type 'Journal Entry', got '{debit_entry.reference_type}'")
+                return False
                 
             if debit_entry.reference_name != loan.name:
                 print(f"ERROR: Expected debit reference_name '{loan.name}', got '{debit_entry.reference_name}'")
@@ -177,9 +177,9 @@ def test_loan_journal_entry_creation():
                 print(f"ERROR: Expected credit amount 10000, got {credit_entry.credit_in_account_currency}")
                 return False
                 
-            if credit_entry.reference_type != "SHG Loan":
-                # Note: Using doctype as reference_type is the correct approach
-                pass
+            if credit_entry.reference_type != "Journal Entry":
+                print(f"ERROR: Expected credit reference_type 'Journal Entry', got '{credit_entry.reference_type}'")
+                return False
                 
             if credit_entry.reference_name != loan.name:
                 print(f"ERROR: Expected credit reference_name '{loan.name}', got '{credit_entry.reference_name}'")

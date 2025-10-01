@@ -315,37 +315,7 @@ class SHGLoan(Document):
                 # Note: For loan disbursement, we typically debit member account and credit loan account
                 # Other account types might be used for more complex scenarios
             
-        # Create Journal Entry
-        je = frappe.get_doc({
-            "doctype": "Journal Entry",
-            "voucher_type": "Journal Entry",
-            "posting_date": self.disbursement_date,
-            "company": company,
-            "user_remark": f"Loan disbursement to {self.member_name} - {self.name}",
-            "accounts": [
-                {
-                    "account": debit_account,
-                    "debit_in_account_currency": self.loan_amount,
-                    "party_type": "Customer",
-                    "party": self.get_member_customer(),
-                    "reference_type": self.doctype,
-                    "reference_name": self.name
-                },
-                {
-                    "account": credit_account,
-                    "credit_in_account_currency": self.loan_amount,
-                    "reference_type": self.doctype,
-                    "reference_name": self.name
-                }
-            ]
-        })
-        
-        je.insert()
-        je.submit()
-        
-        # Update loan record
-        self.disbursement_journal_entry = je.name
-        self.save()
+
         
     def get_member_account(self):
         """Get member's ledger account, create if not exists"""
