@@ -52,6 +52,9 @@
         "default_cash_account",
         "default_loan_account",
         "default_interest_income_account",
+        "contribution_posting_method",
+        "loan_disbursement_posting_method",
+        "loan_repayment_posting_method",
         "system_settings_section",
         "currency",
         "fiscal_year_start_month",
@@ -300,6 +303,27 @@
             "fieldtype": "Link",
             "label": "Default Interest Income Account",
             "options": "Account"
+        },
+        {
+            "fieldname": "contribution_posting_method",
+            "fieldtype": "Select",
+            "label": "Contribution Posting Method",
+            "options": "Journal Entry\nPayment Entry",
+            "default": "Journal Entry"
+        },
+        {
+            "fieldname": "loan_disbursement_posting_method",
+            "fieldtype": "Select",
+            "label": "Loan Disbursement Posting Method",
+            "options": "Journal Entry\nPayment Entry",
+            "default": "Journal Entry"
+        },
+        {
+            "fieldname": "loan_repayment_posting_method",
+            "fieldtype": "Select",
+            "label": "Loan Repayment Posting Method",
+            "options": "Journal Entry\nPayment Entry",
+            "default": "Journal Entry"
         },
         {
             "fieldname": "system_settings_section",

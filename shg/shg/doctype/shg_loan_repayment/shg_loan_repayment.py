@@ -59,46 +59,69 @@ class SHGLoanRepayment(Document):
     def on_submit(self):
         """Update loan balance, GL, and schedule"""
         self.update_loan_balance()
-        self.create_journal_entry()
+        # ensure idempotent: if already posted -> skip
+        if not self.get("posted_to_gl"):
+            self.post_to_ledger()
         self.validate_gl_entries()
         self.update_member_totals()
         self.update_repayment_schedule()
 
     def validate_gl_entries(self):
         """Validate that GL entries were created properly"""
-        if not self.journal_entry:
-            frappe.throw(_("Failed to create Journal Entry for this loan repayment. Please check the system logs."))
+        if not self.journal_entry and not self.payment_entry:
+            frappe.throw(_("Failed to create Journal Entry or Payment Entry for this loan repayment. Please check the system logs."))
             
-        # Verify the journal entry exists and is submitted
+        # Verify the journal entry or payment entry exists and is submitted
         try:
-            je = frappe.get_doc("Journal Entry", self.journal_entry)
-            if je.docstatus != 1:
-                frappe.throw(_("Journal Entry was not submitted successfully."))
-                
-            # Verify accounts and amounts
-            if len(je.accounts) < 2:
-                frappe.throw(_("Journal Entry should have at least 2 accounts."))
-                
-            total_debit = sum(entry.debit_in_account_currency for entry in je.accounts)
-            total_credit = sum(entry.credit_in_account_currency for entry in je.accounts)
-                
-            if abs(total_debit - total_credit) > 0.01:
-                frappe.throw(_("Total debit and credit amounts must be equal."))
-                
-            # Verify party details for credit entry
-            credit_entry_with_party = None
-            for entry in je.accounts:
-                if entry.credit_in_account_currency > 0 and entry.party_type and entry.party:
-                    credit_entry_with_party = entry
-                    break
+            if self.journal_entry:
+                je = frappe.get_doc("Journal Entry", self.journal_entry)
+                if je.docstatus != 1:
+                    frappe.throw(_("Journal Entry was not submitted successfully."))
                     
-            if credit_entry_with_party and credit_entry_with_party.party_type != "Customer":
-                frappe.throw(_("Credit entry party type must be 'Customer'."))
+                # Verify accounts and amounts
+                if len(je.accounts) < 2:
+                    frappe.throw(_("Journal Entry should have at least 2 accounts."))
+                    
+                total_debit = sum(entry.debit_in_account_currency for entry in je.accounts)
+                total_credit = sum(entry.credit_in_account_currency for entry in je.accounts)
+                    
+                if abs(total_debit - total_credit) > 0.01:
+                    frappe.throw(_("Total debit and credit amounts must be equal."))
+                    
+                # Verify party details for credit entry
+                credit_entry_with_party = None
+                for entry in je.accounts:
+                    if entry.credit_in_account_currency > 0 and entry.party_type and entry.party:
+                        credit_entry_with_party = entry
+                        break
+                        
+                if credit_entry_with_party and credit_entry_with_party.party_type != "Customer":
+                    frappe.throw(_("Credit entry party type must be 'Customer'."))
+            elif self.payment_entry:
+                pe = frappe.get_doc("Payment Entry", self.payment_entry)
+                if pe.docstatus != 1:
+                    frappe.throw(_("Payment Entry was not submitted successfully."))
+                    
+                # Verify payment entry details
+                if pe.payment_type != "Receive":
+                    frappe.throw(_("Payment Entry must be of type 'Receive' for loan repayments."))
+                    
+                if not pe.party_type or not pe.party:
+                    frappe.throw(_("Payment Entry must have party type and party set."))
+                    
+                if pe.party_type != "Customer":
+                    frappe.throw(_("Payment Entry party type must be 'Customer'."))
+                    
+                if abs(pe.paid_amount - self.total_paid) > 0.01:
+                    frappe.throw(_("Payment Entry amount does not match repayment amount."))
                 
         except frappe.DoesNotExistError:
-            frappe.throw(_("Journal Entry {0} does not exist.").format(self.journal_entry))
+            if self.journal_entry:
+                frappe.throw(_("Journal Entry {0} does not exist.").format(self.journal_entry))
+            elif self.payment_entry:
+                frappe.throw(_("Payment Entry {0} does not exist.").format(self.payment_entry))
         except Exception as e:
-            frappe.throw(_("Error validating Journal Entry: {0}").format(str(e)))
+            frappe.throw(_("Error validating GL Entry: {0}").format(str(e)))
 
     def update_loan_balance(self):
         """Update the loan balance"""
@@ -114,27 +137,36 @@ class SHGLoanRepayment(Document):
 
         loan.save()
 
-    def create_journal_entry(self):
-        """Create Journal Entry for repayment"""
-        company = frappe.defaults.get_user_default("Company")
-        if not company:
-            companies = frappe.get_all("Company", limit=1)
-            if companies:
-                company = companies[0].name
-            else:
-                frappe.throw(_("Please create a company first"))
-
-        # Get configured accounts or use defaults
+    def post_to_ledger(self):
+        """
+        Create a Payment Entry or Journal Entry for this loan repayment.
+        Use SHG Settings to decide; default to Journal Entry.
+        """
         settings = frappe.get_single("SHG Settings")
-        bank_account = settings.default_bank_account if settings.default_bank_account else f"Bank - {company}"
-        cash_account = settings.default_cash_account if settings.default_cash_account else f"Cash - {company}"
+        posting_method = getattr(settings, "loan_repayment_posting_method", "Journal Entry")
+
+        # Prepare common data
+        company = frappe.get_value("Global Defaults", None, "default_company") or settings.company
+        member_customer = frappe.get_value("SHG Member", self.member, "customer")
+
+        # Choose posting
+        if posting_method == "Payment Entry":
+            pe = self._create_payment_entry(member_customer, company)
+            self.payment_entry = pe.name
+        else:
+            je = self._create_journal_entry(member_customer, company)
+            self.journal_entry = je.name
+
+        self.posted_to_gl = 1
+        self.posted_on = frappe.utils.now()
+        self.save()
+        
+    def _create_journal_entry(self, party_customer, company):
+        from frappe.utils import flt, today
         
         # Get member's account (auto-created if not exists)
         member_account = self.get_member_account()
             
-        # Determine which account to debit (bank or cash)
-        debit_account = bank_account if frappe.db.exists("Account", bank_account) else cash_account
-
         # Get income accounts using the new utility functions
         from shg.shg.utils.account_utils import (
             get_or_create_shg_interest_income_account,
@@ -146,17 +178,17 @@ class SHGLoanRepayment(Document):
 
         accounts = [
             {
-                "account": debit_account,
-                "debit_in_account_currency": self.total_paid,
-                "reference_type": self.doctype,
+                "account": self.get_cash_account(company),
+                "debit_in_account_currency": flt(self.total_paid),
+                "reference_type": "Journal Entry",
                 "reference_name": self.name
             },
             {
                 "account": member_account,
-                "credit_in_account_currency": self.principal_amount,
+                "credit_in_account_currency": flt(self.principal_amount),
                 "party_type": "Customer",
-                "party": self.get_member_customer(),
-                "reference_type": self.doctype,
+                "party": party_customer,
+                "reference_type": "Journal Entry",
                 "reference_name": self.name
             }
         ]
@@ -164,37 +196,80 @@ class SHGLoanRepayment(Document):
         if self.interest_amount > 0:
             accounts.append({
                 "account": interest_income_account,
-                "credit_in_account_currency": self.interest_amount,
-                "reference_type": self.doctype,
+                "credit_in_account_currency": flt(self.interest_amount),
+                "reference_type": "Journal Entry",
                 "reference_name": self.name
             })
 
         if self.penalty_amount > 0:
             accounts.append({
                 "account": penalty_income_account,
-                "credit_in_account_currency": self.penalty_amount,
-                "reference_type": self.doctype,
+                "credit_in_account_currency": flt(self.penalty_amount),
+                "reference_type": "Journal Entry",
                 "reference_name": self.name
             })
 
         je = frappe.get_doc({
             "doctype": "Journal Entry",
             "voucher_type": "Journal Entry",
-            "posting_date": self.repayment_date,
+            "posting_date": self.repayment_date or today(),
             "company": company,
-            "user_remark": f"Loan repayment from {self.member_name} - Principal: {self.principal_amount}, Interest: {self.interest_amount}, Penalty: {self.penalty_amount}",
+            "user_remark": f"SHG Loan Repayment {self.name} from {self.member_name} - Principal: {self.principal_amount}, Interest: {self.interest_amount}, Penalty: {self.penalty_amount}",
             "accounts": accounts
         })
 
-        try:
-            je.insert()
-            je.submit()
-            self.journal_entry = je.name
-            self.save()
-            self.send_payment_confirmation()
-        except Exception as e:
-            frappe.log_error(f"Failed to post repayment to GL: {str(e)}")
-            frappe.throw(f"Failed to post to General Ledger: {str(e)}")
+        je.insert(ignore_permissions=True)
+        je.submit()
+        return je
+        
+    def _create_payment_entry(self, party_customer, company):
+        # create Payment Entry (Receive)
+        from frappe.utils import flt, today
+        pe = frappe.get_doc({
+            "doctype": "Payment Entry",
+            "payment_type": "Receive",
+            "posting_date": self.repayment_date or today(),
+            "company": company,
+            "party_type": "Customer",
+            "party": party_customer,
+            "paid_from": self.get_cash_account(company),
+            "paid_to": self.get_member_account(),
+            "paid_amount": flt(self.total_paid),
+            "received_amount": flt(self.total_paid),
+            "reference_no": self.name,
+            "reference_date": self.repayment_date or today()
+        })
+        pe.insert(ignore_permissions=True)
+        pe.submit()
+        return pe
+        
+    def get_cash_account(self, company):
+        """Get cash or bank account from settings or defaults"""
+        settings = frappe.get_single("SHG Settings")
+        if settings.default_bank_account:
+            return settings.default_bank_account
+        elif settings.default_cash_account:
+            return settings.default_cash_account
+        else:
+            # Try to find a default bank account
+            bank_accounts = frappe.get_all("Account", filters={
+                "company": company,
+                "account_type": "Bank",
+                "is_group": 0
+            }, limit=1)
+            if bank_accounts:
+                return bank_accounts[0].name
+            else:
+                # Try cash account
+                cash_accounts = frappe.get_all("Account", filters={
+                    "company": company,
+                    "account_type": "Cash",
+                    "is_group": 0
+                }, limit=1)
+                if cash_accounts:
+                    return cash_accounts[0].name
+                else:
+                    frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
             
     def get_member_account(self):
         """Get member's ledger account, create if not exists"""
@@ -265,6 +340,13 @@ class SHGLoanRepayment(Document):
                     je.cancel()
             except Exception as e:
                 frappe.log_error(f"Failed to cancel journal entry: {str(e)}")
+        elif self.payment_entry:
+            try:
+                pe = frappe.get_doc("Payment Entry", self.payment_entry)
+                if pe.docstatus == 1:
+                    pe.cancel()
+            except Exception as e:
+                frappe.log_error(f"Failed to cancel payment entry: {str(e)}")
 
         try:
             loan = frappe.get_doc("SHG Loan", self.loan)

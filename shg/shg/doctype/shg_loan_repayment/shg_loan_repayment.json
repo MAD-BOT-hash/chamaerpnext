@@ -24,7 +24,10 @@
         "outstanding_balance",
         "balance_after_payment",
         "accounting_section",
-        "journal_entry"
+        "journal_entry",
+        "payment_entry",
+        "posted_to_gl",
+        "posted_on"
     ],
     "fields": [
         {
@@ -142,6 +145,25 @@
             "fieldtype": "Link",
             "label": "Journal Entry",
             "options": "Journal Entry",
+            "read_only": 1
+        },
+        {
+            "fieldname": "payment_entry",
+            "fieldtype": "Link",
+            "label": "Payment Entry",
+            "options": "Payment Entry",
+            "read_only": 1
+        },
+        {
+            "fieldname": "posted_to_gl",
+            "fieldtype": "Check",
+            "label": "Posted to GL",
+            "read_only": 1
+        },
+        {
+            "fieldname": "posted_on",
+            "fieldtype": "Datetime",
+            "label": "Posted On",
             "read_only": 1
         }
     ],
