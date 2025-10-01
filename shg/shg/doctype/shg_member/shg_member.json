@@ -20,6 +20,7 @@
         "member_id",
         "account_number",
         "customer",
+        "party_type",
         "next_of_kin_section",
         "next_of_kin_name",
         "next_of_kin_phone",
@@ -124,6 +125,14 @@
             "read_only": 1
         },
         {
+            "fieldname": "party_type",
+            "fieldtype": "Select",
+            "label": "Party Type",
+            "options": "Customer\nSupplier\nEmployee\nSHG Member",
+            "allow_on_submit": 1,
+            "default": "SHG Member"
+        },
+        {
             "fieldname": "next_of_kin_section",
             "fieldtype": "Section Break",
             "label": "Next of Kin Details"
@@ -209,7 +218,7 @@
             "fieldname": "credit_score",
             "fieldtype": "Int",
             "label": "Credit Score",
-            "allow_on_submit": 1
+            "allow_on_submit": 1            
         }
     ],
     "is_submittable": 1,
