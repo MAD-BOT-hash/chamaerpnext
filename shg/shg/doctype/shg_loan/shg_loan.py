@@ -157,13 +157,13 @@ class SHGLoan(Document):
                     "debit_in_account_currency": self.loan_amount,
                     "party_type": "Customer",
                     "party": self.get_member_customer(),
-                    "reference_type": "SHG Loan",
+                    "reference_type": self.doctype,
                     "reference_name": self.name
                 },
                 {
                     "account": credit_account,
                     "credit_in_account_currency": self.loan_amount,
-                    "reference_type": "SHG Loan",
+                    "reference_type": self.doctype,
                     "reference_name": self.name
                 }
             ]

@@ -117,3 +117,4 @@ The new system prevents the original error by:
 2. Using `journal_entry` field instead to track accounting status
 3. Providing clear dashboard indicators in the UI
 4. Using robust field existence checks in JavaScript
+5. Using valid reference types for Journal Entry accounts (doctype instead of custom names)

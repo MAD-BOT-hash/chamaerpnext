@@ -70,13 +70,13 @@ class SHGMeetingFine(Document):
                     "debit_in_account_currency": self.fine_amount,
                     "party_type": "Customer",
                     "party": self.get_member_customer(),
-                    "reference_type": "SHG Meeting Fine",
+                    "reference_type": self.doctype,
                     "reference_name": self.name
                 },
                 {
                     "account": fine_account,
                     "credit_in_account_currency": self.fine_amount,
-                    "reference_type": "SHG Meeting Fine",
+                    "reference_type": self.doctype,
                     "reference_name": self.name
                 }
             ]

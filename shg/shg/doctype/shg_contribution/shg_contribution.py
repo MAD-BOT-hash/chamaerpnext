@@ -94,7 +94,7 @@ class SHGContribution(Document):
                 {
                     "account": debit_account,
                     "debit_in_account_currency": self.amount,
-                    "reference_type": "SHG Contribution",
+                    "reference_type": self.doctype,
                     "reference_name": self.name
                 },
                 {
@@ -102,7 +102,7 @@ class SHGContribution(Document):
                     "credit_in_account_currency": self.amount,
                     "party_type": "Customer",
                     "party": self.get_member_customer(),
-                    "reference_type": "SHG Contribution",
+                    "reference_type": self.doctype,
                     "reference_name": self.name
                 }
             ]
