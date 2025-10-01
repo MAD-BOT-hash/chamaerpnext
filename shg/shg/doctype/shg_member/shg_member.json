@@ -19,7 +19,6 @@
         "membership_status",
         "member_id",
         "account_number",
-        "customer",
         "party_type",
         "next_of_kin_section",
         "next_of_kin_name",
@@ -115,13 +114,6 @@
             "fieldname": "account_number",
             "fieldtype": "Data",
             "label": "Account Number",
-            "read_only": 1
-        },
-        {
-            "fieldname": "customer",
-            "fieldtype": "Link",
-            "label": "Customer",
-            "options": "Customer",
             "read_only": 1
         },
         {

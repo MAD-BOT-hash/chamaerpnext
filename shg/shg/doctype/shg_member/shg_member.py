@@ -65,22 +65,6 @@ class SHGMember(Document):
             # Format as MN001, MN002, etc.
             self.account_number = f"MN{new_number:03d}"
             
-    def create_customer(self):
-        """Create link to ERPNext Customer"""
-        if not self.customer:
-            customer = frappe.get_doc({
-                "doctype": "Customer",
-                "customer_name": self.member_name or self.name,
-                "customer_type": "Individual",
-                "customer_group": "SHG Members",
-                "territory": "Kenya",
-                "is_shg_member": 1,
-                "shg_member_id": self.name
-            })
-            customer.insert()
-            self.customer = customer.name
-            self.save()
-            
     def create_member_ledger_account(self):
         """Create member's ledger account"""
         company = frappe.defaults.get_user_default("Company")
@@ -182,11 +166,6 @@ class SHGMember(Document):
         self.validate_id_number()
         self.validate_phone_number()
         self.validate_next_of_kin()
-        # Update customer link if member name changed
-        if self.has_value_changed('member_name') and self.customer:
-            customer = frappe.get_doc("Customer", self.customer)
-            customer.customer_name = self.member_name
-            customer.save()
         # Update financial summary
         self.update_financial_summary()
         
@@ -229,8 +208,6 @@ def validate_member(doc, method):
 
 def create_member_ledger(doc, method):
     """Hook function called from hooks.py"""
-    # Create customer automatically when member is created
-    doc.create_customer()
     doc.create_member_ledger_account()
 
 def handle_member_amendment(doc, method):
