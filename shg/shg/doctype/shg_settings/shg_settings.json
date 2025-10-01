@@ -55,6 +55,7 @@
         "contribution_posting_method",
         "loan_disbursement_posting_method",
         "loan_repayment_posting_method",
+        "meeting_fine_posting_method",
         "system_settings_section",
         "currency",
         "fiscal_year_start_month",
@@ -309,7 +310,7 @@
             "fieldtype": "Select",
             "label": "Contribution Posting Method",
             "options": "Journal Entry\nPayment Entry",
-            "default": "Journal Entry"
+            "default": "Payment Entry"
         },
         {
             "fieldname": "loan_disbursement_posting_method",
@@ -322,6 +323,13 @@
             "fieldname": "loan_repayment_posting_method",
             "fieldtype": "Select",
             "label": "Loan Repayment Posting Method",
+            "options": "Journal Entry\nPayment Entry",
+            "default": "Journal Entry"
+        },
+        {
+            "fieldname": "meeting_fine_posting_method",
+            "fieldtype": "Select",
+            "label": "Meeting Fine Posting Method",
             "options": "Journal Entry\nPayment Entry",
             "default": "Journal Entry"
         },

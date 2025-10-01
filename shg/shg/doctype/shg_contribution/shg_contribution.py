@@ -79,6 +79,10 @@ class SHGContribution(Document):
                     
                 if credit_entry.party_type != "Customer":
                     frappe.throw(_("Credit entry party type must be 'Customer'."))
+                    
+                # Verify custom field linking
+                if not je.custom_shg_contribution or je.custom_shg_contribution != self.name:
+                    frappe.throw(_("Journal Entry must be linked to this SHG Contribution."))
             elif self.payment_entry:
                 pe = frappe.get_doc("Payment Entry", self.payment_entry)
                 if pe.docstatus != 1:
@@ -96,6 +100,10 @@ class SHGContribution(Document):
                     
                 if abs(pe.paid_amount - self.amount) > 0.01:
                     frappe.throw(_("Payment Entry amount does not match contribution amount."))
+                    
+                # Verify custom field linking
+                if not pe.custom_shg_contribution or pe.custom_shg_contribution != self.name:
+                    frappe.throw(_("Payment Entry must be linked to this SHG Contribution."))
                 
         except frappe.DoesNotExistError:
             if self.journal_entry:
@@ -137,20 +145,17 @@ class SHGContribution(Document):
             "company": company,
             "voucher_type": "Journal Entry",
             "user_remark": f"SHG Contribution {self.name} from {self.member}",
+            "custom_shg_contribution": self.name,
             "accounts": [
                 {
                     "account": self.get_cash_account(company),  # implement helper to find Cash/Bank
-                    "debit_in_account_currency": flt(self.amount),
-                    "reference_type": "Journal Entry",
-                    "reference_name": self.name
+                    "debit_in_account_currency": flt(self.amount)
                 },
                 {
                     "account": self.get_contribution_account(company),
                     "credit_in_account_currency": flt(self.amount),
                     "party_type": "Customer",
-                    "party": party_customer,
-                    "reference_type": "Journal Entry",
-                    "reference_name": self.name
+                    "party": party_customer
                 }
             ]
         })
@@ -173,7 +178,8 @@ class SHGContribution(Document):
             "paid_amount": flt(self.amount),
             "received_amount": flt(self.amount),
             "reference_no": self.name,
-            "reference_date": self.contribution_date or today()
+            "reference_date": self.contribution_date or today(),
+            "custom_shg_contribution": self.name
         })
         pe.insert(ignore_permissions=True)
         pe.submit()

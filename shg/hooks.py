@@ -62,6 +62,66 @@ custom_fields = {
             "insert_after": "is_shg_member",
             "depends_on": "is_shg_member"
         }
+    ],
+    "Payment Entry": [
+        {
+            "fieldname": "custom_shg_contribution",
+            "label": "SHG Contribution",
+            "fieldtype": "Link",
+            "options": "SHG Contribution",
+            "insert_after": "payment_type"
+        },
+        {
+            "fieldname": "custom_shg_loan",
+            "label": "SHG Loan",
+            "fieldtype": "Link",
+            "options": "SHG Loan",
+            "insert_after": "payment_type"
+        },
+        {
+            "fieldname": "custom_shg_loan_repayment",
+            "label": "SHG Loan Repayment",
+            "fieldtype": "Link",
+            "options": "SHG Loan Repayment",
+            "insert_after": "payment_type"
+        },
+        {
+            "fieldname": "custom_shg_meeting_fine",
+            "label": "SHG Meeting Fine",
+            "fieldtype": "Link",
+            "options": "SHG Meeting Fine",
+            "insert_after": "payment_type"
+        }
+    ],
+    "Journal Entry": [
+        {
+            "fieldname": "custom_shg_contribution",
+            "label": "SHG Contribution",
+            "fieldtype": "Link",
+            "options": "SHG Contribution",
+            "insert_after": "voucher_type"
+        },
+        {
+            "fieldname": "custom_shg_loan",
+            "label": "SHG Loan",
+            "fieldtype": "Link",
+            "options": "SHG Loan",
+            "insert_after": "voucher_type"
+        },
+        {
+            "fieldname": "custom_shg_loan_repayment",
+            "label": "SHG Loan Repayment",
+            "fieldtype": "Link",
+            "options": "SHG Loan Repayment",
+            "insert_after": "voucher_type"
+        },
+        {
+            "fieldname": "custom_shg_meeting_fine",
+            "label": "SHG Meeting Fine",
+            "fieldtype": "Link",
+            "options": "SHG Meeting Fine",
+            "insert_after": "voucher_type"
+        }
     ]
 }
 

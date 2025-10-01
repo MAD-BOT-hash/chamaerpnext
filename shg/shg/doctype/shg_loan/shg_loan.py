@@ -150,6 +150,10 @@ class SHGLoan(Document):
                     
                 if debit_entry.party_type != "Customer":
                     frappe.throw(_("Debit entry party type must be 'Customer'."))
+                    
+                # Verify custom field linking
+                if not je.custom_shg_loan or je.custom_shg_loan != self.name:
+                    frappe.throw(_("Journal Entry must be linked to this SHG Loan."))
             elif self.disbursement_payment_entry:
                 pe = frappe.get_doc("Payment Entry", self.disbursement_payment_entry)
                 if pe.docstatus != 1:
@@ -167,6 +171,10 @@ class SHGLoan(Document):
                     
                 if abs(pe.paid_amount - self.loan_amount) > 0.01:
                     frappe.throw(_("Payment Entry amount does not match loan amount."))
+                    
+                # Verify custom field linking
+                if not pe.custom_shg_loan or pe.custom_shg_loan != self.name:
+                    frappe.throw(_("Payment Entry must be linked to this SHG Loan."))
                 
         except frappe.DoesNotExistError:
             if self.disbursement_journal_entry:
@@ -208,18 +216,15 @@ class SHGLoan(Document):
             "company": company,
             "voucher_type": "Journal Entry",
             "user_remark": f"SHG Loan Disbursement {self.name} to {self.member}",
+            "custom_shg_loan": self.name,
             "accounts": [
                 {
                     "account": self.get_loan_account(company),  # Loan Asset account
-                    "debit_in_account_currency": flt(self.loan_amount),
-                    "reference_type": "Journal Entry",
-                    "reference_name": self.name
+                    "debit_in_account_currency": flt(self.loan_amount)
                 },
                 {
                     "account": self.get_bank_account(company),  # Bank account
-                    "credit_in_account_currency": flt(self.loan_amount),
-                    "reference_type": "Journal Entry",
-                    "reference_name": self.name
+                    "credit_in_account_currency": flt(self.loan_amount)
                 }
             ]
         })
@@ -242,7 +247,8 @@ class SHGLoan(Document):
             "paid_amount": flt(self.loan_amount),
             "received_amount": flt(self.loan_amount),
             "reference_no": self.name,
-            "reference_date": self.disbursement_date or today()
+            "reference_date": self.disbursement_date or today(),
+            "custom_shg_loan": self.name
         })
         pe.insert(ignore_permissions=True)
         pe.submit()

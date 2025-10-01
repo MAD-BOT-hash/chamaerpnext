@@ -75,6 +75,10 @@ class SHGMeetingFine(Document):
                     
                 if debit_entry.party_type != "Customer":
                     frappe.throw(_("Debit entry party type must be 'Customer'."))
+                    
+                # Verify custom field linking
+                if not je.custom_shg_meeting_fine or je.custom_shg_meeting_fine != self.name:
+                    frappe.throw(_("Journal Entry must be linked to this SHG Meeting Fine."))
             elif self.payment_entry:
                 pe = frappe.get_doc("Payment Entry", self.payment_entry)
                 if pe.docstatus != 1:
@@ -92,7 +96,10 @@ class SHGMeetingFine(Document):
                     
                 if abs(pe.paid_amount - self.fine_amount) > 0.01:
                     frappe.throw(_("Payment Entry amount does not match fine amount."))
-                
+                    
+                # Verify custom field linking
+                if not pe.custom_shg_meeting_fine or pe.custom_shg_meeting_fine != self.name:
+                    frappe.throw(_("Payment Entry must be linked to this SHG Meeting Fine."))
         except frappe.DoesNotExistError:
             if self.journal_entry:
                 frappe.throw(_("Journal Entry {0} does not exist.").format(self.journal_entry))
@@ -145,20 +152,17 @@ class SHGMeetingFine(Document):
             "posting_date": self.fine_date or today(),
             "company": company,
             "remark": f"SHG Meeting Fine {self.name} from {self.member_name} - {self.fine_reason}",
+            "custom_shg_meeting_fine": self.name,
             "accounts": [
                 {
                     "account": member_account,
                     "debit_in_account_currency": flt(self.fine_amount),
                     "party_type": "Customer",
-                    "party": party_customer,
-                    "reference_type": "Journal Entry",
-                    "reference_name": self.name
+                    "party": party_customer
                 },
                 {
                     "account": fine_account,
-                    "credit_in_account_currency": flt(self.fine_amount),
-                    "reference_type": "Journal Entry",
-                    "reference_name": self.name
+                    "credit_in_account_currency": flt(self.fine_amount)
                 }
             ]
         })
@@ -186,7 +190,8 @@ class SHGMeetingFine(Document):
             "paid_amount": flt(self.fine_amount),
             "received_amount": flt(self.fine_amount),
             "reference_no": self.name,
-            "reference_date": self.fine_date or today()
+            "reference_date": self.fine_date or today(),
+            "custom_shg_meeting_fine": self.name
         })
         pe.insert(ignore_permissions=True)
         pe.submit()

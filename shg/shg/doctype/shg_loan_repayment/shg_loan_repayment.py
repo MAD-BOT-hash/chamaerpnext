@@ -97,6 +97,10 @@ class SHGLoanRepayment(Document):
                         
                 if credit_entry_with_party and credit_entry_with_party.party_type != "Customer":
                     frappe.throw(_("Credit entry party type must be 'Customer'."))
+                    
+                # Verify custom field linking
+                if not je.custom_shg_loan_repayment or je.custom_shg_loan_repayment != self.name:
+                    frappe.throw(_("Journal Entry must be linked to this SHG Loan Repayment."))
             elif self.payment_entry:
                 pe = frappe.get_doc("Payment Entry", self.payment_entry)
                 if pe.docstatus != 1:
@@ -114,6 +118,10 @@ class SHGLoanRepayment(Document):
                     
                 if abs(pe.paid_amount - self.total_paid) > 0.01:
                     frappe.throw(_("Payment Entry amount does not match repayment amount."))
+                    
+                # Verify custom field linking
+                if not pe.custom_shg_loan_repayment or pe.custom_shg_loan_repayment != self.name:
+                    frappe.throw(_("Payment Entry must be linked to this SHG Loan Repayment."))
                 
         except frappe.DoesNotExistError:
             if self.journal_entry:
@@ -180,32 +188,24 @@ class SHGLoanRepayment(Document):
         accounts = [
             {
                 "account": cash_account,  # Cash/Bank account
-                "debit_in_account_currency": flt(self.total_paid),
-                "reference_type": "Journal Entry",
-                "reference_name": self.name
+                "debit_in_account_currency": flt(self.total_paid)
             },
             {
                 "account": loan_account,  # Loan Receivable account
-                "credit_in_account_currency": flt(self.principal_amount),
-                "reference_type": "Journal Entry",
-                "reference_name": self.name
+                "credit_in_account_currency": flt(self.principal_amount)
             }
         ]
 
         if self.interest_amount > 0:
             accounts.append({
                 "account": interest_income_account,
-                "credit_in_account_currency": flt(self.interest_amount),
-                "reference_type": "Journal Entry",
-                "reference_name": self.name
+                "credit_in_account_currency": flt(self.interest_amount)
             })
 
         if self.penalty_amount > 0:
             accounts.append({
                 "account": penalty_income_account,
-                "credit_in_account_currency": flt(self.penalty_amount),
-                "reference_type": "Journal Entry",
-                "reference_name": self.name
+                "credit_in_account_currency": flt(self.penalty_amount)
             })
 
         je = frappe.get_doc({
@@ -214,6 +214,7 @@ class SHGLoanRepayment(Document):
             "posting_date": self.repayment_date or today(),
             "company": company,
             "user_remark": f"SHG Loan Repayment {self.name} from {self.member_name} - Principal: {self.principal_amount}, Interest: {self.interest_amount}, Penalty: {self.penalty_amount}",
+            "custom_shg_loan_repayment": self.name,
             "accounts": accounts
         })
 
@@ -236,7 +237,8 @@ class SHGLoanRepayment(Document):
             "paid_amount": flt(self.total_paid),
             "received_amount": flt(self.total_paid),
             "reference_no": self.name,
-            "reference_date": self.repayment_date or today()
+            "reference_date": self.repayment_date or today(),
+            "custom_shg_loan_repayment": self.name
         })
         pe.insert(ignore_permissions=True)
         pe.submit()
