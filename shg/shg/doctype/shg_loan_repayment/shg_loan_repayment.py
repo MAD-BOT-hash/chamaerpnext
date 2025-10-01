@@ -60,8 +60,45 @@ class SHGLoanRepayment(Document):
         """Update loan balance, GL, and schedule"""
         self.update_loan_balance()
         self.create_journal_entry()
+        self.validate_gl_entries()
         self.update_member_totals()
         self.update_repayment_schedule()
+
+    def validate_gl_entries(self):
+        """Validate that GL entries were created properly"""
+        if not self.journal_entry:
+            frappe.throw(_("Failed to create Journal Entry for this loan repayment. Please check the system logs."))
+            
+        # Verify the journal entry exists and is submitted
+        try:
+            je = frappe.get_doc("Journal Entry", self.journal_entry)
+            if je.docstatus != 1:
+                frappe.throw(_("Journal Entry was not submitted successfully."))
+                
+            # Verify accounts and amounts
+            if len(je.accounts) < 2:
+                frappe.throw(_("Journal Entry should have at least 2 accounts."))
+                
+            total_debit = sum(entry.debit_in_account_currency for entry in je.accounts)
+            total_credit = sum(entry.credit_in_account_currency for entry in je.accounts)
+                
+            if abs(total_debit - total_credit) > 0.01:
+                frappe.throw(_("Total debit and credit amounts must be equal."))
+                
+            # Verify party details for credit entry
+            credit_entry_with_party = None
+            for entry in je.accounts:
+                if entry.credit_in_account_currency > 0 and entry.party_type and entry.party:
+                    credit_entry_with_party = entry
+                    break
+                    
+            if credit_entry_with_party and credit_entry_with_party.party_type != "Customer":
+                frappe.throw(_("Credit entry party type must be 'Customer'."))
+                
+        except frappe.DoesNotExistError:
+            frappe.throw(_("Journal Entry {0} does not exist.").format(self.journal_entry))
+        except Exception as e:
+            frappe.throw(_("Error validating Journal Entry: {0}").format(str(e)))
 
     def update_loan_balance(self):
         """Update the loan balance"""

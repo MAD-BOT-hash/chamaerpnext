@@ -102,6 +102,7 @@ class SHGLoan(Document):
             self.generate_repayment_schedule()
             self.update_member_summary()
             self.create_disbursement_journal_entry()
+            self.validate_gl_entries()
             
     def on_update(self):
         """Update balance when status changes"""
@@ -109,6 +110,48 @@ class SHGLoan(Document):
             self.disbursed_amount = self.loan_amount
             self.balance_amount = self.loan_amount
             self.save()
+            
+    def validate_gl_entries(self):
+        """Validate that GL entries were created properly"""
+        if not self.disbursement_journal_entry:
+            frappe.throw(_("Failed to create Journal Entry for this loan disbursement. Please check the system logs."))
+            
+        # Verify the journal entry exists and is submitted
+        try:
+            je = frappe.get_doc("Journal Entry", self.disbursement_journal_entry)
+            if je.docstatus != 1:
+                frappe.throw(_("Journal Entry was not submitted successfully."))
+                
+            # Verify accounts and amounts
+            if len(je.accounts) != 2:
+                frappe.throw(_("Journal Entry should have exactly 2 accounts."))
+                
+            debit_entry = None
+            credit_entry = None
+            
+            for entry in je.accounts:
+                if entry.debit_in_account_currency > 0:
+                    debit_entry = entry
+                elif entry.credit_in_account_currency > 0:
+                    credit_entry = entry
+                    
+            if not debit_entry or not credit_entry:
+                frappe.throw(_("Journal Entry must have one debit and one credit entry."))
+                
+            if abs(debit_entry.debit_in_account_currency - credit_entry.credit_in_account_currency) > 0.01:
+                frappe.throw(_("Debit and credit amounts must be equal."))
+                
+            # Verify party details for debit entry
+            if not debit_entry.party_type or not debit_entry.party:
+                frappe.throw(_("Debit entry must have party type and party set."))
+                
+            if debit_entry.party_type != "Customer":
+                frappe.throw(_("Debit entry party type must be 'Customer'."))
+                
+        except frappe.DoesNotExistError:
+            frappe.throw(_("Journal Entry {0} does not exist.").format(self.disbursement_journal_entry))
+        except Exception as e:
+            frappe.throw(_("Error validating Journal Entry: {0}").format(str(e)))
             
     def create_disbursement_journal_entry(self):
         """Create Journal Entry for loan disbursement"""

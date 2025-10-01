@@ -57,11 +57,52 @@ def get_data(filters):
     # Get member details
     member = frappe.get_doc("SHG Member", filters.member)
     
+    # Add member summary at the top
+    data.append({
+        "particulars": f"Member: {member.member_name}",
+        "debit": "",
+        "credit": "",
+        "balance": "",
+        "reference": ""
+    })
+    
+    data.append({
+        "particulars": f"Account Number: {member.account_number}",
+        "debit": "",
+        "credit": "",
+        "balance": "",
+        "reference": ""
+    })
+    
+    data.append({
+        "particulars": f"Current Loan Balance: KES {flt(member.current_loan_balance):,.2f}",
+        "debit": "",
+        "credit": "",
+        "balance": "",
+        "reference": ""
+    })
+    
+    data.append({
+        "particulars": f"Total Contributions: KES {flt(member.total_contributions):,.2f}",
+        "debit": "",
+        "credit": "",
+        "balance": "",
+        "reference": ""
+    })
+    
+    data.append({
+        "particulars": "",
+        "debit": "",
+        "credit": "",
+        "balance": "",
+        "reference": ""
+    })
+    
     # Get contributions
     contributions = frappe.db.sql("""
         SELECT 
             contribution_date as date,
-            contribution_type as particulars,
+            CONCAT('Contribution - ', contribution_type) as particulars,
             0 as debit,
             amount as credit,
             name as reference
@@ -79,7 +120,7 @@ def get_data(filters):
             0 as credit,
             name as reference
         FROM `tabSHG Loan`
-        WHERE member = %s AND status = 'Disbursed' AND docstatus = 1
+        WHERE member = %s AND status IN ('Disbursed', 'Closed') AND docstatus = 1
         ORDER BY disbursement_date
     """, filters.member, as_dict=1)
     
@@ -96,11 +137,24 @@ def get_data(filters):
         ORDER BY repayment_date
     """, filters.member, as_dict=1)
     
+    # Get meeting fines
+    fines = frappe.db.sql("""
+        SELECT 
+            fine_date as date,
+            CONCAT('Meeting Fine - ', fine_reason) as particulars,
+            fine_amount as debit,
+            0 as credit,
+            name as reference
+        FROM `tabSHG Meeting Fine`
+        WHERE member = %s AND docstatus = 1
+        ORDER BY fine_date
+    """, filters.member, as_dict=1)
+    
     # Combine all transactions
-    all_transactions = contributions + loans + repayments
+    all_transactions = contributions + loans + repayments + fines
     
     # Sort by date
-    all_transactions.sort(key=lambda x: x.date)
+    all_transactions.sort(key=lambda x: x.date if x.date else getdate())
     
     # Calculate running balance
     for transaction in all_transactions:
@@ -112,6 +166,103 @@ def get_data(filters):
         transaction.balance = balance
         data.append(transaction)
     
+    # Add loan details section
+    data.append({
+        "particulars": "",
+        "debit": "",
+        "credit": "",
+        "balance": "",
+        "reference": ""
+    })
+    
+    data.append({
+        "particulars": "OUTSTANDING LOANS",
+        "debit": "",
+        "credit": "",
+        "balance": "",
+        "reference": ""
+    })
+    
+    # Get outstanding loans with repayment schedules
+    outstanding_loans = frappe.db.sql("""
+        SELECT 
+            name,
+            loan_type,
+            loan_amount,
+            balance_amount,
+            disbursement_date,
+            next_due_date,
+            monthly_installment
+        FROM `tabSHG Loan`
+        WHERE member = %s AND status = 'Disbursed' AND docstatus = 1
+        ORDER BY disbursement_date
+    """, filters.member, as_dict=1)
+    
+    for loan in outstanding_loans:
+        data.append({
+            "particulars": f"Loan: {loan.loan_type}",
+            "debit": "",
+            "credit": "",
+            "balance": "",
+            "reference": loan.name
+        })
+        
+        data.append({
+            "particulars": f"  Amount: KES {flt(loan.loan_amount):,.2f}",
+            "debit": "",
+            "credit": "",
+            "balance": "",
+            "reference": ""
+        })
+        
+        data.append({
+            "particulars": f"  Outstanding: KES {flt(loan.balance_amount):,.2f}",
+            "debit": "",
+            "credit": "",
+            "balance": "",
+            "reference": ""
+        })
+        
+        # Get repayment schedule for this loan
+        schedule = frappe.db.sql("""
+            SELECT 
+                due_date,
+                principal_amount,
+                interest_amount,
+                total_payment,
+                status
+            FROM `tabSHG Loan Repayment Schedule`
+            WHERE loan = %s
+            ORDER BY due_date
+        """, loan.name, as_dict=1)
+        
+        data.append({
+            "particulars": "  Repayment Schedule:",
+            "debit": "",
+            "credit": "",
+            "balance": "",
+            "reference": ""
+        })
+        
+        for entry in schedule:
+            status_indicator = "✓" if entry.status == "Paid" else "○"
+            data.append({
+                "date": entry.due_date,
+                "particulars": f"    {status_indicator} Due: {entry.due_date} - Principal: KES {flt(entry.principal_amount):,.2f}, Interest: KES {flt(entry.interest_amount):,.2f}",
+                "debit": "",
+                "credit": "",
+                "balance": "",
+                "reference": ""
+            })
+        
+        data.append({
+            "particulars": "",
+            "debit": "",
+            "credit": "",
+            "balance": "",
+            "reference": ""
+        })
+    
     return data
 
 def get_chart_data(data):
@@ -119,8 +270,9 @@ def get_chart_data(data):
     dates = []
     
     for row in data:
-        dates.append(row.date)
-        balance_data.append(row.balance)
+        if row.date and (row.debit > 0 or row.credit > 0):
+            dates.append(row.date)
+            balance_data.append(row.balance)
     
     if not dates:
         return []
