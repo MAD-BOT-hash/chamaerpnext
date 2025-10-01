@@ -10,6 +10,10 @@ class SHGMember(Document):
         self.set_member_id()
         self.set_account_number()
         
+    def after_insert(self):
+        """Create customer link after member is inserted to avoid recursion"""
+        self.create_customer_link()
+        
     def validate_id_number(self):
         """Validate Kenyan ID number format"""
         if self.id_number:
@@ -64,6 +68,30 @@ class SHGMember(Document):
                 
             # Format as MN001, MN002, etc.
             self.account_number = f"MN{new_number:03d}"
+            
+    def create_customer_link(self):
+        """Create a Customer record linked to this SHG Member"""
+        # Check if customer already exists for this member
+        if not self.customer:
+            # Create customer record
+            customer = frappe.new_doc("Customer")
+            customer.customer_name = self.member_name
+            customer.customer_type = "Individual"
+            customer.customer_group = "SHG Members"  # You may need to adjust this based on your setup
+            customer.territory = "Kenya"  # You may need to adjust this based on your setup
+            customer.is_shg_member = 1
+            customer.shg_member_id = self.name
+            
+            # Set contact details
+            if self.phone_number:
+                customer.mobile_no = self.phone_number
+            
+            # Save customer
+            customer.insert()
+            
+            # Link customer to member
+            self.customer = customer.name
+            self.save()
             
     def create_member_ledger_account(self):
         """Create member's ledger account"""

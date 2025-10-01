@@ -9,6 +9,7 @@ def after_install():
     setup_user_roles()
     create_default_loan_types()
     create_default_contribution_types()
+    create_default_customer_groups()  # Add this line
     # Register workspace components
     register_workspace_components()
 
@@ -163,6 +164,22 @@ def create_default_contribution_types():
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), "SHG Install - Bi-Monthly Contribution Creation Failed")
 
+def create_default_customer_groups():
+    """Create default customer groups for SHG"""
+    # Create SHG Members customer group
+    if not frappe.db.exists("Customer Group", "SHG Members"):
+        try:
+            customer_group = frappe.get_doc({
+                "doctype": "Customer Group",
+                "customer_group_name": "SHG Members",
+                "parent_customer_group": "All Customer Groups",
+                "is_group": 0
+            })
+            customer_group.insert()
+            frappe.db.commit()
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Install - Customer Group Creation Failed")
+
 def setup_user_roles():
     """Setup default user roles for SHG"""
     roles_to_create = ["SHG Admin", "SHG Treasurer", "SHG Member", "SHG Auditor"]
@@ -285,5 +302,4 @@ def validate_member(doc, method):
 
 def create_member_ledger(doc, method):
     """Hook function called from hooks.py"""
-    doc.create_customer_link()
-    doc.create_member_ledger()
+    doc.create_member_ledger_account()
