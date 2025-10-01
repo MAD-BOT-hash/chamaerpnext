@@ -135,7 +135,7 @@ class SHGContribution(Document):
 
         self.posted_to_gl = 1
         self.posted_on = frappe.utils.now()
-        self.save()
+        self.save(ignore_permissions=True)
         
     def _create_journal_entry(self, party_customer, company):
         from frappe.utils import flt, today
@@ -218,9 +218,7 @@ class SHGContribution(Document):
         from shg.shg.utils.account_utils import get_or_create_shg_contributions_account
         return get_or_create_shg_contributions_account(company)
             
-
-        
-    def on_cancel(self):
+    def cancel_journal_entry(self):
         """Cancel the associated journal entry or payment entry"""
         if self.journal_entry:
             je = frappe.get_doc("Journal Entry", self.journal_entry)
@@ -230,6 +228,10 @@ class SHGContribution(Document):
             pe = frappe.get_doc("Payment Entry", self.payment_entry)
             if pe.docstatus == 1:
                 pe.cancel()
+                
+    def on_cancel(self):
+        """Cancel the associated journal entry or payment entry"""
+        self.cancel_journal_entry()
         self.update_member_summary()
                 
     def get_member_account(self):
