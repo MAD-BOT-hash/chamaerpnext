@@ -141,8 +141,8 @@ class SHGLoan(Document):
                 {
                     "account": member_account,
                     "debit_in_account_currency": self.loan_amount,
-                    "party_type": "Customer",
-                    "party": self.get_member_customer(),
+                    "party_type": self.get_member_party_type(),
+                    "party": self.member,
                     "reference_type": "SHG Loan",
                     "reference_name": self.name
                 },
@@ -176,10 +176,10 @@ class SHGLoan(Document):
         from shg.shg.utils.account_utils import get_or_create_member_account
         return get_or_create_member_account(member, company)
         
-    def get_member_customer(self):
-        """Get member's customer link"""
+    def get_member_party_type(self):
+        """Get member's party type"""
         member = frappe.get_doc("SHG Member", self.member)
-        return member.customer
+        return member.party_type if member.party_type else "SHG Member"
                 
     def generate_repayment_schedule(self):
         """Generate repayment schedule based on frequency"""
