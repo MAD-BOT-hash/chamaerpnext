@@ -3,7 +3,7 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 def after_install():
     """Setup after installing SHG app"""
-    create_custom_fields_for_existing_doctypes()
+    # Custom fields are now handled via fixtures
     create_default_accounts()
     create_default_settings()
     setup_user_roles()
@@ -12,27 +12,6 @@ def after_install():
     create_default_customer_groups()  # Add this line
     # Register workspace components
     register_workspace_components()
-
-def create_custom_fields_for_existing_doctypes():
-    """Add custom fields to existing ERPNext doctypes"""
-    custom_fields = {
-        "Customer": [
-            {
-                "fieldname": "is_shg_member",
-                "label": "Is SHG Member",
-                "fieldtype": "Check",
-                "insert_after": "customer_type"
-            },
-            {
-                "fieldname": "shg_member_id", 
-                "label": "SHG Member ID",
-                "fieldtype": "Data",
-                "insert_after": "is_shg_member",
-                "depends_on": "is_shg_member"
-            }
-        ]
-    }
-    create_custom_fields(custom_fields, update=True)
 
 def create_default_accounts():
     """Create default GL accounts for SHG operations"""
