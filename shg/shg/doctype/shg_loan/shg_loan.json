@@ -36,6 +36,8 @@
         "balance_amount",
         "last_repayment_date",
         "next_due_date",
+        "account_mapping_section",
+        "account_mapping",
         "repayment_schedule_section",
         "repayment_schedule"
     ],
@@ -219,6 +221,17 @@
             "fieldtype": "Date",
             "label": "Next Due Date",
             "read_only": 1
+        },
+        {
+            "fieldname": "account_mapping_section",
+            "fieldtype": "Section Break",
+            "label": "Account Mapping"
+        },
+        {
+            "fieldname": "account_mapping",
+            "fieldtype": "Table",
+            "label": "Account Mapping",
+            "options": "SHG Loan Account"
         },
         {
             "fieldname": "repayment_schedule_section",

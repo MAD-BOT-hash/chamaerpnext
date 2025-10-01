@@ -64,9 +64,24 @@ class SHGContribution(Document):
         # Get contribution account
         from shg.shg.utils.account_utils import get_or_create_shg_contributions_account
         contribution_account = get_or_create_shg_contributions_account(company)
-            
+        
+        # Use account mapping if available, otherwise use defaults
+        debit_account = bank_account
+        credit_account = member_account
+        
+        if self.account_mapping:
+            # Process account mapping
+            for mapping in self.account_mapping:
+                if mapping.account_type == "Bank Account":
+                    debit_account = mapping.account
+                elif mapping.account_type == "Member Account":
+                    credit_account = mapping.account
+                # Note: For contributions, we typically debit bank/cash and credit member account
+                # Other account types might be used for more complex scenarios
+        
         # Determine which account to debit (bank or cash)
-        debit_account = bank_account if frappe.db.exists("Account", bank_account) else cash_account
+        if not self.account_mapping:
+            debit_account = bank_account if frappe.db.exists("Account", bank_account) else cash_account
             
         # Create Journal Entry
         je = frappe.get_doc({
@@ -83,7 +98,7 @@ class SHGContribution(Document):
                     "reference_name": self.name
                 },
                 {
-                    "account": member_account,
+                    "account": credit_account,
                     "credit_in_account_currency": self.amount,
                     "party_type": "Customer",
                     "party": self.get_member_customer(),

@@ -129,6 +129,20 @@ class SHGLoan(Document):
         # Get loan account using the new utility function
         from shg.shg.utils.account_utils import get_or_create_shg_loans_account
         loan_account = get_or_create_shg_loans_account(company)
+        
+        # Use account mapping if available, otherwise use defaults
+        debit_account = member_account
+        credit_account = loan_account
+        
+        if self.account_mapping:
+            # Process account mapping
+            for mapping in self.account_mapping:
+                if mapping.account_type == "Member Account":
+                    debit_account = mapping.account
+                elif mapping.account_type == "Loan Account":
+                    credit_account = mapping.account
+                # Note: For loan disbursement, we typically debit member account and credit loan account
+                # Other account types might be used for more complex scenarios
             
         # Create Journal Entry
         je = frappe.get_doc({
@@ -139,7 +153,7 @@ class SHGLoan(Document):
             "user_remark": f"Loan disbursement to {self.member_name} - {self.name}",
             "accounts": [
                 {
-                    "account": member_account,
+                    "account": debit_account,
                     "debit_in_account_currency": self.loan_amount,
                     "party_type": "Customer",
                     "party": self.get_member_customer(),
@@ -147,7 +161,7 @@ class SHGLoan(Document):
                     "reference_name": self.name
                 },
                 {
-                    "account": loan_account,
+                    "account": credit_account,
                     "credit_in_account_currency": self.loan_amount,
                     "reference_type": "SHG Loan",
                     "reference_name": self.name

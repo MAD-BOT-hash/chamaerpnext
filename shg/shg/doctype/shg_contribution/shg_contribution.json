@@ -20,7 +20,9 @@
         "reference_number",
         "notes",
         "accounting_section",
-        "journal_entry"
+        "journal_entry",
+        "account_mapping_section",
+        "account_mapping"
     ],
     "fields": [
         {
@@ -111,6 +113,17 @@
             "label": "Journal Entry",
             "options": "Journal Entry",
             "read_only": 1
+        },
+        {
+            "fieldname": "account_mapping_section",
+            "fieldtype": "Section Break",
+            "label": "Account Mapping"
+        },
+        {
+            "fieldname": "account_mapping",
+            "fieldtype": "Table",
+            "label": "Account Mapping",
+            "options": "SHG Contribution Account"
         }
     ],
     "is_submittable": 1,

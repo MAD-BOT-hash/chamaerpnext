@@ -1,7 +1,7 @@
 frappe.ui.form.on('SHG Loan Repayment', {
     refresh: function(frm) {
         // Add dashboard indicators
-        if (frm.doc.docstatus === 1 && frm.doc.posted_to_gl) {
+        if (frm.doc.docstatus === 1 && frm.doc.journal_entry) {
             frm.dashboard.add_indicator(__('Posted to General Ledger'), 'green');
         }
         
