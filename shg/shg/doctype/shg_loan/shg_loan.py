@@ -210,15 +210,13 @@ class SHGLoan(Document):
             "user_remark": f"SHG Loan Disbursement {self.name} to {self.member}",
             "accounts": [
                 {
-                    "account": self.get_member_account(),
+                    "account": self.get_loan_account(company),  # Loan Asset account
                     "debit_in_account_currency": flt(self.loan_amount),
-                    "party_type": "Customer",
-                    "party": party_customer,
                     "reference_type": "Journal Entry",
                     "reference_name": self.name
                 },
                 {
-                    "account": self.get_loan_account(company),
+                    "account": self.get_bank_account(company),  # Bank account
                     "credit_in_account_currency": flt(self.loan_amount),
                     "reference_type": "Journal Entry",
                     "reference_name": self.name
@@ -239,8 +237,8 @@ class SHGLoan(Document):
             "company": company,
             "party_type": "Customer",
             "party": party_customer,
-            "paid_from": self.get_loan_account(company),
-            "paid_to": self.get_bank_account(company),
+            "paid_from": self.get_loan_account(company),  # Loan Asset account
+            "paid_to": self.get_bank_account(company),    # Bank account
             "paid_amount": flt(self.loan_amount),
             "received_amount": flt(self.loan_amount),
             "reference_no": self.name,

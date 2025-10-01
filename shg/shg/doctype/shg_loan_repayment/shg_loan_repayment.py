@@ -164,8 +164,9 @@ class SHGLoanRepayment(Document):
     def _create_journal_entry(self, party_customer, company):
         from frappe.utils import flt, today
         
-        # Get member's account (auto-created if not exists)
-        member_account = self.get_member_account()
+        # Get accounts
+        cash_account = self.get_cash_account(company)
+        loan_account = self.get_loan_account(company)
             
         # Get income accounts using the new utility functions
         from shg.shg.utils.account_utils import (
@@ -178,16 +179,14 @@ class SHGLoanRepayment(Document):
 
         accounts = [
             {
-                "account": self.get_cash_account(company),
+                "account": cash_account,  # Cash/Bank account
                 "debit_in_account_currency": flt(self.total_paid),
                 "reference_type": "Journal Entry",
                 "reference_name": self.name
             },
             {
-                "account": member_account,
+                "account": loan_account,  # Loan Receivable account
                 "credit_in_account_currency": flt(self.principal_amount),
-                "party_type": "Customer",
-                "party": party_customer,
                 "reference_type": "Journal Entry",
                 "reference_name": self.name
             }
@@ -232,8 +231,8 @@ class SHGLoanRepayment(Document):
             "company": company,
             "party_type": "Customer",
             "party": party_customer,
-            "paid_from": self.get_cash_account(company),
-            "paid_to": self.get_member_account(),
+            "paid_from": self.get_cash_account(company),     # Cash/Bank account
+            "paid_to": self.get_loan_account(company),       # Loan Receivable account
             "paid_amount": flt(self.total_paid),
             "received_amount": flt(self.total_paid),
             "reference_no": self.name,
@@ -270,7 +269,7 @@ class SHGLoanRepayment(Document):
                     return cash_accounts[0].name
                 else:
                     frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
-            
+                    
     def get_member_account(self):
         """Get member's ledger account, create if not exists"""
         member = frappe.get_doc("SHG Member", self.member)
@@ -289,6 +288,16 @@ class SHGLoanRepayment(Document):
         """Get member's customer link"""
         member = frappe.get_doc("SHG Member", self.member)
         return member.customer
+
+    def get_loan_account(self, company):
+        """Get loan account from the associated loan"""
+        if self.loan:
+            loan = frappe.get_doc("SHG Loan", self.loan)
+            return loan.get_loan_account(company)
+        else:
+            # Fallback to settings
+            from shg.shg.utils.account_utils import get_or_create_shg_loans_account
+            return get_or_create_shg_loans_account(company)
 
     def update_member_totals(self):
         """Update member's totals"""
