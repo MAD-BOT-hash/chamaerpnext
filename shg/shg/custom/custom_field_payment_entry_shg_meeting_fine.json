@@ -1,0 +1,9 @@
+{
+  "doctype": "Custom Field",
+  "dt": "Payment Entry",
+  "fieldname": "custom_shg_meeting_fine",
+  "fieldtype": "Link",
+  "options": "SHG Meeting Fine",
+  "label": "SHG Meeting Fine",
+  "insert_after": "payment_type"
+}

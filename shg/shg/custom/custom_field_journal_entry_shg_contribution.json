@@ -1,0 +1,9 @@
+{
+  "doctype": "Custom Field",
+  "dt": "Journal Entry",
+  "fieldname": "custom_shg_contribution",
+  "fieldtype": "Link",
+  "options": "SHG Contribution",
+  "label": "SHG Contribution",
+  "insert_after": "voucher_type"
+}

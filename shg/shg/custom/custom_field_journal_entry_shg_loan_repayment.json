@@ -1,0 +1,9 @@
+{
+  "doctype": "Custom Field",
+  "dt": "Journal Entry",
+  "fieldname": "custom_shg_loan_repayment",
+  "fieldtype": "Link",
+  "options": "SHG Loan Repayment",
+  "label": "SHG Loan Repayment",
+  "insert_after": "voucher_type"
+}

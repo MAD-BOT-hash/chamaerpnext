@@ -1,0 +1,9 @@
+{
+  "doctype": "Custom Field",
+  "dt": "Journal Entry",
+  "fieldname": "custom_shg_meeting_fine",
+  "fieldtype": "Link",
+  "options": "SHG Meeting Fine",
+  "label": "SHG Meeting Fine",
+  "insert_after": "voucher_type"
+}
