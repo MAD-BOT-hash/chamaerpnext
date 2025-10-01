@@ -81,7 +81,7 @@ class SHGMember(Document):
             self.customer = customer.name
             self.save()
             
-    def create_member_ledger(self):
+    def create_member_ledger_account(self):
         """Create member's ledger account"""
         company = frappe.defaults.get_user_default("Company")
         if not company:
@@ -231,7 +231,7 @@ def create_member_ledger(doc, method):
     """Hook function called from hooks.py"""
     # Create customer automatically when member is created
     doc.create_customer()
-    doc.create_member_ledger()
+    doc.create_member_ledger_account()
 
 def handle_member_amendment(doc, method):
     """Handle member amendment to ensure data consistency"""
