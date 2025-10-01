@@ -59,7 +59,7 @@ class SHGLoanRepayment(Document):
     def on_submit(self):
         """Update loan balance, GL, and schedule"""
         self.update_loan_balance()
-        self.post_to_general_ledger()
+        self.create_journal_entry()
         self.update_member_totals()
         self.update_repayment_schedule()
 
@@ -77,7 +77,7 @@ class SHGLoanRepayment(Document):
 
         loan.save()
 
-    def post_to_general_ledger(self):
+    def create_journal_entry(self):
         """Create Journal Entry for repayment"""
         company = frappe.defaults.get_user_default("Company")
         if not company:
@@ -153,7 +153,6 @@ class SHGLoanRepayment(Document):
             je.insert()
             je.submit()
             self.journal_entry = je.name
-            self.posted_to_gl = 1
             self.save()
             self.send_payment_confirmation()
         except Exception as e:

@@ -33,16 +33,16 @@ class SHGContribution(Document):
                 self.amount = contrib_type.default_amount
                 
     def on_submit(self):
-        self.post_to_general_ledger()
+        self.create_journal_entry()
         self.update_member_summary()
         
     def on_cancel(self):
         self.cancel_journal_entry()
         self.update_member_summary()
         
-    def post_to_general_ledger(self):
-        """Post contribution to General Ledger using Journal Entry"""
-        if self.posted_to_gl:
+    def create_journal_entry(self):
+        """Create Journal Entry for contribution"""
+        if self.journal_entry:
             return
             
         company = frappe.defaults.get_user_default("Company")
@@ -74,7 +74,7 @@ class SHGContribution(Document):
             "voucher_type": "Journal Entry",
             "posting_date": self.contribution_date,
             "company": company,
-            "remark": f"Contribution from {self.member_name} - {self.contribution_type}",
+            "user_remark": f"Contribution from {self.member_name} - {self.contribution_type}",
             "accounts": [
                 {
                     "account": debit_account,
@@ -98,7 +98,6 @@ class SHGContribution(Document):
         
         # Update contribution record
         self.journal_entry = je.name
-        self.posted_to_gl = 1
         self.save()
         
     def cancel_journal_entry(self):
@@ -207,4 +206,4 @@ def validate_contribution(doc, method):
 def post_to_general_ledger(doc, method):
     """Hook function called from hooks.py"""
     if doc.docstatus == 1:
-        doc.post_to_general_ledger()
+        doc.create_journal_entry()

@@ -1,4 +1,4 @@
- {
+{
     "actions": [],
     "allow_rename": 1,
     "autoname": "naming_series:",
@@ -24,8 +24,7 @@
         "outstanding_balance",
         "balance_after_payment",
         "accounting_section",
-        "journal_entry",
-        "posted_to_gl"
+        "journal_entry"
     ],
     "fields": [
         {
@@ -143,12 +142,6 @@
             "fieldtype": "Link",
             "label": "Journal Entry",
             "options": "Journal Entry",
-            "read_only": 1
-        },
-        {
-            "fieldname": "posted_to_gl",
-            "fieldtype": "Check",
-            "label": "Posted to GL",
             "read_only": 1
         }
     ],

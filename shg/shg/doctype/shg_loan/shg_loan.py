@@ -101,7 +101,7 @@ class SHGLoan(Document):
         elif self.status == "Disbursed":
             self.generate_repayment_schedule()
             self.update_member_summary()
-            self.post_disbursement_to_general_ledger()
+            self.create_disbursement_journal_entry()
             
     def on_update(self):
         """Update balance when status changes"""
@@ -110,8 +110,8 @@ class SHGLoan(Document):
             self.balance_amount = self.loan_amount
             self.save()
             
-    def post_disbursement_to_general_ledger(self):
-        """Post loan disbursement to General Ledger using Journal Entry"""
+    def create_disbursement_journal_entry(self):
+        """Create Journal Entry for loan disbursement"""
         if self.disbursement_journal_entry:
             return
             
@@ -136,7 +136,7 @@ class SHGLoan(Document):
             "voucher_type": "Journal Entry",
             "posting_date": self.disbursement_date,
             "company": company,
-            "remark": f"Loan disbursement to {self.member_name} - {self.name}",
+            "user_remark": f"Loan disbursement to {self.member_name} - {self.name}",
             "accounts": [
                 {
                     "account": member_account,
