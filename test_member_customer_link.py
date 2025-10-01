@@ -64,6 +64,9 @@ def test_customer_linking():
         member.insert()
         print(f"Created SHG Member: {member.name}")
         
+        # Reload the member to get the updated customer field
+        member.reload()
+        
         # Verify that a Customer was created and linked
         if not member.customer:
             print("ERROR: Customer was not linked to SHG Member")
@@ -109,6 +112,9 @@ def test_customer_linking():
         
         # Save the member again (simulating an update)
         member.save()
+        
+        # Reload the member to get the updated customer field
+        member.reload()
         
         if member.customer != original_customer:
             print("ERROR: Duplicate customer created on member update")
