@@ -5,5 +5,6 @@
   "fieldtype": "Link",
   "options": "SHG Loan",
   "label": "SHG Loan",
-  "insert_after": "payment_type"
+  "insert_after": "payment_type",
+  "allow_on_submit": 1
 }
