@@ -85,8 +85,8 @@ class SHGContribution(Document):
                 {
                     "account": member_account,
                     "credit_in_account_currency": self.amount,
-                    "party_type": self.get_member_party_type(),
-                    "party": self.member,
+                    "party_type": "Customer",
+                    "party": self.get_member_customer(),
                     "reference_type": "SHG Contribution",
                     "reference_name": self.name
                 }
@@ -122,10 +122,10 @@ class SHGContribution(Document):
         from shg.shg.utils.account_utils import get_or_create_member_account
         return get_or_create_member_account(member, company)
         
-    def get_member_party_type(self):
-        """Get member's party type"""
+    def get_member_customer(self):
+        """Get member's customer link"""
         member = frappe.get_doc("SHG Member", self.member)
-        return member.party_type if member.party_type else "SHG Member"
+        return member.customer
         
     def update_member_summary(self):
         """Update member's financial summary"""

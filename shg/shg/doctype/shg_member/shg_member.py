@@ -9,6 +9,9 @@ class SHGMember(Document):
         self.validate_phone_number()
         self.set_member_id()
         self.set_account_number()
+        # Set default party_type to Customer for GL entries
+        if not self.party_type:
+            self.party_type = "Customer"
         
     def after_insert(self):
         """Create customer link after member is inserted to avoid recursion"""
