@@ -92,9 +92,8 @@ class SHGMember(Document):
             # Save customer
             customer.insert()
             
-            # Link customer to member
-            self.customer = customer.name
-            self.save()
+            # Link customer to member (avoid recursion by using db_set)
+            self.db_set("customer", customer.name, update_modified=False)
             
     def create_member_ledger_account(self):
         """Create member's ledger account"""
@@ -109,7 +108,9 @@ class SHGMember(Document):
         # Ensure account number is set
         if not self.account_number:
             self.set_account_number()
-            self.save()
+            # Only save if this is a new document (not yet inserted)
+            if not self.get_doc_before_save():
+                self.db_set("account_number", self.account_number, update_modified=False)
                 
         # Create member's receivable account using account number
         from shg.shg.utils.account_utils import get_or_create_member_account
@@ -182,14 +183,15 @@ class SHGMember(Document):
             self.credit_score = int(credit_score)
         # If credit score was manually updated, keep the manually set value
         
-        # Update document
-        self.total_contributions = total_contributions
-        self.total_loans_taken = total_loans
-        self.current_loan_balance = loan_balance
-        self.last_contribution_date = last_contribution
-        self.last_loan_date = last_loan
-        
-        self.save()
+        # Update document using db_set to avoid recursion
+        self.db_set({
+            "total_contributions": total_contributions,
+            "total_loans_taken": total_loans,
+            "current_loan_balance": loan_balance,
+            "last_contribution_date": last_contribution,
+            "last_loan_date": last_loan,
+            "credit_score": self.credit_score
+        }, update_modified=False)
         
     def on_update_after_submit(self):
         """Handle updates to member information after submission"""
@@ -250,4 +252,8 @@ def handle_member_amendment(doc, method):
 
 def handle_member_update_after_submit(doc, method):
     """Handle member updates after submission"""
-    doc.on_update_after_submit()
+    # Directly call the method to avoid recursion through hooks
+    doc.validate_id_number()
+    doc.validate_phone_number()
+    doc.validate_next_of_kin()
+    doc.update_financial_summary()
