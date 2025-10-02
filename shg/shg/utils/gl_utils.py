@@ -60,6 +60,10 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         "SHG Meeting Fine": "Journal Entry"
     }
     
+    # Initialize reference fields
+    reference_no = None
+    reference_date = None
+    
     # Get accounts based on document type
     accounts = []
     
@@ -193,8 +197,9 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
     
     # Add reference_no and reference_date for Bank and Cash entries
     if je.voucher_type in ["Bank Entry", "Cash Entry"]:
-        je.reference_no = reference_no
-        je.reference_date = reference_date
+        # Ensure we have reference values, fallback to doc name and today if not set
+        je.reference_no = reference_no or doc.name
+        je.reference_date = reference_date or today()
     
     for account_entry in accounts:
         je.append("accounts", account_entry)

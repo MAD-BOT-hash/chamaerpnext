@@ -80,13 +80,14 @@ def _update_document_with_entry(doc, entry_field, entry_name):
 
 **Issue**: ERPNext requires Bank Entry and Cash Entry voucher types to have reference_no and reference_date fields populated.
 
-**Fix**: Added reference fields for Bank Entry and Cash Entry voucher types:
+**Fix**: Added reference fields for Bank Entry and Cash Entry voucher types with proper fallback handling:
 
 ```python
 # Add reference_no and reference_date for Bank and Cash entries
 if je.voucher_type in ["Bank Entry", "Cash Entry"]:
-    je.reference_no = reference_no
-    je.reference_date = reference_date
+    # Ensure we have reference values, fallback to doc name and today if not set
+    je.reference_no = reference_no or doc.name
+    je.reference_date = reference_date or today()
 ```
 
 **Changes Made**:
@@ -94,6 +95,7 @@ if je.voucher_type in ["Bank Entry", "Cash Entry"]:
 - Added reference_no and reference_date for Bank Entry (Contributions)
 - Added reference_no and reference_date for Cash Entry (Loan Repayments)
 - Used document name as reference_no and document date as reference_date
+- Added fallback handling to prevent undefined variable errors
 
 ## Detailed Changes by File
 
@@ -103,6 +105,7 @@ if je.voucher_type in ["Bank Entry", "Cash Entry"]:
 - **Payment Direction Fix**: Corrected paid_from/paid_to directions for all transactions
 - **Hook Prevention**: Changed `doc.save()` to `doc.db_set()` with `update_modified=False`
 - **Reference Fields**: Added reference_no and reference_date for Bank Entry and Cash Entry voucher types
+- **Fallback Handling**: Added proper fallback for reference fields to prevent undefined variable errors
 
 ### shg/shg/doctype/*/ *.json (All 4 doctypes)
 - **Default Voucher Types**: Updated default values to match valid ERPNext voucher types
@@ -171,8 +174,8 @@ Member Account (SHG Member) → Cash/Bank Account
 
 ### Reference Fields
 Bank Entry and Cash Entry voucher types now include required reference fields:
-- **reference_no**: Set to document name
-- **reference_date**: Set to document date
+- **reference_no**: Set to document name (with fallback to document name)
+- **reference_date**: Set to document date (with fallback to today)
 
 ## Conclusion
 
