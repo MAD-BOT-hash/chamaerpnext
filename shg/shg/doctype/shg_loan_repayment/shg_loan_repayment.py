@@ -16,9 +16,8 @@ class SHGLoanRepayment(Document):
 
         if self.loan:
             loan = frappe.get_doc("SHG Loan", self.loan)
-            monthly_interest = loan.balance_amount * (loan.interest_rate / 100) / 12
-            max_penalty = loan.monthly_installment * 0.05 * 12
-            max_payment = loan.balance_amount + monthly_interest + max_penalty
+            # More accurate validation based on actual loan balance
+            max_payment = loan.balance_amount * 1.1  # Allow 10% buffer for interest/penalties
 
             if self.total_paid > max_payment:
                 frappe.msgprint(
@@ -47,37 +46,54 @@ class SHGLoanRepayment(Document):
             self.outstanding_balance = loan.balance_amount
 
     def calculate_repayment_breakdown(self):
-        """Calculate principal, interest, and penalty breakdown"""
+        """Calculate principal, interest, and penalty breakdown with improved accuracy"""
         if not self.loan:
             return
             
         loan = frappe.get_doc("SHG Loan", self.loan)
 
-        # Calculate penalties
+        # Calculate penalties based on overdue status
+        penalty_amount = 0
         if loan.next_due_date and getdate(self.repayment_date) > getdate(loan.next_due_date):
             overdue_days = (getdate(self.repayment_date) - getdate(loan.next_due_date)).days
+            # Penalty calculation: 5% per month on outstanding balance
             penalty_rate = 0.05  # 5% per month
-            self.penalty_amount = loan.monthly_installment * penalty_rate * (overdue_days / 30)
-        else:
-            self.penalty_amount = 0
+            penalty_amount = loan.balance_amount * penalty_rate * (overdue_days / 30)
+        
+        self.penalty_amount = penalty_amount
 
+        # Calculate interest based on loan type
+        if loan.interest_type == "Flat Rate":
+            # For flat rate loans, interest is calculated on original principal
+            monthly_interest = (loan.loan_amount * (loan.interest_rate / 100)) / 12
+        else:
+            # For reducing balance loans, interest is calculated on current balance
+            monthly_interest = loan.balance_amount * (loan.interest_rate / 100) / 12
+
+        # Allocate payment: First penalty, then interest, then principal
         remaining_amount = self.total_paid
 
         # Deduct penalty
-        penalty_paid = min(remaining_amount, self.penalty_amount or 0)
-        self.penalty_amount = penalty_paid
+        penalty_paid = min(remaining_amount, self.penalty_amount)
         remaining_amount -= penalty_paid
 
-        # Interest
-        monthly_interest = loan.balance_amount * (loan.interest_rate / 100) / 12
+        # Deduct interest
         interest_paid = min(remaining_amount, monthly_interest)
-        self.interest_amount = interest_paid
         remaining_amount -= interest_paid
 
-        # Principal
-        self.principal_amount = remaining_amount
+        # Remaining amount goes to principal
+        principal_paid = min(remaining_amount, loan.balance_amount)
+        
+        # If payment exceeds what's needed, adjust principal to not exceed balance
+        if principal_paid + interest_paid + penalty_paid > self.total_paid:
+            # Recalculate to ensure exact match
+            principal_paid = self.total_paid - interest_paid - penalty_paid
 
-        # New balance
+        self.penalty_amount = penalty_paid
+        self.interest_amount = interest_paid
+        self.principal_amount = principal_paid
+
+        # Calculate new balance
         self.balance_after_payment = max(0, loan.balance_amount - self.principal_amount)
 
     def on_submit(self):
@@ -102,14 +118,34 @@ class SHGLoanRepayment(Document):
         validate_accounting_integrity(self)
 
     def update_loan_balance(self):
-        """Update the loan balance"""
+        """Update the loan balance with improved accuracy"""
         loan = frappe.get_doc("SHG Loan", self.loan)
+        
+        # Update loan balance
         loan.balance_amount = max(0, loan.balance_amount - self.principal_amount)
         loan.last_repayment_date = self.repayment_date
 
+        # Update next due date based on repayment frequency
         if loan.balance_amount > 0:
-            loan.next_due_date = add_months(getdate(self.repayment_date), 1)
+            if loan.repayment_frequency == "Daily":
+                loan.next_due_date = add_days(getdate(self.repayment_date), 1)
+            elif loan.repayment_frequency == "Weekly":
+                loan.next_due_date = add_days(getdate(self.repayment_date), 7)
+            elif loan.repayment_frequency == "Bi-Weekly":
+                loan.next_due_date = add_days(getdate(self.repayment_date), 14)
+            elif loan.repayment_frequency == "Monthly":
+                loan.next_due_date = add_months(getdate(self.repayment_date), 1)
+            elif loan.repayment_frequency == "Bi-Monthly":
+                loan.next_due_date = add_months(getdate(self.repayment_date), 2)
+            elif loan.repayment_frequency == "Quarterly":
+                loan.next_due_date = add_months(getdate(self.repayment_date), 3)
+            elif loan.repayment_frequency == "Yearly":
+                loan.next_due_date = add_months(getdate(self.repayment_date), 12)
+            else:
+                # Default to monthly
+                loan.next_due_date = add_months(getdate(self.repayment_date), 1)
         else:
+            # Loan is fully paid
             loan.status = "Closed"
             loan.next_due_date = None
 
@@ -186,7 +222,24 @@ class SHGLoanRepayment(Document):
             loan.balance_amount += self.principal_amount
             if loan.status == "Closed" and loan.balance_amount > 0:
                 loan.status = "Disbursed"
-                loan.next_due_date = add_months(getdate(self.repayment_date), 1)
+                # Restore next due date based on repayment frequency
+                if loan.repayment_frequency == "Daily":
+                    loan.next_due_date = add_days(getdate(self.repayment_date), 1)
+                elif loan.repayment_frequency == "Weekly":
+                    loan.next_due_date = add_days(getdate(self.repayment_date), 7)
+                elif loan.repayment_frequency == "Bi-Weekly":
+                    loan.next_due_date = add_days(getdate(self.repayment_date), 14)
+                elif loan.repayment_frequency == "Monthly":
+                    loan.next_due_date = add_months(getdate(self.repayment_date), 1)
+                elif loan.repayment_frequency == "Bi-Monthly":
+                    loan.next_due_date = add_months(getdate(self.repayment_date), 2)
+                elif loan.repayment_frequency == "Quarterly":
+                    loan.next_due_date = add_months(getdate(self.repayment_date), 3)
+                elif loan.repayment_frequency == "Yearly":
+                    loan.next_due_date = add_months(getdate(self.repayment_date), 12)
+                else:
+                    # Default to monthly
+                    loan.next_due_date = add_months(getdate(self.repayment_date), 1)
             loan.save()
             self.update_member_totals()
         except Exception as e:
@@ -238,17 +291,33 @@ class SHGLoanRepayment(Document):
 
     def update_repayment_schedule(self):
         if self.loan:
+            # Find the next pending repayment schedule entry
             schedule_entries = frappe.get_all(
                 "SHG Loan Repayment Schedule",
                 {"loan": self.loan, "status": "Pending"},
-                ["name", "due_date"], order_by="due_date"
+                ["name", "due_date"], 
+                order_by="due_date"
             )
+            
             if schedule_entries:
+                # Update the earliest pending schedule entry
                 schedule_doc = frappe.get_doc("SHG Loan Repayment Schedule", schedule_entries[0].name)
                 schedule_doc.status = "Paid"
                 schedule_doc.actual_payment_date = self.repayment_date
                 schedule_doc.actual_amount_paid = self.total_paid
                 schedule_doc.save()
+
+                # If this payment was for a specific scheduled amount, check for over/under payment
+                scheduled_info = self.get_repayment_schedule_info()
+                if scheduled_info and scheduled_info["scheduled_total"]:
+                    difference = self.total_paid - scheduled_info["scheduled_total"]
+                    if abs(difference) > 1:  # More than KES 1 difference
+                        # Log the difference for review
+                        frappe.msgprint(
+                            f"Payment amount differs from scheduled amount by KES {difference:,.2f}. "
+                            "Please verify the payment allocation.",
+                            alert=True
+                        )
 
 
 # --- Hook functions ---

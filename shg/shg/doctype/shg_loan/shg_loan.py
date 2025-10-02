@@ -73,22 +73,29 @@ class SHGLoan(Document):
             self.repayment_frequency = loan_type.repayment_frequency
             
     def calculate_repayment_details(self):
-        """Calculate repayment details"""
+        """Calculate repayment details with improved accuracy"""
         if self.loan_amount and self.interest_rate and self.loan_period_months:
             if self.interest_type == "Flat Rate":
                 # Flat rate calculation
                 total_interest = self.loan_amount * (self.interest_rate / 100) * (self.loan_period_months / 12)
                 self.total_payable = self.loan_amount + total_interest
-                self.monthly_installment = self.total_payable / self.loan_period_months
+                if self.loan_period_months > 0:
+                    self.monthly_installment = self.total_payable / self.loan_period_months
+                else:
+                    self.monthly_installment = 0
             else:
-                # Reducing balance calculation
+                # Reducing balance calculation using standard formula
                 monthly_rate = (self.interest_rate / 100) / 12
-                if monthly_rate > 0:
+                if monthly_rate > 0 and self.loan_period_months > 0:
+                    # Standard amortization formula
                     self.monthly_installment = (self.loan_amount * monthly_rate * 
                                              (1 + monthly_rate) ** self.loan_period_months) / \
                                              ((1 + monthly_rate) ** self.loan_period_months - 1)
-                else:
+                elif self.loan_period_months > 0:
+                    # No interest loan
                     self.monthly_installment = self.loan_amount / self.loan_period_months
+                else:
+                    self.monthly_installment = 0
                     
                 # For display purposes, calculate total payable
                 self.total_payable = self.monthly_installment * self.loan_period_months
@@ -111,6 +118,24 @@ class SHGLoan(Document):
         if self.status == "Disbursed" and not self.disbursed_amount:
             self.disbursed_amount = self.loan_amount
             self.balance_amount = self.loan_amount
+            # Set next due date based on repayment frequency
+            if self.repayment_frequency == "Daily":
+                self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 1)
+            elif self.repayment_frequency == "Weekly":
+                self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 7)
+            elif self.repayment_frequency == "Bi-Weekly":
+                self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 14)
+            elif self.repayment_frequency == "Monthly":
+                self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 1)
+            elif self.repayment_frequency == "Bi-Monthly":
+                self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 2)
+            elif self.repayment_frequency == "Quarterly":
+                self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 3)
+            elif self.repayment_frequency == "Yearly":
+                self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 12)
+            else:
+                # Default to monthly
+                self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 1)
             self.save()
             
     def validate_gl_entries(self):
@@ -220,8 +245,11 @@ class SHGLoan(Document):
         due_date = self.repayment_start_date or self.disbursement_date
         
         # Calculate number of days for the loan period
-        total_days = self.loan_period_months * 30  # Approximate
+        total_days = int(self.loan_period_months * 30)  # Approximate
         
+        if total_days <= 0:
+            return
+            
         for i in range(total_days):
             due_date = add_days(due_date, 1)
             
@@ -232,17 +260,24 @@ class SHGLoan(Document):
             else:
                 # Reducing balance calculation
                 interest = outstanding_balance * daily_rate
-                principal = (self.loan_amount / total_days)  # Simplified
+                # For daily payments, principal is calculated to ensure loan is paid off
+                if i == total_days - 1:
+                    # Last payment - pay off remaining balance
+                    principal = outstanding_balance
+                else:
+                    principal = self.monthly_installment / 30 if self.monthly_installment > 0 else 0
                 
             self.append("repayment_schedule", {
                 "payment_date": due_date,
                 "principal_amount": principal,
                 "interest_amount": interest,
                 "total_payment": principal + interest,
-                "balance_amount": outstanding_balance - principal
+                "balance_amount": max(0, outstanding_balance - principal)
             })
             
-            outstanding_balance -= principal
+            outstanding_balance = max(0, outstanding_balance - principal)
+            if outstanding_balance <= 0:
+                break
             
     def generate_weekly_schedule(self):
         """Generate weekly repayment schedule"""
@@ -251,7 +286,12 @@ class SHGLoan(Document):
         due_date = self.repayment_start_date or self.disbursement_date
         
         # Calculate number of weeks for the loan period
-        total_weeks = self.loan_period_months * 4  # Approximate
+        total_weeks = int(self.loan_period_months * 4)  # Approximate
+        
+        if total_weeks <= 0:
+            return
+            
+        weekly_installment = self.monthly_installment * 12 / 52 if self.monthly_installment > 0 else 0
         
         for i in range(total_weeks):
             due_date = add_days(due_date, 7)
@@ -263,17 +303,24 @@ class SHGLoan(Document):
             else:
                 # Reducing balance calculation
                 interest = outstanding_balance * weekly_rate
-                principal = (self.loan_amount / total_weeks)  # Simplified
+                # For weekly payments
+                if i == total_weeks - 1:
+                    # Last payment - pay off remaining balance
+                    principal = outstanding_balance
+                else:
+                    principal = weekly_installment - interest if weekly_installment > interest else 0
                 
             self.append("repayment_schedule", {
                 "payment_date": due_date,
                 "principal_amount": principal,
                 "interest_amount": interest,
                 "total_payment": principal + interest,
-                "balance_amount": outstanding_balance - principal
+                "balance_amount": max(0, outstanding_balance - principal)
             })
             
-            outstanding_balance -= principal
+            outstanding_balance = max(0, outstanding_balance - principal)
+            if outstanding_balance <= 0:
+                break
             
     def generate_biweekly_schedule(self):
         """Generate bi-weekly repayment schedule"""
@@ -282,7 +329,12 @@ class SHGLoan(Document):
         due_date = self.repayment_start_date or self.disbursement_date
         
         # Calculate number of bi-weekly periods for the loan period
-        total_biweekly = self.loan_period_months * 2  # Approximate
+        total_biweekly = int(self.loan_period_months * 2)  # Approximate
+        
+        if total_biweekly <= 0:
+            return
+            
+        biweekly_installment = self.monthly_installment * 12 / 26 if self.monthly_installment > 0 else 0
         
         for i in range(total_biweekly):
             due_date = add_days(due_date, 14)
@@ -294,45 +346,64 @@ class SHGLoan(Document):
             else:
                 # Reducing balance calculation
                 interest = outstanding_balance * biweekly_rate
-                principal = (self.loan_amount / total_biweekly)  # Simplified
+                # For bi-weekly payments
+                if i == total_biweekly - 1:
+                    # Last payment - pay off remaining balance
+                    principal = outstanding_balance
+                else:
+                    principal = biweekly_installment - interest if biweekly_installment > interest else 0
                 
             self.append("repayment_schedule", {
                 "payment_date": due_date,
                 "principal_amount": principal,
                 "interest_amount": interest,
                 "total_payment": principal + interest,
-                "balance_amount": outstanding_balance - principal
+                "balance_amount": max(0, outstanding_balance - principal)
             })
             
-            outstanding_balance -= principal
+            outstanding_balance = max(0, outstanding_balance - principal)
+            if outstanding_balance <= 0:
+                break
             
     def generate_monthly_schedule(self):
-        """Generate monthly repayment schedule"""
+        """Generate monthly repayment schedule with improved accuracy"""
         outstanding_balance = self.loan_amount
         monthly_rate = (self.interest_rate / 100) / 12
         due_date = self.repayment_start_date or self.disbursement_date
         
-        for i in range(int(self.loan_period_months)):
+        total_months = int(self.loan_period_months)
+        
+        if total_months <= 0:
+            return
+            
+        for i in range(total_months):
             due_date = add_months(due_date, 1)
             
             if self.interest_type == "Flat Rate":
                 # Flat rate calculation
-                principal = self.loan_amount / self.loan_period_months
+                principal = self.loan_amount / total_months
                 interest = (self.loan_amount * self.interest_rate / 100) / 12
             else:
-                # Reducing balance calculation
+                # Reducing balance calculation using the proper amortization formula
                 interest = outstanding_balance * monthly_rate
-                principal = self.monthly_installment - interest
+                # For monthly payments
+                if i == total_months - 1:
+                    # Last payment - pay off remaining balance
+                    principal = outstanding_balance
+                else:
+                    principal = self.monthly_installment - interest if self.monthly_installment > interest else 0
                 
             self.append("repayment_schedule", {
                 "payment_date": due_date,
                 "principal_amount": principal,
                 "interest_amount": interest,
                 "total_payment": principal + interest,
-                "balance_amount": outstanding_balance - principal
+                "balance_amount": max(0, outstanding_balance - principal)
             })
             
-            outstanding_balance -= principal
+            outstanding_balance = max(0, outstanding_balance - principal)
+            if outstanding_balance <= 0:
+                break
             
     def generate_bimonthly_schedule(self):
         """Generate bi-monthly repayment schedule"""
@@ -341,9 +412,14 @@ class SHGLoan(Document):
         due_date = self.repayment_start_date or self.disbursement_date
         
         # Calculate number of bi-monthly periods for the loan period
-        total_bimonthly = self.loan_period_months / 2
+        total_bimonthly = int(self.loan_period_months / 2)
         
-        for i in range(int(total_bimonthly)):
+        if total_bimonthly <= 0:
+            return
+            
+        bimonthly_installment = self.monthly_installment * 2 if self.monthly_installment > 0 else 0
+        
+        for i in range(total_bimonthly):
             due_date = add_months(due_date, 2)
             
             if self.interest_type == "Flat Rate":
@@ -353,17 +429,24 @@ class SHGLoan(Document):
             else:
                 # Reducing balance calculation
                 interest = outstanding_balance * bimonthly_rate
-                principal = (self.loan_amount / total_bimonthly)  # Simplified
+                # For bi-monthly payments
+                if i == total_bimonthly - 1:
+                    # Last payment - pay off remaining balance
+                    principal = outstanding_balance
+                else:
+                    principal = bimonthly_installment - interest if bimonthly_installment > interest else 0
                 
             self.append("repayment_schedule", {
                 "payment_date": due_date,
                 "principal_amount": principal,
                 "interest_amount": interest,
                 "total_payment": principal + interest,
-                "balance_amount": outstanding_balance - principal
+                "balance_amount": max(0, outstanding_balance - principal)
             })
             
-            outstanding_balance -= principal
+            outstanding_balance = max(0, outstanding_balance - principal)
+            if outstanding_balance <= 0:
+                break
             
     def generate_quarterly_schedule(self):
         """Generate quarterly repayment schedule"""
@@ -372,9 +455,14 @@ class SHGLoan(Document):
         due_date = self.repayment_start_date or self.disbursement_date
         
         # Calculate number of quarterly periods for the loan period
-        total_quarterly = self.loan_period_months / 3
+        total_quarterly = int(self.loan_period_months / 3)
         
-        for i in range(int(total_quarterly)):
+        if total_quarterly <= 0:
+            return
+            
+        quarterly_installment = self.monthly_installment * 3 if self.monthly_installment > 0 else 0
+        
+        for i in range(total_quarterly):
             due_date = add_months(due_date, 3)
             
             if self.interest_type == "Flat Rate":
@@ -384,17 +472,24 @@ class SHGLoan(Document):
             else:
                 # Reducing balance calculation
                 interest = outstanding_balance * quarterly_rate
-                principal = (self.loan_amount / total_quarterly)  # Simplified
+                # For quarterly payments
+                if i == total_quarterly - 1:
+                    # Last payment - pay off remaining balance
+                    principal = outstanding_balance
+                else:
+                    principal = quarterly_installment - interest if quarterly_installment > interest else 0
                 
             self.append("repayment_schedule", {
                 "payment_date": due_date,
                 "principal_amount": principal,
                 "interest_amount": interest,
                 "total_payment": principal + interest,
-                "balance_amount": outstanding_balance - principal
+                "balance_amount": max(0, outstanding_balance - principal)
             })
             
-            outstanding_balance -= principal
+            outstanding_balance = max(0, outstanding_balance - principal)
+            if outstanding_balance <= 0:
+                break
             
     def generate_yearly_schedule(self):
         """Generate yearly repayment schedule"""
@@ -403,9 +498,14 @@ class SHGLoan(Document):
         due_date = self.repayment_start_date or self.disbursement_date
         
         # Calculate number of yearly periods for the loan period
-        total_yearly = self.loan_period_months / 12
+        total_yearly = int(self.loan_period_months / 12)
         
-        for i in range(int(total_yearly)):
+        if total_yearly <= 0:
+            return
+            
+        yearly_installment = self.monthly_installment * 12 if self.monthly_installment > 0 else 0
+        
+        for i in range(total_yearly):
             due_date = add_months(due_date, 12)
             
             if self.interest_type == "Flat Rate":
@@ -415,17 +515,24 @@ class SHGLoan(Document):
             else:
                 # Reducing balance calculation
                 interest = outstanding_balance * yearly_rate
-                principal = (self.loan_amount / total_yearly)  # Simplified
+                # For yearly payments
+                if i == total_yearly - 1:
+                    # Last payment - pay off remaining balance
+                    principal = outstanding_balance
+                else:
+                    principal = yearly_installment - interest if yearly_installment > interest else 0
                 
             self.append("repayment_schedule", {
                 "payment_date": due_date,
                 "principal_amount": principal,
                 "interest_amount": interest,
                 "total_payment": principal + interest,
-                "balance_amount": outstanding_balance - principal
+                "balance_amount": max(0, outstanding_balance - principal)
             })
             
-            outstanding_balance -= principal
+            outstanding_balance = max(0, outstanding_balance - principal)
+            if outstanding_balance <= 0:
+                break
             
     def update_member_summary(self):
         """Update member's financial summary"""

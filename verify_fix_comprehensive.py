@@ -18,26 +18,22 @@ def test_journal_entry_with_valid_reference():
         company = "Test Company"
         
         # Create a simple Journal Entry with valid reference_type
-        je = frappe.get_doc({
-            "doctype": "Journal Entry",
-            "voucher_type": "Journal Entry",
-            "posting_date": frappe.utils.nowdate(),
-            "company": company,
-            "user_remark": "Test entry for reference type validation",
-            "accounts": [
-                {
-                    "account": "Cash - " + company,
-                    "debit_in_account_currency": 1000,
-                    "reference_type": "Journal Entry",  # Valid reference type
-                    "reference_name": "TEST-001"
-                },
-                {
-                    "account": "Bank - " + company,
-                    "credit_in_account_currency": 1000,
-                    "reference_type": "Journal Entry",  # Valid reference type
-                    "reference_name": "TEST-001"
-                }
-            ]
+        je = frappe.new_doc("Journal Entry")
+        je.voucher_type = "Journal Entry"
+        je.posting_date = frappe.utils.nowdate()
+        je.company = company
+        je.user_remark = "Test entry for reference type validation"
+        je.append("accounts", {
+            "account": "Cash - " + company,
+            "debit_in_account_currency": 1000,
+            "reference_type": "Journal Entry",  # Valid reference type
+            "reference_name": "TEST-001"
+        })
+        je.append("accounts", {
+            "account": "Bank - " + company,
+            "credit_in_account_currency": 1000,
+            "reference_type": "Journal Entry",  # Valid reference type
+            "reference_name": "TEST-001"
         })
         
         # Insert and submit the journal entry

@@ -79,7 +79,9 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         accounts = [
             {
                 "account": get_or_create_shg_loans_account(company),
-                "debit_in_account_currency": flt(doc.loan_amount)
+                "debit_in_account_currency": flt(doc.loan_amount),
+                "party_type": "Customer",
+                "party": member_customer
             },
             {
                 "account": _get_bank_account(doc, company),
@@ -99,26 +101,35 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         accounts = [
             {
                 "account": cash_account,
-                "debit_in_account_currency": flt(doc.total_paid)
+                "debit_in_account_currency": flt(doc.total_paid),
+                "party_type": "Customer",
+                "party": member_customer
             }
         ]
         
+        # Add credit entries
         if doc.principal_amount > 0:
             accounts.append({
                 "account": loan_account,
-                "credit_in_account_currency": flt(doc.principal_amount)
+                "credit_in_account_currency": flt(doc.principal_amount),
+                "party_type": "Customer",
+                "party": member_customer
             })
             
         if doc.interest_amount > 0:
             accounts.append({
                 "account": interest_account,
-                "credit_in_account_currency": flt(doc.interest_amount)
+                "credit_in_account_currency": flt(doc.interest_amount),
+                "party_type": "Customer",
+                "party": member_customer
             })
             
         if doc.penalty_amount > 0:
             accounts.append({
                 "account": penalty_account,
-                "credit_in_account_currency": flt(doc.penalty_amount)
+                "credit_in_account_currency": flt(doc.penalty_amount),
+                "party_type": "Customer",
+                "party": member_customer
             })
             
         je_remark = f"SHG Loan Repayment {doc.name} from {doc.member_name}"
@@ -137,7 +148,9 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
             },
             {
                 "account": get_or_create_shg_penalty_income_account(company),
-                "credit_in_account_currency": flt(doc.fine_amount)
+                "credit_in_account_currency": flt(doc.fine_amount),
+                "party_type": "Customer",
+                "party": member_customer
             }
         ]
         je_remark = f"SHG Meeting Fine {doc.name} from {doc.member_name}"
@@ -146,16 +159,28 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
     else:
         frappe.throw(_("Unsupported document type for Journal Entry creation: {0}").format(doc_type))
     
-    # Create Journal Entry
-    je = frappe.get_doc({
-        "doctype": "Journal Entry",
-        "voucher_type": getattr(doc, 'voucher_type', 'Journal Entry') or 'Journal Entry',
-        "posting_date": _get_posting_date(doc, doc_type),
-        "company": company,
-        "user_remark": je_remark,
-        custom_field: doc.name,
-        "accounts": accounts
-    })
+    # Validate that we have accounts
+    if not accounts:
+        frappe.throw(_("No accounts found for Journal Entry creation"))
+    
+    # Validate that debits equal credits
+    total_debit = sum(entry.get("debit_in_account_currency", 0) for entry in accounts)
+    total_credit = sum(entry.get("credit_in_account_currency", 0) for entry in accounts)
+    
+    if abs(total_debit - total_credit) > 0.01:  # Allow for small rounding differences
+        frappe.throw(_("Debit amount ({0}) does not equal credit amount ({1})").format(total_debit, total_credit))
+    
+    # Create Journal Entry using new_doc -> insert() -> submit() pattern
+    je = frappe.new_doc("Journal Entry")
+    je.voucher_type = getattr(doc, 'voucher_type', 'Journal Entry') or 'Journal Entry'
+    je.posting_date = _get_posting_date(doc, doc_type)
+    je.company = company
+    je.user_remark = je_remark
+    je.set(custom_field, doc.name)
+    je.accounts = []
+    
+    for account_entry in accounts:
+        je.append("accounts", account_entry)
     
     je.insert(ignore_permissions=True)
     je.submit()
@@ -177,21 +202,20 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
     
     if doc_type == "SHG Contribution":
         # Receive payment for contribution
-        pe = frappe.get_doc({
-            "doctype": "Payment Entry",
-            "payment_type": "Receive",
-            "posting_date": doc.contribution_date or today(),
-            "company": company,
-            "party_type": "Customer",
-            "party": member_customer,
-            "paid_from": _get_cash_account(doc, company),
-            "paid_to": get_or_create_shg_contributions_account(company),
-            "paid_amount": flt(doc.amount),
-            "received_amount": flt(doc.amount),
-            "reference_no": doc.name,
-            "reference_date": doc.contribution_date or today(),
-            "custom_shg_contribution": doc.name
-        })
+        pe = frappe.new_doc("Payment Entry")
+        pe.payment_type = "Receive"
+        pe.posting_date = doc.contribution_date or today()
+        pe.company = company
+        pe.party_type = "Customer"
+        pe.party = member_customer
+        pe.paid_from = _get_cash_account(doc, company)
+        pe.paid_to = get_or_create_shg_contributions_account(company)
+        pe.paid_amount = flt(doc.amount)
+        pe.received_amount = flt(doc.amount)
+        pe.reference_no = doc.name
+        pe.reference_date = doc.contribution_date or today()
+        pe.set("custom_shg_contribution", doc.name)
+        
         pe.insert(ignore_permissions=True)
         pe.submit()
         _update_document_with_entry(doc, "payment_entry", pe.name)
@@ -199,21 +223,19 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         
     elif doc_type == "SHG Loan Repayment":
         # Receive payment for loan repayment
-        pe = frappe.get_doc({
-            "doctype": "Payment Entry",
-            "payment_type": "Receive",
-            "posting_date": doc.repayment_date or today(),
-            "company": company,
-            "party_type": "Customer",
-            "party": member_customer,
-            "paid_from": _get_cash_account(doc, company),
-            "paid_to": get_or_create_shg_loans_account(company),
-            "paid_amount": flt(doc.total_paid),
-            "received_amount": flt(doc.total_paid),
-            "reference_no": doc.name,
-            "reference_date": doc.repayment_date or today(),
-            "custom_shg_loan_repayment": doc.name
-        })
+        pe = frappe.new_doc("Payment Entry")
+        pe.payment_type = "Receive"
+        pe.posting_date = doc.repayment_date or today()
+        pe.company = company
+        pe.party_type = "Customer"
+        pe.party = member_customer
+        pe.paid_from = _get_cash_account(doc, company)
+        pe.paid_to = get_or_create_shg_loans_account(company)
+        pe.paid_amount = flt(doc.total_paid)
+        pe.received_amount = flt(doc.total_paid)
+        pe.reference_no = doc.name
+        pe.reference_date = doc.repayment_date or today()
+        pe.set("custom_shg_loan_repayment", doc.name)
         
         # Add allocations for principal, interest, and penalty
         if doc.principal_amount > 0:
@@ -230,21 +252,20 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         
     elif doc_type == "SHG Loan" and doc.status == "Disbursed":
         # Pay out loan amount
-        pe = frappe.get_doc({
-            "doctype": "Payment Entry",
-            "payment_type": "Pay",
-            "posting_date": doc.disbursement_date or today(),
-            "company": company,
-            "party_type": "Customer",
-            "party": member_customer,
-            "paid_from": get_or_create_shg_loans_account(company),
-            "paid_to": _get_bank_account(doc, company),
-            "paid_amount": flt(doc.loan_amount),
-            "received_amount": flt(doc.loan_amount),
-            "reference_no": doc.name,
-            "reference_date": doc.disbursement_date or today(),
-            "custom_shg_loan": doc.name
-        })
+        pe = frappe.new_doc("Payment Entry")
+        pe.payment_type = "Pay"
+        pe.posting_date = doc.disbursement_date or today()
+        pe.company = company
+        pe.party_type = "Customer"
+        pe.party = member_customer
+        pe.paid_from = get_or_create_shg_loans_account(company)
+        pe.paid_to = _get_bank_account(doc, company)
+        pe.paid_amount = flt(doc.loan_amount)
+        pe.received_amount = flt(doc.loan_amount)
+        pe.reference_no = doc.name
+        pe.reference_date = doc.disbursement_date or today()
+        pe.set("custom_shg_loan", doc.name)
+        
         pe.insert(ignore_permissions=True)
         pe.submit()
         _update_document_with_entry(doc, "disbursement_payment_entry", pe.name)
