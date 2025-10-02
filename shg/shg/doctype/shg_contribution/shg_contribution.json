@@ -20,6 +20,7 @@
         "reference_number",
         "notes",
         "accounting_section",
+        "voucher_type",
         "journal_entry",
         "payment_entry",
         "posted_to_gl",
@@ -109,6 +110,14 @@
             "fieldname": "accounting_section",
             "fieldtype": "Section Break",
             "label": "Accounting"
+        },
+        {
+            "fieldname": "voucher_type",
+            "fieldtype": "Select",
+            "label": "Voucher Type",
+            "options": "Contribution Entry\nBank Entry\nCash Entry\nCredit Card Entry\nWrite Off Entry\nOpening Entry\nContra Entry\nExcise Entry\nAdjustment Entry\nPurchase Entry\nSales Entry\nStock Entry\nDebit Note\nCredit Note\nInter Company Journal Entry\nInter Company Payment\nBill of Entry",
+            "default": "Contribution Entry",
+            "reqd": 1
         },
         {
             "fieldname": "journal_entry",

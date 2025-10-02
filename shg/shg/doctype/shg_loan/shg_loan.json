@@ -27,6 +27,8 @@
         "column_break_12",
         "disbursement_date",
         "disbursed_amount",
+        "accounting_section",
+        "voucher_type",
         "disbursement_journal_entry",
         "disbursement_payment_entry",
         "posted_to_gl",
@@ -170,6 +172,19 @@
             "label": "Disbursed Amount",
             "precision": 2,
             "read_only": 1
+        },
+        {
+            "fieldname": "accounting_section",
+            "fieldtype": "Section Break",
+            "label": "Accounting"
+        },
+        {
+            "fieldname": "voucher_type",
+            "fieldtype": "Select",
+            "label": "Voucher Type",
+            "options": "Loan Entry\nBank Entry\nCash Entry\nCredit Card Entry\nWrite Off Entry\nOpening Entry\nContra Entry\nExcise Entry\nAdjustment Entry\nPurchase Entry\nSales Entry\nStock Entry\nDebit Note\nCredit Note\nInter Company Journal Entry\nInter Company Payment\nBill of Entry",
+            "default": "Loan Entry",
+            "reqd": 1
         },
         {
             "fieldname": "disbursement_journal_entry",

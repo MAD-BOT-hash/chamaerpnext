@@ -15,6 +15,8 @@
         "fine_amount",
         "fine_reason",
         "status",
+        "accounting_section",
+        "voucher_type",
         "payment_section",
         "paid_date",
         "journal_entry",
@@ -82,6 +84,19 @@
             "options": "Pending\nPaid\nWaived",
             "default": "Pending",
             "in_list_view": 1
+        },
+        {
+            "fieldname": "accounting_section",
+            "fieldtype": "Section Break",
+            "label": "Accounting"
+        },
+        {
+            "fieldname": "voucher_type",
+            "fieldtype": "Select",
+            "label": "Voucher Type",
+            "options": "Fine Entry\nBank Entry\nCash Entry\nCredit Card Entry\nWrite Off Entry\nOpening Entry\nContra Entry\nExcise Entry\nAdjustment Entry\nPurchase Entry\nSales Entry\nStock Entry\nDebit Note\nCredit Note\nInter Company Journal Entry\nInter Company Payment\nBill of Entry",
+            "default": "Fine Entry",
+            "reqd": 1
         },
         {
             "fieldname": "payment_section",

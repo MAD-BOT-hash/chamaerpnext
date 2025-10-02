@@ -47,177 +47,20 @@ class SHGContribution(Document):
         if not self.journal_entry and not self.payment_entry:
             frappe.throw(_("Failed to create Journal Entry or Payment Entry for this contribution. Please check the system logs."))
             
-        # Verify the journal entry or payment entry exists and is submitted
-        try:
-            if self.journal_entry:
-                je = frappe.get_doc("Journal Entry", self.journal_entry)
-                if je.docstatus != 1:
-                    frappe.throw(_("Journal Entry was not submitted successfully."))
-                    
-                # Verify accounts and amounts
-                if len(je.accounts) != 2:
-                    frappe.throw(_("Journal Entry should have exactly 2 accounts."))
-                    
-                debit_entry = None
-                credit_entry = None
-                
-                for entry in je.accounts:
-                    if entry.debit_in_account_currency > 0:
-                        debit_entry = entry
-                    elif entry.credit_in_account_currency > 0:
-                        credit_entry = entry
-                        
-                if not debit_entry or not credit_entry:
-                    frappe.throw(_("Journal Entry must have one debit and one credit entry."))
-                    
-                if abs(debit_entry.debit_in_account_currency - credit_entry.credit_in_account_currency) > 0.01:
-                    frappe.throw(_("Debit and credit amounts must be equal."))
-                    
-                # Verify party details for credit entry
-                if not credit_entry.party_type or not credit_entry.party:
-                    frappe.throw(_("Credit entry must have party type and party set."))
-                    
-                if credit_entry.party_type != "Customer":
-                    frappe.throw(_("Credit entry party type must be 'Customer'."))
-                    
-                # Verify custom field linking
-                if not je.custom_shg_contribution or je.custom_shg_contribution != self.name:
-                    frappe.throw(_("Journal Entry must be linked to this SHG Contribution."))
-            elif self.payment_entry:
-                pe = frappe.get_doc("Payment Entry", self.payment_entry)
-                if pe.docstatus != 1:
-                    frappe.throw(_("Payment Entry was not submitted successfully."))
-                    
-                # Verify payment entry details
-                if pe.payment_type != "Receive":
-                    frappe.throw(_("Payment Entry must be of type 'Receive' for contributions."))
-                    
-                if not pe.party_type or not pe.party:
-                    frappe.throw(_("Payment Entry must have party type and party set."))
-                    
-                if pe.party_type != "Customer":
-                    frappe.throw(_("Payment Entry party type must be 'Customer'."))
-                    
-                if abs(pe.paid_amount - self.amount) > 0.01:
-                    frappe.throw(_("Payment Entry amount does not match contribution amount."))
-                    
-                # Verify custom field linking
-                if not pe.custom_shg_contribution or pe.custom_shg_contribution != self.name:
-                    frappe.throw(_("Payment Entry must be linked to this SHG Contribution."))
-                
-        except frappe.DoesNotExistError:
-            if self.journal_entry:
-                frappe.throw(_("Journal Entry {0} does not exist.").format(self.journal_entry))
-            elif self.payment_entry:
-                frappe.throw(_("Payment Entry {0} does not exist.").format(self.payment_entry))
-        except Exception as e:
-            frappe.throw(_("Error validating GL Entry: {0}").format(str(e)))
+        # Use validation utilities
+        from shg.shg.utils.validation_utils import validate_reference_types_and_names, validate_custom_field_linking, validate_accounting_integrity
+        validate_reference_types_and_names(self)
+        validate_custom_field_linking(self)
+        validate_accounting_integrity(self)
         
     def post_to_ledger(self):
         """
         Create a Payment Entry or Journal Entry for this contribution.
         Use SHG Settings to decide; default to Journal Entry.
         """
-        settings = frappe.get_single("SHG Settings")
-        posting_method = getattr(settings, "contribution_posting_method", "Journal Entry")  # or "Payment Entry"
-
-        # Prepare common data
-        company = frappe.get_value("Global Defaults", None, "default_company") or settings.company
-        member_customer = frappe.get_value("SHG Member", self.member, "customer")
-
-        # Choose posting
-        if posting_method == "Payment Entry":
-            pe = self._create_payment_entry(member_customer, company)
-            self.payment_entry = pe.name
-        else:
-            je = self._create_journal_entry(member_customer, company)
-            self.journal_entry = je.name
-
-        self.posted_to_gl = 1
-        self.posted_on = frappe.utils.now()
-        self.save(ignore_permissions=True)
+        from shg.shg.utils.gl_utils import make_gl_entries
+        make_gl_entries(self)
         
-    def _create_journal_entry(self, party_customer, company):
-        from frappe.utils import flt, today
-        je = frappe.get_doc({
-            "doctype": "Journal Entry",
-            "posting_date": self.contribution_date or today(),
-            "company": company,
-            "voucher_type": "Journal Entry",
-            "user_remark": f"SHG Contribution {self.name} from {self.member}",
-            "custom_shg_contribution": self.name,
-            "accounts": [
-                {
-                    "account": self.get_cash_account(company),  # implement helper to find Cash/Bank
-                    "debit_in_account_currency": flt(self.amount)
-                },
-                {
-                    "account": self.get_contribution_account(company),
-                    "credit_in_account_currency": flt(self.amount),
-                    "party_type": "Customer",
-                    "party": party_customer
-                }
-            ]
-        })
-        je.insert(ignore_permissions=True)
-        je.submit()
-        return je
-        
-    def _create_payment_entry(self, party_customer, company):
-        # create Payment Entry (Receipt)
-        from frappe.utils import flt, today
-        pe = frappe.get_doc({
-            "doctype": "Payment Entry",
-            "payment_type": "Receive",
-            "posting_date": self.contribution_date or today(),
-            "company": company,
-            "party_type": "Customer",
-            "party": party_customer,
-            "paid_from": self.get_cash_account(company),
-            "paid_to": self.get_contribution_account(company),
-            "paid_amount": flt(self.amount),
-            "received_amount": flt(self.amount),
-            "reference_no": self.name,
-            "reference_date": self.contribution_date or today(),
-            "custom_shg_contribution": self.name
-        })
-        pe.insert(ignore_permissions=True)
-        pe.submit()
-        return pe
-        
-    def get_cash_account(self, company):
-        """Get cash or bank account from settings or defaults"""
-        settings = frappe.get_single("SHG Settings")
-        if settings.default_bank_account:
-            return settings.default_bank_account
-        elif settings.default_cash_account:
-            return settings.default_cash_account
-        else:
-            # Try to find a default bank account
-            bank_accounts = frappe.get_all("Account", filters={
-                "company": company,
-                "account_type": "Bank",
-                "is_group": 0
-            }, limit=1)
-            if bank_accounts:
-                return bank_accounts[0].name
-            else:
-                # Try cash account
-                cash_accounts = frappe.get_all("Account", filters={
-                    "company": company,
-                    "account_type": "Cash",
-                    "is_group": 0
-                }, limit=1)
-                if cash_accounts:
-                    return cash_accounts[0].name
-                else:
-                    frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
-                    
-    def get_contribution_account(self, company):
-        """Get contribution account, create if not exists"""
-        from shg.shg.utils.account_utils import get_or_create_shg_contributions_account
-        return get_or_create_shg_contributions_account(company)
-            
     def cancel_journal_entry(self):
         """Cancel the associated journal entry or payment entry"""
         if self.journal_entry:

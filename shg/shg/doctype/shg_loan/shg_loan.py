@@ -118,141 +118,19 @@ class SHGLoan(Document):
         if not self.disbursement_journal_entry and not self.disbursement_payment_entry:
             frappe.throw(_("Failed to create Journal Entry or Payment Entry for this loan disbursement. Please check the system logs."))
             
-        # Verify the journal entry or payment entry exists and is submitted
-        try:
-            if self.disbursement_journal_entry:
-                je = frappe.get_doc("Journal Entry", self.disbursement_journal_entry)
-                if je.docstatus != 1:
-                    frappe.throw(_("Journal Entry was not submitted successfully."))
-                    
-                # Verify accounts and amounts
-                if len(je.accounts) != 2:
-                    frappe.throw(_("Journal Entry should have exactly 2 accounts."))
-                    
-                debit_entry = None
-                credit_entry = None
-                
-                for entry in je.accounts:
-                    if entry.debit_in_account_currency > 0:
-                        debit_entry = entry
-                    elif entry.credit_in_account_currency > 0:
-                        credit_entry = entry
-                        
-                if not debit_entry or not credit_entry:
-                    frappe.throw(_("Journal Entry must have one debit and one credit entry."))
-                    
-                if abs(debit_entry.debit_in_account_currency - credit_entry.credit_in_account_currency) > 0.01:
-                    frappe.throw(_("Debit and credit amounts must be equal."))
-                    
-                # Verify party details for debit entry
-                if not debit_entry.party_type or not debit_entry.party:
-                    frappe.throw(_("Debit entry must have party type and party set."))
-                    
-                if debit_entry.party_type != "Customer":
-                    frappe.throw(_("Debit entry party type must be 'Customer'."))
-                    
-                # Verify custom field linking
-                if not je.custom_shg_loan or je.custom_shg_loan != self.name:
-                    frappe.throw(_("Journal Entry must be linked to this SHG Loan."))
-            elif self.disbursement_payment_entry:
-                pe = frappe.get_doc("Payment Entry", self.disbursement_payment_entry)
-                if pe.docstatus != 1:
-                    frappe.throw(_("Payment Entry was not submitted successfully."))
-                    
-                # Verify payment entry details
-                if pe.payment_type != "Pay":
-                    frappe.throw(_("Payment Entry must be of type 'Pay' for loan disbursements."))
-                    
-                if not pe.party_type or not pe.party:
-                    frappe.throw(_("Payment Entry must have party type and party set."))
-                    
-                if pe.party_type != "Customer":
-                    frappe.throw(_("Payment Entry party type must be 'Customer'."))
-                    
-                if abs(pe.paid_amount - self.loan_amount) > 0.01:
-                    frappe.throw(_("Payment Entry amount does not match loan amount."))
-                    
-                # Verify custom field linking
-                if not pe.custom_shg_loan or pe.custom_shg_loan != self.name:
-                    frappe.throw(_("Payment Entry must be linked to this SHG Loan."))
-                
-        except frappe.DoesNotExistError:
-            if self.disbursement_journal_entry:
-                frappe.throw(_("Journal Entry {0} does not exist.").format(self.disbursement_journal_entry))
-            elif self.disbursement_payment_entry:
-                frappe.throw(_("Payment Entry {0} does not exist.").format(self.disbursement_payment_entry))
-        except Exception as e:
-            frappe.throw(_("Error validating GL Entry: {0}").format(str(e)))
+        # Use validation utilities
+        from shg.shg.utils.validation_utils import validate_reference_types_and_names, validate_custom_field_linking, validate_accounting_integrity
+        validate_reference_types_and_names(self)
+        validate_custom_field_linking(self)
+        validate_accounting_integrity(self)
             
     def post_to_ledger(self):
         """
         Create a Payment Entry or Journal Entry for this loan disbursement.
         Use SHG Settings to decide; default to Journal Entry.
         """
-        settings = frappe.get_single("SHG Settings")
-        posting_method = getattr(settings, "loan_disbursement_posting_method", "Journal Entry")
-
-        # Prepare common data
-        company = frappe.get_value("Global Defaults", None, "default_company") or settings.company
-        member_customer = frappe.get_value("SHG Member", self.member, "customer")
-
-        # Choose posting
-        if posting_method == "Payment Entry":
-            pe = self._create_payment_entry(member_customer, company)
-            self.disbursement_payment_entry = pe.name
-        else:
-            je = self._create_journal_entry(member_customer, company)
-            self.disbursement_journal_entry = je.name
-
-        self.posted_to_gl = 1
-        self.posted_on = frappe.utils.now()
-        self.save()
-        
-    def _create_journal_entry(self, party_customer, company):
-        from frappe.utils import flt, today
-        je = frappe.get_doc({
-            "doctype": "Journal Entry",
-            "posting_date": self.disbursement_date or today(),
-            "company": company,
-            "voucher_type": "Journal Entry",
-            "user_remark": f"SHG Loan Disbursement {self.name} to {self.member}",
-            "custom_shg_loan": self.name,
-            "accounts": [
-                {
-                    "account": self.get_loan_account(company),  # Loan Asset account
-                    "debit_in_account_currency": flt(self.loan_amount)
-                },
-                {
-                    "account": self.get_bank_account(company),  # Bank account
-                    "credit_in_account_currency": flt(self.loan_amount)
-                }
-            ]
-        })
-        je.insert(ignore_permissions=True)
-        je.submit()
-        return je
-        
-    def _create_payment_entry(self, party_customer, company):
-        # create Payment Entry (Pay)
-        from frappe.utils import flt, today
-        pe = frappe.get_doc({
-            "doctype": "Payment Entry",
-            "payment_type": "Pay",
-            "posting_date": self.disbursement_date or today(),
-            "company": company,
-            "party_type": "Customer",
-            "party": party_customer,
-            "paid_from": self.get_loan_account(company),  # Loan Asset account
-            "paid_to": self.get_bank_account(company),    # Bank account
-            "paid_amount": flt(self.loan_amount),
-            "received_amount": flt(self.loan_amount),
-            "reference_no": self.name,
-            "reference_date": self.disbursement_date or today(),
-            "custom_shg_loan": self.name
-        })
-        pe.insert(ignore_permissions=True)
-        pe.submit()
-        return pe
+        from shg.shg.utils.gl_utils import make_gl_entries
+        make_gl_entries(self)
         
     def get_member_account(self):
         """Get member's account, create if not exists"""
@@ -290,37 +168,6 @@ class SHGLoan(Document):
             else:
                 frappe.throw(_("Please configure default bank account in SHG Settings"))
             
-        company = frappe.defaults.get_user_default("Company")
-        if not company:
-            companies = frappe.get_all("Company", limit=1)
-            if companies:
-                company = companies[0].name
-            else:
-                frappe.throw(_("Please create a company first"))
-                
-        # Get member's account (auto-created if not exists)
-        member_account = self.get_member_account()
-            
-        # Get loan account using the new utility function
-        from shg.shg.utils.account_utils import get_or_create_shg_loans_account
-        loan_account = get_or_create_shg_loans_account(company)
-        
-        # Use account mapping if available, otherwise use defaults
-        debit_account = member_account
-        credit_account = loan_account
-        
-        if self.account_mapping:
-            # Process account mapping
-            for mapping in self.account_mapping:
-                if mapping.account_type == "Member Account":
-                    debit_account = mapping.account
-                elif mapping.account_type == "Loan Account":
-                    credit_account = mapping.account
-                # Note: For loan disbursement, we typically debit member account and credit loan account
-                # Other account types might be used for more complex scenarios
-            
-
-        
     def get_member_account(self):
         """Get member's ledger account, create if not exists"""
         member = frappe.get_doc("SHG Member", self.member)
@@ -609,6 +456,12 @@ class SHGLoan(Document):
 def validate_loan(doc, method):
     """Hook function called from hooks.py"""
     doc.validate()
+
+
+def post_to_general_ledger(doc, method):
+    """Hook function called from hooks.py"""
+    if doc.docstatus == 1 and doc.status == "Disbursed" and not doc.get("posted_to_gl"):
+        doc.post_to_ledger()
 
 
 def generate_repayment_schedule(doc, method):
