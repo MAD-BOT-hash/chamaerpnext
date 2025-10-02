@@ -32,6 +32,9 @@ doc_events = {
     "SHG Meeting Fine": {
         "validate": "shg.shg.doctype.shg_meeting_fine.shg_meeting_fine.validate_fine",
         "on_submit": "shg.shg.doctype.shg_meeting_fine.shg_meeting_fine.post_to_general_ledger"
+    },
+    "Payment Entry": {
+        "validate": "shg.shg.hooks.payment_entry.payment_entry_validate"
     }
 }
 

@@ -235,11 +235,20 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         # paid_to = cash/bank account (where the money goes)
         pe.paid_from = get_or_create_member_account(
             frappe.get_doc("SHG Member", doc.member), company)
-        pe.paid_to = _get_cash_account(doc, company)
+        paid_to_account = _get_cash_account(doc, company)
+        pe.paid_to = paid_to_account
         pe.paid_amount = flt(doc.amount)
         pe.received_amount = flt(doc.amount)
         pe.reference_no = doc.name
         pe.reference_date = doc.contribution_date or today()
+        # Set mode_of_payment based on account type
+        account_type = frappe.db.get_value("Account", paid_to_account, "account_type")
+        if account_type == "Bank":
+            pe.mode_of_payment = "Bank"
+        elif account_type == "Cash":
+            pe.mode_of_payment = "Cash"
+        # Set voucher type
+        pe.voucher_type = "Bank Entry"
         pe.set("custom_shg_contribution", doc.name)
         
         pe.insert(ignore_permissions=True)
@@ -257,11 +266,20 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         pe.party = doc.member
         pe.paid_from = get_or_create_member_account(
             frappe.get_doc("SHG Member", doc.member), company)
-        pe.paid_to = _get_cash_account(doc, company)
+        paid_to_account = _get_cash_account(doc, company)
+        pe.paid_to = paid_to_account
         pe.paid_amount = flt(doc.total_paid)
         pe.received_amount = flt(doc.total_paid)
         pe.reference_no = doc.name
         pe.reference_date = doc.repayment_date or today()
+        # Set mode_of_payment based on account type
+        account_type = frappe.db.get_value("Account", paid_to_account, "account_type")
+        if account_type == "Bank":
+            pe.mode_of_payment = "Bank"
+        elif account_type == "Cash":
+            pe.mode_of_payment = "Cash"
+        # Set voucher type
+        pe.voucher_type = "Bank Entry"
         pe.set("custom_shg_loan_repayment", doc.name)
         
         # Add allocations for principal, interest, and penalty
@@ -285,13 +303,22 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         pe.company = company
         pe.party_type = "SHG Member"
         pe.party = doc.member
-        pe.paid_from = _get_bank_account(doc, company)
+        paid_from_account = _get_bank_account(doc, company)
+        pe.paid_from = paid_from_account
         pe.paid_to = get_or_create_member_account(
             frappe.get_doc("SHG Member", doc.member), company)
         pe.paid_amount = flt(doc.loan_amount)
         pe.received_amount = flt(doc.loan_amount)
         pe.reference_no = doc.name
         pe.reference_date = doc.disbursement_date or today()
+        # Set mode_of_payment based on account type
+        account_type = frappe.db.get_value("Account", paid_from_account, "account_type")
+        if account_type == "Bank":
+            pe.mode_of_payment = "Bank"
+        elif account_type == "Cash":
+            pe.mode_of_payment = "Cash"
+        # Set voucher type
+        pe.voucher_type = "Bank Entry"
         pe.set("custom_shg_loan", doc.name)
         
         pe.insert(ignore_permissions=True)
