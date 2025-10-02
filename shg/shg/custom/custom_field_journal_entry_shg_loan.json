@@ -1,10 +1,14 @@
 {
-  "doctype": "Custom Field",
-  "dt": "Journal Entry",
-  "fieldname": "custom_shg_loan",
-  "fieldtype": "Link",
-  "options": "SHG Loan",
-  "label": "SHG Loan",
-  "insert_after": "voucher_type",
-  "allow_on_submit": 1
+  "custom_fields": {
+    "Journal Entry": [
+      {
+        "fieldname": "custom_shg_loan",
+        "fieldtype": "Link",
+        "options": "SHG Loan",
+        "label": "SHG Loan",
+        "insert_after": "voucher_type",
+        "allow_on_submit": 1
+      }
+    ]
+  }
 }

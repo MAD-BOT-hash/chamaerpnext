@@ -1,8 +1,12 @@
 {
-  "doctype": "Custom Field",
-  "dt": "Customer",
-  "fieldname": "is_shg_member",
-  "label": "Is SHG Member",
-  "fieldtype": "Check",
-  "insert_after": "customer_type"
+  "custom_fields": {
+    "Customer": [
+      {
+        "fieldname": "is_shg_member",
+        "label": "Is SHG Member",
+        "fieldtype": "Check",
+        "insert_after": "customer_type"
+      }
+    ]
+  }
 }

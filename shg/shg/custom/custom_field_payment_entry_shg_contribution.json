@@ -1,10 +1,14 @@
 {
-  "doctype": "Custom Field",
-  "dt": "Payment Entry",
-  "fieldname": "custom_shg_contribution",
-  "fieldtype": "Link",
-  "options": "SHG Contribution",
-  "label": "SHG Contribution",
-  "insert_after": "payment_type",
-  "allow_on_submit": 1
+  "custom_fields": {
+    "Payment Entry": [
+      {
+        "fieldname": "custom_shg_contribution",
+        "fieldtype": "Link",
+        "options": "SHG Contribution",
+        "label": "SHG Contribution",
+        "insert_after": "payment_type",
+        "allow_on_submit": 1
+      }
+    ]
+  }
 }
