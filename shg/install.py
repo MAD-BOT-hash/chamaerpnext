@@ -12,6 +12,8 @@ def after_install():
     create_default_customer_groups()  # Add this line
     # Register workspace components
     register_workspace_components()
+    # Register SHG Member as a party type
+    register_party_types()
 
 def create_default_accounts():
     """Create default GL accounts for SHG operations"""
@@ -188,6 +190,21 @@ def register_workspace_components():
         frappe.db.commit()
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "SHG Install - Workspace Component Registration Failed")
+
+def register_party_types():
+    """Register SHG Member as a valid party type in ERPNext"""
+    try:
+        # Check if SHG Member is already registered as a party type
+        if not frappe.db.exists("Party Type", "SHG Member"):
+            party_type = frappe.get_doc({
+                "doctype": "Party Type",
+                "party_type": "SHG Member",
+                "account_type": "Receivable"
+            })
+            party_type.insert()
+            frappe.db.commit()
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "SHG Install - Party Type Registration Failed")
 
 def create_shg_accounts(company):
     """Create all SHG-specific accounts at once"""

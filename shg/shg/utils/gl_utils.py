@@ -52,6 +52,14 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         get_or_create_member_account
     )
     
+    # Valid voucher types mapping
+    valid_voucher_type = {
+        "SHG Contribution": "Bank Entry",
+        "SHG Loan": "Journal Entry",
+        "SHG Loan Repayment": "Cash Entry",
+        "SHG Meeting Fine": "Journal Entry"
+    }
+    
     # Get accounts based on document type
     accounts = []
     
@@ -65,8 +73,8 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
             {
                 "account": get_or_create_shg_contributions_account(company),
                 "credit_in_account_currency": flt(doc.amount),
-                "party_type": "Customer",
-                "party": member_customer
+                "party_type": "SHG Member",
+                "party": doc.member
             }
         ]
         je_remark = f"SHG Contribution {doc.name} from {doc.member_name}"
@@ -80,8 +88,8 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
             {
                 "account": get_or_create_shg_loans_account(company),
                 "debit_in_account_currency": flt(doc.loan_amount),
-                "party_type": "Customer",
-                "party": member_customer
+                "party_type": "SHG Member",
+                "party": doc.member
             },
             {
                 "account": _get_bank_account(doc, company),
@@ -101,9 +109,7 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         accounts = [
             {
                 "account": cash_account,
-                "debit_in_account_currency": flt(doc.total_paid),
-                "party_type": "Customer",
-                "party": member_customer
+                "debit_in_account_currency": flt(doc.total_paid)
             }
         ]
         
@@ -112,24 +118,24 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
             accounts.append({
                 "account": loan_account,
                 "credit_in_account_currency": flt(doc.principal_amount),
-                "party_type": "Customer",
-                "party": member_customer
+                "party_type": "SHG Member",
+                "party": doc.member
             })
             
         if doc.interest_amount > 0:
             accounts.append({
                 "account": interest_account,
                 "credit_in_account_currency": flt(doc.interest_amount),
-                "party_type": "Customer",
-                "party": member_customer
+                "party_type": "SHG Member",
+                "party": doc.member
             })
             
         if doc.penalty_amount > 0:
             accounts.append({
                 "account": penalty_account,
                 "credit_in_account_currency": flt(doc.penalty_amount),
-                "party_type": "Customer",
-                "party": member_customer
+                "party_type": "SHG Member",
+                "party": doc.member
             })
             
         je_remark = f"SHG Loan Repayment {doc.name} from {doc.member_name}"
@@ -143,14 +149,14 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
             {
                 "account": member_account,
                 "debit_in_account_currency": flt(doc.fine_amount),
-                "party_type": "Customer",
-                "party": member_customer
+                "party_type": "SHG Member",
+                "party": doc.member
             },
             {
                 "account": get_or_create_shg_penalty_income_account(company),
                 "credit_in_account_currency": flt(doc.fine_amount),
-                "party_type": "Customer",
-                "party": member_customer
+                "party_type": "SHG Member",
+                "party": doc.member
             }
         ]
         je_remark = f"SHG Meeting Fine {doc.name} from {doc.member_name}"
@@ -172,7 +178,7 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
     
     # Create Journal Entry using new_doc -> insert() -> submit() pattern
     je = frappe.new_doc("Journal Entry")
-    je.voucher_type = getattr(doc, 'voucher_type', 'Journal Entry') or 'Journal Entry'
+    je.voucher_type = valid_voucher_type.get(doc_type, "Journal Entry")
     je.posting_date = _get_posting_date(doc, doc_type)
     je.company = company
     je.user_remark = je_remark
@@ -206,10 +212,14 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         pe.payment_type = "Receive"
         pe.posting_date = doc.contribution_date or today()
         pe.company = company
-        pe.party_type = "Customer"
-        pe.party = member_customer
-        pe.paid_from = _get_cash_account(doc, company)
-        pe.paid_to = get_or_create_shg_contributions_account(company)
+        pe.party_type = "SHG Member"
+        pe.party = doc.member
+        # Members bring cash to the group, so:
+        # paid_from = member account (what they're paying from)
+        # paid_to = cash/bank account (where the money goes)
+        pe.paid_from = get_or_create_member_account(
+            frappe.get_doc("SHG Member", doc.member), company)
+        pe.paid_to = _get_cash_account(doc, company)
         pe.paid_amount = flt(doc.amount)
         pe.received_amount = flt(doc.amount)
         pe.reference_no = doc.name
@@ -227,10 +237,11 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         pe.payment_type = "Receive"
         pe.posting_date = doc.repayment_date or today()
         pe.company = company
-        pe.party_type = "Customer"
-        pe.party = member_customer
-        pe.paid_from = _get_cash_account(doc, company)
-        pe.paid_to = get_or_create_shg_loans_account(company)
+        pe.party_type = "SHG Member"
+        pe.party = doc.member
+        pe.paid_from = get_or_create_member_account(
+            frappe.get_doc("SHG Member", doc.member), company)
+        pe.paid_to = _get_cash_account(doc, company)
         pe.paid_amount = flt(doc.total_paid)
         pe.received_amount = flt(doc.total_paid)
         pe.reference_no = doc.name
@@ -256,10 +267,11 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         pe.payment_type = "Pay"
         pe.posting_date = doc.disbursement_date or today()
         pe.company = company
-        pe.party_type = "Customer"
-        pe.party = member_customer
-        pe.paid_from = get_or_create_shg_loans_account(company)
-        pe.paid_to = _get_bank_account(doc, company)
+        pe.party_type = "SHG Member"
+        pe.party = doc.member
+        pe.paid_from = _get_bank_account(doc, company)
+        pe.paid_to = get_or_create_member_account(
+            frappe.get_doc("SHG Member", doc.member), company)
         pe.paid_amount = flt(doc.loan_amount)
         pe.received_amount = flt(doc.loan_amount)
         pe.reference_no = doc.name
@@ -333,8 +345,9 @@ def _get_posting_date(doc, doc_type):
         return today()
 
 def _update_document_with_entry(doc, entry_field, entry_name):
-    """Update document with created entry reference and save"""
-    doc.set(entry_field, entry_name)
-    doc.posted_to_gl = 1
-    doc.posted_on = frappe.utils.now()
-    doc.save()
+    """Update document with created entry reference without triggering hooks"""
+    doc.db_set({
+        entry_field: entry_name,
+        "posted_to_gl": 1,
+        "posted_on": frappe.utils.now()
+    }, update_modified=False)

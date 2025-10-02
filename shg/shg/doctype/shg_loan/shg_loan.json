@@ -183,7 +183,7 @@
             "fieldtype": "Select",
             "label": "Voucher Type",
             "options": "Loan Entry\nBank Entry\nCash Entry\nCredit Card Entry\nWrite Off Entry\nOpening Entry\nContra Entry\nExcise Entry\nAdjustment Entry\nPurchase Entry\nSales Entry\nStock Entry\nDebit Note\nCredit Note\nInter Company Journal Entry\nInter Company Payment\nBill of Entry",
-            "default": "Loan Entry",
+            "default": "Journal Entry",
             "reqd": 1
         },
         {

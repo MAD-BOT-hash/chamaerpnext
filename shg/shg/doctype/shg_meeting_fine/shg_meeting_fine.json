@@ -7,18 +7,18 @@
     "engine": "InnoDB",
     "field_order": [
         "naming_series",
+        "meeting_section",
+        "meeting",
         "member",
         "member_name",
-        "meeting",
-        "fine_date",
         "column_break_4",
-        "fine_amount",
+        "fine_date",
         "fine_reason",
         "status",
+        "paid_date",
         "accounting_section",
         "voucher_type",
-        "payment_section",
-        "paid_date",
+        "fine_amount",
         "journal_entry",
         "payment_entry",
         "posted_to_gl",
@@ -33,9 +33,20 @@
             "reqd": 1
         },
         {
+            "fieldname": "meeting_section",
+            "fieldtype": "Section Break",
+            "label": "Meeting Information"
+        },
+        {
+            "fieldname": "meeting",
+            "fieldtype": "Link",
+            "label": "Meeting",
+            "options": "SHG Meeting",
+            "reqd": 1
+        },
+        {
             "fieldname": "member",
             "fieldtype": "Link",
-            "in_list_view": 1,
             "label": "Member",
             "options": "SHG Member",
             "reqd": 1
@@ -43,16 +54,13 @@
         {
             "fieldname": "member_name",
             "fieldtype": "Data",
-            "in_list_view": 1,
             "label": "Member Name",
             "read_only": 1,
             "fetch_from": "member.member_name"
         },
         {
-            "fieldname": "meeting",
-            "fieldtype": "Link",
-            "label": "Meeting",
-            "options": "SHG Meeting"
+            "fieldname": "column_break_4",
+            "fieldtype": "Column Break"
         },
         {
             "fieldname": "fine_date",
@@ -62,20 +70,11 @@
             "default": "Today"
         },
         {
-            "fieldname": "column_break_4",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "fine_amount",
-            "fieldtype": "Currency",
-            "label": "Fine Amount (KES)",
-            "reqd": 1,
-            "precision": 2
-        },
-        {
             "fieldname": "fine_reason",
-            "fieldtype": "Text",
-            "label": "Fine Reason"
+            "fieldtype": "Select",
+            "label": "Fine Reason",
+            "options": "Late Arrival\nAbsentee\nUniform Violation\nNoise Disturbance\nOther",
+            "reqd": 1
         },
         {
             "fieldname": "status",
@@ -83,7 +82,13 @@
             "label": "Status",
             "options": "Pending\nPaid\nWaived",
             "default": "Pending",
-            "in_list_view": 1
+            "reqd": 1
+        },
+        {
+            "fieldname": "paid_date",
+            "fieldtype": "Date",
+            "label": "Paid Date",
+            "depends_on": "eval:doc.status=='Paid'"
         },
         {
             "fieldname": "accounting_section",
@@ -95,19 +100,15 @@
             "fieldtype": "Select",
             "label": "Voucher Type",
             "options": "Fine Entry\nBank Entry\nCash Entry\nCredit Card Entry\nWrite Off Entry\nOpening Entry\nContra Entry\nExcise Entry\nAdjustment Entry\nPurchase Entry\nSales Entry\nStock Entry\nDebit Note\nCredit Note\nInter Company Journal Entry\nInter Company Payment\nBill of Entry",
-            "default": "Fine Entry",
+            "default": "Journal Entry",
             "reqd": 1
         },
         {
-            "fieldname": "payment_section",
-            "fieldtype": "Section Break",
-            "label": "Payment Details"
-        },
-        {
-            "fieldname": "paid_date",
-            "fieldtype": "Date",
-            "label": "Paid Date",
-            "read_only": 1
+            "fieldname": "fine_amount",
+            "fieldtype": "Currency",
+            "label": "Fine Amount (KES)",
+            "reqd": 1,
+            "precision": 2
         },
         {
             "fieldname": "journal_entry",
@@ -169,8 +170,21 @@
             "share": 1,
             "submit": 1,
             "write": 1
+        },
+        {
+            "create": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Member",
+            "share": 1,
+            "submit": 1,
+            "write": 1
         }
     ],
     "sort_field": "modified",
-    "sort_order": "DESC"
+    "sort_order": "DESC",
+    "track_changes": 1
 }
