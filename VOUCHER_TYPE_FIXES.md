@@ -76,6 +76,25 @@ def _update_document_with_entry(doc, entry_field, entry_name):
 - Added `update_modified=False` parameter to prevent hook triggering
 - Ensured document updates don't cause recursive calls
 
+### 5. Bank Entry Reference Fields Missing
+
+**Issue**: ERPNext requires Bank Entry and Cash Entry voucher types to have reference_no and reference_date fields populated.
+
+**Fix**: Added reference fields for Bank Entry and Cash Entry voucher types:
+
+```python
+# Add reference_no and reference_date for Bank and Cash entries
+if je.voucher_type in ["Bank Entry", "Cash Entry"]:
+    je.reference_no = reference_no
+    je.reference_date = reference_date
+```
+
+**Changes Made**:
+- Updated `_create_journal_entry` function in gl_utils.py
+- Added reference_no and reference_date for Bank Entry (Contributions)
+- Added reference_no and reference_date for Cash Entry (Loan Repayments)
+- Used document name as reference_no and document date as reference_date
+
 ## Detailed Changes by File
 
 ### shg/shg/utils/gl_utils.py
@@ -83,6 +102,7 @@ def _update_document_with_entry(doc, entry_field, entry_name):
 - **Party Type Correction**: Changed from "Customer" to "SHG Member" for all entries
 - **Payment Direction Fix**: Corrected paid_from/paid_to directions for all transactions
 - **Hook Prevention**: Changed `doc.save()` to `doc.db_set()` with `update_modified=False`
+- **Reference Fields**: Added reference_no and reference_date for Bank Entry and Cash Entry voucher types
 
 ### shg/shg/doctype/*/ *.json (All 4 doctypes)
 - **Default Voucher Types**: Updated default values to match valid ERPNext voucher types
@@ -97,12 +117,10 @@ def _update_document_with_entry(doc, entry_field, entry_name):
 
 ## Testing
 
-A new test file `test_voucher_type_fixes.py` was created to verify all fixes:
+New test files were created to verify all fixes:
 
-1. **Voucher Type Verification**: Tests ensure correct voucher types are used
-2. **Payment Direction**: Tests verify correct payment flow direction
-3. **Party Type Registration**: Tests confirm SHG Member is registered as party type
-4. **Hook Prevention**: Tests ensure document updates don't trigger recursive calls
+1. **test_voucher_type_fixes.py**: Tests voucher types, payment directions, party types, and hook prevention
+2. **test_bank_entry_references.py**: Tests that Bank Entry and Cash Entry have required reference fields
 
 ## Benefits
 
@@ -150,6 +168,11 @@ Corrected payment flow for all transactions:
 ```
 Member Account (SHG Member) → Cash/Bank Account
 ```
+
+### Reference Fields
+Bank Entry and Cash Entry voucher types now include required reference fields:
+- **reference_no**: Set to document name
+- **reference_date**: Set to document date
 
 ## Conclusion
 

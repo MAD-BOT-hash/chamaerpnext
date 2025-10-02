@@ -79,6 +79,9 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         ]
         je_remark = f"SHG Contribution {doc.name} from {doc.member_name}"
         custom_field = "custom_shg_contribution"
+        # Bank Entry requires reference_no and reference_date
+        reference_no = doc.name
+        reference_date = doc.contribution_date or today()
         
     elif doc_type == "SHG Loan" and doc.status == "Disbursed":
         # Debit: Loan Asset, Credit: Bank
@@ -140,6 +143,9 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
             
         je_remark = f"SHG Loan Repayment {doc.name} from {doc.member_name}"
         custom_field = "custom_shg_loan_repayment"
+        # Cash Entry requires reference_no and reference_date
+        reference_no = doc.name
+        reference_date = doc.repayment_date or today()
         
     elif doc_type == "SHG Meeting Fine":
         # Debit: Member Account, Credit: Penalty Income
@@ -184,6 +190,11 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
     je.user_remark = je_remark
     je.set(custom_field, doc.name)
     je.accounts = []
+    
+    # Add reference_no and reference_date for Bank and Cash entries
+    if je.voucher_type in ["Bank Entry", "Cash Entry"]:
+        je.reference_no = reference_no
+        je.reference_date = reference_date
     
     for account_entry in accounts:
         je.append("accounts", account_entry)
