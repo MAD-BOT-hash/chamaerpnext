@@ -310,28 +310,28 @@
             "fieldtype": "Select",
             "label": "Contribution Posting Method",
             "options": "Journal Entry\nPayment Entry",
-            "default": "Payment Entry"
+            "default": "Journal Entry"
         },
         {
             "fieldname": "loan_disbursement_posting_method",
             "fieldtype": "Select",
             "label": "Loan Disbursement Posting Method",
             "options": "Journal Entry\nPayment Entry",
-            "default": "Journal Entry"
+            "default": "Payment Entry"
         },
         {
             "fieldname": "loan_repayment_posting_method",
             "fieldtype": "Select",
             "label": "Loan Repayment Posting Method",
             "options": "Journal Entry\nPayment Entry",
-            "default": "Journal Entry"
+            "default": "Payment Entry"
         },
         {
             "fieldname": "meeting_fine_posting_method",
             "fieldtype": "Select",
             "label": "Meeting Fine Posting Method",
             "options": "Journal Entry\nPayment Entry",
-            "default": "Journal Entry"
+            "default": "Payment Entry"
         },
         {
             "fieldname": "system_settings_section",

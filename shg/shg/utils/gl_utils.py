@@ -83,9 +83,8 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         ]
         je_remark = f"SHG Contribution {doc.name} from {doc.member_name}"
         custom_field = "custom_shg_contribution"
-        # Bank Entry requires reference_no and reference_date
-        reference_no = doc.name
-        reference_date = doc.contribution_date or today()
+        # For contributions, we don't set reference fields as per requirements
+        # Reference fields will remain None
         
     elif doc_type == "SHG Loan" and doc.status == "Disbursed":
         # Debit: Loan Asset, Credit: Bank
@@ -105,6 +104,8 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         ]
         je_remark = f"SHG Loan Disbursement {doc.name} to {doc.member_name}"
         custom_field = "custom_shg_loan"
+        # For loan disbursement, we don't set reference fields as per requirements
+        # Reference fields will remain None
         
     elif doc_type == "SHG Loan Repayment":
         # Debit: Bank/Cash, Credit: Loan Receivable + Interest + Penalty
@@ -147,9 +148,8 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
             
         je_remark = f"SHG Loan Repayment {doc.name} from {doc.member_name}"
         custom_field = "custom_shg_loan_repayment"
-        # Cash Entry requires reference_no and reference_date
-        reference_no = doc.name
-        reference_date = doc.repayment_date or today()
+        # For loan repayment, we don't set reference fields as per requirements
+        # Reference fields will remain None
         
     elif doc_type == "SHG Meeting Fine":
         # Debit: Member Account, Credit: Penalty Income
@@ -171,6 +171,8 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         ]
         je_remark = f"SHG Meeting Fine {doc.name} from {doc.member_name}"
         custom_field = "custom_shg_meeting_fine"
+        # For meeting fines, we don't set reference fields as per requirements
+        # Reference fields will remain None
         
     else:
         frappe.throw(_("Unsupported document type for Journal Entry creation: {0}").format(doc_type))
@@ -195,12 +197,9 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
     je.set(custom_field, doc.name)
     je.accounts = []
     
-    # Auto-fill reference fields for all voucher types
-    # Only set if not already set to preserve manual entries
-    if not je.reference_no:
-        je.reference_no = reference_no or doc.name
-    if not je.reference_date:
-        je.reference_date = reference_date or doc.posting_date or today()
+    # For Journal Entries, we don't auto-fill reference fields as per requirements
+    # Only set if manually provided by user
+    # We leave reference_no and reference_date as None unless explicitly set by user
     
     for account_entry in accounts:
         je.append("accounts", account_entry)
@@ -334,6 +333,40 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         pe.insert(ignore_permissions=True)
         pe.submit()
         _update_document_with_entry(doc, "disbursement_payment_entry", pe.name)
+        return pe
+        
+    elif doc_type == "SHG Meeting Fine":
+        # Receive payment for meeting fine
+        pe = frappe.new_doc("Payment Entry")
+        pe.payment_type = "Receive"
+        pe.posting_date = doc.fine_date or today()
+        pe.company = company
+        pe.party_type = "SHG Member"
+        pe.party = doc.member
+        pe.paid_from = get_or_create_member_account(
+            frappe.get_doc("SHG Member", doc.member), company)
+        paid_to_account = _get_cash_account(doc, company)
+        pe.paid_to = paid_to_account
+        pe.paid_amount = flt(doc.fine_amount)
+        pe.received_amount = flt(doc.fine_amount)
+        # Auto-fill reference fields if not already set
+        if not pe.reference_no:
+            pe.reference_no = doc.name
+        if not pe.reference_date:
+            pe.reference_date = doc.fine_date or doc.posting_date or today()
+        # Set mode_of_payment based on account type
+        account_type = frappe.db.get_value("Account", paid_to_account, "account_type")
+        if account_type == "Bank":
+            pe.mode_of_payment = "Bank"
+        elif account_type == "Cash":
+            pe.mode_of_payment = "Cash"
+        # Set voucher type
+        pe.voucher_type = "Bank Entry"
+        pe.set("custom_shg_meeting_fine", doc.name)
+        
+        pe.insert(ignore_permissions=True)
+        pe.submit()
+        _update_document_with_entry(doc, "payment_entry", pe.name)
         return pe
         
     else:
