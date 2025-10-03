@@ -74,7 +74,7 @@ def get_data(filters):
     # Get loan repayments
     repayments = frappe.db.sql("""
         SELECT 
-            payment_date as date,
+            repayment_date as date,
             loan as loan_id,
             principal_amount,
             interest_amount,
@@ -83,7 +83,7 @@ def get_data(filters):
             'Loan Repayment' as description
         FROM `tabSHG Loan Repayment`
         WHERE member = %(member)s AND docstatus = 1
-        ORDER BY payment_date
+        ORDER BY repayment_date
     """, filters, as_dict=1)
     
     # Combine and sort all transactions

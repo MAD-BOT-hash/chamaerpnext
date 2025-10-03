@@ -71,7 +71,7 @@ def get_data(filters):
         SELECT 
             MONTH(disbursement_date) as month,
             YEAR(disbursement_date) as year,
-            SUM(disbursed_amount) as total_loan_disbursements
+            SUM(loan_amount) as total_loan_disbursements
         FROM `tabSHG Loan`
         WHERE docstatus = 1 AND status = 'Disbursed'
         GROUP BY YEAR(disbursement_date), MONTH(disbursement_date)
@@ -81,13 +81,13 @@ def get_data(filters):
     # Get loan repayments summary
     repayments = frappe.db.sql("""
         SELECT 
-            MONTH(payment_date) as month,
-            YEAR(payment_date) as year,
+            MONTH(repayment_date) as month,
+            YEAR(repayment_date) as year,
             SUM(total_paid) as total_loan_repayments,
             SUM(interest_amount) as total_interest_collected
         FROM `tabSHG Loan Repayment`
         WHERE docstatus = 1
-        GROUP BY YEAR(payment_date), MONTH(payment_date)
+        GROUP BY YEAR(repayment_date), MONTH(repayment_date)
         ORDER BY year, month
     """, as_dict=1)
     
