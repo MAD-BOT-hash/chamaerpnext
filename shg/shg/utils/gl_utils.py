@@ -60,10 +60,6 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         "SHG Meeting Fine": "Journal Entry"
     }
     
-    # Initialize reference fields
-    reference_no = None
-    reference_date = None
-    
     # Get accounts based on document type
     accounts = []
     
@@ -83,8 +79,6 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         ]
         je_remark = f"SHG Contribution {doc.name} from {doc.member_name}"
         custom_field = "custom_shg_contribution"
-        # For contributions, we don't set reference fields as per requirements
-        # Reference fields will remain None
         
     elif doc_type == "SHG Loan" and doc.status == "Disbursed":
         # Debit: Loan Asset, Credit: Bank
@@ -104,8 +98,6 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         ]
         je_remark = f"SHG Loan Disbursement {doc.name} to {doc.member_name}"
         custom_field = "custom_shg_loan"
-        # For loan disbursement, we don't set reference fields as per requirements
-        # Reference fields will remain None
         
     elif doc_type == "SHG Loan Repayment":
         # Debit: Bank/Cash, Credit: Loan Receivable + Interest + Penalty
@@ -148,8 +140,6 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
             
         je_remark = f"SHG Loan Repayment {doc.name} from {doc.member_name}"
         custom_field = "custom_shg_loan_repayment"
-        # For loan repayment, we don't set reference fields as per requirements
-        # Reference fields will remain None
         
     elif doc_type == "SHG Meeting Fine":
         # Debit: Member Account, Credit: Penalty Income
@@ -171,8 +161,6 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
         ]
         je_remark = f"SHG Meeting Fine {doc.name} from {doc.member_name}"
         custom_field = "custom_shg_meeting_fine"
-        # For meeting fines, we don't set reference fields as per requirements
-        # Reference fields will remain None
         
     else:
         frappe.throw(_("Unsupported document type for Journal Entry creation: {0}").format(doc_type))
@@ -198,8 +186,7 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
     je.accounts = []
     
     # For Journal Entries, we don't auto-fill reference fields as per requirements
-    # Only set if manually provided by user
-    # We leave reference_no and reference_date as None unless explicitly set by user
+    # Reference fields will remain empty unless manually set by user
     
     for account_entry in accounts:
         je.append("accounts", account_entry)
@@ -437,3 +424,124 @@ def _update_document_with_entry(doc, entry_field, entry_name):
         "posted_to_gl": 1,
         "posted_on": frappe.utils.now()
     }, update_modified=False)
+
+# Additional function for creating contribution journal entries specifically
+def create_contribution_journal(contribution_doc):
+    """
+    Create a Journal Entry for contribution adjustments without reference fields.
+    
+    Args:
+        contribution_doc: SHG Contribution document
+        
+    Returns:
+        str: Name of the created Journal Entry
+    """
+    je = frappe.new_doc("Journal Entry")
+    je.voucher_type = "Journal Entry"
+    je.posting_date = contribution_doc.posting_date or today()
+    je.user_remark = f"Contribution adjustment for {contribution_doc.member}"
+    
+    # Credit Member (liability)
+    je.append("accounts", {
+        "account": contribution_doc.member_account,
+        "party_type": "SHG Member",
+        "party": contribution_doc.member,
+        "credit_in_account_currency": contribution_doc.amount
+    })
+    
+    # Debit Bank or Cash
+    je.append("accounts", {
+        "account": contribution_doc.company_bank_account,
+        "debit_in_account_currency": contribution_doc.amount
+    })
+    
+    # Do NOT set reference fields as per requirements
+    # je.reference_no and je.reference_date are left unset
+    
+    je.insert(ignore_permissions=True)
+    je.submit()
+    return je.name
+
+# Additional function for creating loan disbursement payment entries specifically
+def create_loan_disbursement_payment(loan_doc):
+    """
+    Create a Payment Entry for loan disbursement with reference fields.
+    
+    Args:
+        loan_doc: SHG Loan document
+        
+    Returns:
+        str: Name of the created Payment Entry
+    """
+    pe = frappe.new_doc("Payment Entry")
+    pe.payment_type = "Pay"
+    pe.posting_date = loan_doc.disbursement_date or loan_doc.posting_date or today()
+    pe.company = loan_doc.company
+    pe.party_type = "SHG Member"
+    pe.party = loan_doc.member
+    pe.paid_from = loan_doc.company_bank_account
+    pe.paid_to = loan_doc.member_loan_account
+    pe.paid_amount = loan_doc.loan_amount
+    pe.received_amount = loan_doc.loan_amount
+
+    # Reference details are required for Bank Entry
+    pe.reference_no = loan_doc.name
+    pe.reference_date = loan_doc.disbursement_date or loan_doc.posting_date or today()
+
+    pe.remarks = f"Loan Disbursement for {loan_doc.member} (Loan {loan_doc.name})"
+    
+    # Set mode_of_payment based on account type
+    account_type = frappe.db.get_value("Account", loan_doc.company_bank_account, "account_type")
+    if account_type == "Bank":
+        pe.mode_of_payment = "Bank"
+    elif account_type == "Cash":
+        pe.mode_of_payment = "Cash"
+    # Set voucher type
+    pe.voucher_type = "Bank Entry"
+    pe.set("custom_shg_loan", loan_doc.name)
+
+    pe.insert(ignore_permissions=True)
+    pe.submit()
+    return pe.name
+
+# Additional function for creating loan repayment payment entries specifically
+def create_loan_repayment_payment(repayment_doc):
+    """
+    Create a Payment Entry for loan repayment with reference fields.
+    
+    Args:
+        repayment_doc: SHG Loan Repayment document
+        
+    Returns:
+        str: Name of the created Payment Entry
+    """
+    pe = frappe.new_doc("Payment Entry")
+    pe.payment_type = "Receive"
+    pe.posting_date = repayment_doc.repayment_date or repayment_doc.posting_date or today()
+    pe.company = repayment_doc.company
+    pe.party_type = "SHG Member"
+    pe.party = repayment_doc.member
+    pe.paid_from = repayment_doc.member_account
+    pe.paid_to = repayment_doc.company_bank_account
+    pe.paid_amount = repayment_doc.total_paid
+    pe.received_amount = repayment_doc.total_paid
+
+    # Reference No & Date are required for Bank Entries
+    pe.reference_no = repayment_doc.name
+    pe.reference_date = repayment_doc.repayment_date or repayment_doc.posting_date or today()
+
+    pe.remarks = f"Loan Repayment (Loan {repayment_doc.loan}) by {repayment_doc.member}"
+    
+    # Set mode_of_payment based on account type
+    account_type = frappe.db.get_value("Account", repayment_doc.company_bank_account, "account_type")
+    if account_type == "Bank":
+        pe.mode_of_payment = "Bank"
+    elif account_type == "Cash":
+        pe.mode_of_payment = "Cash"
+    # Set voucher type
+    pe.voucher_type = "Bank Entry"
+    pe.set("custom_shg_loan_repayment", repayment_doc.name)
+
+    pe.insert(ignore_permissions=True)
+    pe.submit()
+    return pe.name
