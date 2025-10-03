@@ -195,11 +195,12 @@ def _create_journal_entry(doc, doc_type, member_customer, company):
     je.set(custom_field, doc.name)
     je.accounts = []
     
-    # Add reference_no and reference_date for Bank and Cash entries
-    if je.voucher_type in ["Bank Entry", "Cash Entry"]:
-        # Ensure we have reference values, fallback to doc name and today if not set
+    # Auto-fill reference fields for all voucher types
+    # Only set if not already set to preserve manual entries
+    if not je.reference_no:
         je.reference_no = reference_no or doc.name
-        je.reference_date = reference_date or today()
+    if not je.reference_date:
+        je.reference_date = reference_date or doc.posting_date or today()
     
     for account_entry in accounts:
         je.append("accounts", account_entry)
@@ -239,8 +240,11 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         pe.paid_to = paid_to_account
         pe.paid_amount = flt(doc.amount)
         pe.received_amount = flt(doc.amount)
-        pe.reference_no = doc.name
-        pe.reference_date = doc.contribution_date or today()
+        # Auto-fill reference fields if not already set
+        if not pe.reference_no:
+            pe.reference_no = doc.name
+        if not pe.reference_date:
+            pe.reference_date = doc.contribution_date or doc.posting_date or today()
         # Set mode_of_payment based on account type
         account_type = frappe.db.get_value("Account", paid_to_account, "account_type")
         if account_type == "Bank":
@@ -270,8 +274,11 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
         pe.paid_to = paid_to_account
         pe.paid_amount = flt(doc.total_paid)
         pe.received_amount = flt(doc.total_paid)
-        pe.reference_no = doc.name
-        pe.reference_date = doc.repayment_date or today()
+        # Auto-fill reference fields if not already set
+        if not pe.reference_no:
+            pe.reference_no = doc.name
+        if not pe.reference_date:
+            pe.reference_date = doc.repayment_date or doc.posting_date or today()
         # Set mode_of_payment based on account type
         account_type = frappe.db.get_value("Account", paid_to_account, "account_type")
         if account_type == "Bank":
@@ -309,8 +316,11 @@ def _create_payment_entry(doc, doc_type, member_customer, company):
             frappe.get_doc("SHG Member", doc.member), company)
         pe.paid_amount = flt(doc.loan_amount)
         pe.received_amount = flt(doc.loan_amount)
-        pe.reference_no = doc.name
-        pe.reference_date = doc.disbursement_date or today()
+        # Auto-fill reference fields if not already set
+        if not pe.reference_no:
+            pe.reference_no = doc.name
+        if not pe.reference_date:
+            pe.reference_date = doc.disbursement_date or doc.posting_date or today()
         # Set mode_of_payment based on account type
         account_type = frappe.db.get_value("Account", paid_from_account, "account_type")
         if account_type == "Bank":

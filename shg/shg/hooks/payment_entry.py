@@ -10,13 +10,13 @@ def set_reference_fields(pe, source_doc):
         pe: Payment Entry document
         source_doc: Source SHG document (Contribution, Loan, etc.)
     """
-    # Check if payment entry is for bank transactions
-    # For Bank Entries, we need to auto-fill reference fields
-    if pe.voucher_type == "Bank Entry":
-        # Only set reference fields if they're not already set
-        if not pe.reference_no or not pe.reference_date:
-            # Set reference fields from the source document
+    # Auto-fill reference fields for all voucher types
+    # Only set reference fields if they're not already set
+    if not pe.reference_no or not pe.reference_date:
+        # Set reference fields from the source document
+        if not pe.reference_no:
             pe.reference_no = source_doc.name
+        if not pe.reference_date:
             if hasattr(source_doc, 'contribution_date'):
                 pe.reference_date = source_doc.contribution_date
             elif hasattr(source_doc, 'disbursement_date'):
@@ -27,7 +27,7 @@ def set_reference_fields(pe, source_doc):
                 pe.reference_date = source_doc.fine_date
             else:
                 # Fallback to posting date
-                pe.reference_date = pe.posting_date
+                pe.reference_date = source_doc.posting_date or pe.posting_date
 
 def payment_entry_validate(doc, method):
     """
