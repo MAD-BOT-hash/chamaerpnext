@@ -575,6 +575,21 @@ class SHGLoan(Document):
         
         # Send SMS (would be implemented in actual system)
         # send_sms(member.phone_number, message)
+        
+    def before_submit(self):
+        """Ensure repayment schedule is generated, rounded, and frozen before submission"""
+        # Ensure repayment schedule is generated before submit
+        if not self.repayment_schedule or len(self.repayment_schedule) == 0:
+            self.generate_repayment_schedule()
+
+        # Round and freeze schedule values
+        for d in self.repayment_schedule:
+            d.principal_amount = round(float(d.principal_amount), 2)
+            d.interest_amount = round(float(d.interest_amount), 2)
+            d.total_payment = round(float(d.total_payment), 2)
+
+        # Lock repayment schedule length to avoid post-submit changes
+        self.db_set("repayment_schedule", self.repayment_schedule, update_modified=False)
 
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
