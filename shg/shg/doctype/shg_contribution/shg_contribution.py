@@ -55,11 +55,11 @@ class SHGContribution(Document):
         
     def post_to_ledger(self):
         """
-        Create a Payment Entry or Journal Entry for this contribution.
-        Use SHG Settings to decide; default to Journal Entry.
+        Create a Journal Entry for this contribution.
         """
-        from shg.shg.utils.gl_utils import make_gl_entries
-        make_gl_entries(self)
+        from shg.shg.utils.gl_utils import create_contribution_journal_entry, update_document_with_journal_entry
+        journal_entry = create_contribution_journal_entry(self)
+        update_document_with_journal_entry(self, journal_entry)
         
     def cancel_journal_entry(self):
         """Cancel the associated journal entry or payment entry"""

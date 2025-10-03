@@ -151,11 +151,11 @@ class SHGLoan(Document):
             
     def post_to_ledger(self):
         """
-        Create a Payment Entry or Journal Entry for this loan disbursement.
-        Use SHG Settings to decide; default to Journal Entry.
+        Create a Payment Entry for this loan disbursement.
         """
-        from shg.shg.utils.gl_utils import make_gl_entries
-        make_gl_entries(self)
+        from shg.shg.utils.gl_utils import create_loan_disbursement_payment_entry, update_document_with_payment_entry
+        payment_entry = create_loan_disbursement_payment_entry(self)
+        update_document_with_payment_entry(self, payment_entry, "disbursement_payment_entry")
         
     def get_member_account(self):
         """Get member's account, create if not exists"""

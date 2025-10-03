@@ -51,11 +51,11 @@ class SHGMeetingFine(Document):
             
     def post_to_ledger(self):
         """
-        Create a Payment Entry or Journal Entry for this meeting fine.
-        Use SHG Settings to decide; default to Journal Entry.
+        Create a Payment Entry for this meeting fine.
         """
-        from shg.shg.utils.gl_utils import make_gl_entries
-        make_gl_entries(self)
+        from shg.shg.utils.gl_utils import create_meeting_fine_payment_entry, update_document_with_payment_entry
+        payment_entry = create_meeting_fine_payment_entry(self)
+        update_document_with_payment_entry(self, payment_entry)
         
     def get_fine_account(self, company):
         """Get fine income account, create if not exists"""

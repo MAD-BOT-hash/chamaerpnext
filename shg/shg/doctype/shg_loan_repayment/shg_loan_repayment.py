@@ -153,11 +153,11 @@ class SHGLoanRepayment(Document):
 
     def post_to_ledger(self):
         """
-        Create a Payment Entry or Journal Entry for this loan repayment.
-        Use SHG Settings to decide; default to Journal Entry.
+        Create a Payment Entry for this loan repayment.
         """
-        from shg.shg.utils.gl_utils import make_gl_entries
-        make_gl_entries(self)
+        from shg.shg.utils.gl_utils import create_loan_repayment_payment_entry, update_document_with_payment_entry
+        payment_entry = create_loan_repayment_payment_entry(self)
+        update_document_with_payment_entry(self, payment_entry)
 
     def update_member_totals(self):
         """Update member's totals"""

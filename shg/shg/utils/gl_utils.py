@@ -2,546 +2,365 @@ import frappe
 from frappe import _
 from frappe.utils import flt, today
 
-def make_gl_entries(doc, method=None):
+
+def create_loan_disbursement_payment_entry(loan_doc):
     """
-    Reusable function to create GL entries for SHG documents.
-    Supports both Journal Entry and Payment Entry creation based on settings.
-    
-    Args:
-        doc: SHG document (Contribution, Loan, Loan Repayment, Meeting Fine)
-        method: Optional method parameter for hooks
-    """
-    # Determine document type and get appropriate settings
-    doc_type = doc.doctype
-    settings = frappe.get_single("SHG Settings")
-    
-    # Get posting method based on document type
-    posting_method = _get_posting_method(doc_type, settings)
-    
-    # Prepare common data
-    company = frappe.get_value("Global Defaults", None, "default_company") or settings.company
-    member_customer = None
-    if hasattr(doc, 'member'):
-        member_customer = frappe.get_value("SHG Member", doc.member, "customer")
-    
-    # Create appropriate entry based on posting method
-    if posting_method == "Payment Entry":
-        return _create_payment_entry(doc, doc_type, member_customer, company)
-    else:
-        return _create_journal_entry(doc, doc_type, member_customer, company)
-
-def _get_posting_method(doc_type, settings):
-    """Get posting method based on document type and settings"""
-    method_map = {
-        "SHG Contribution": "contribution_posting_method",
-        "SHG Loan": "loan_disbursement_posting_method",
-        "SHG Loan Repayment": "loan_repayment_posting_method",
-        "SHG Meeting Fine": "meeting_fine_posting_method"
-    }
-    
-    method_setting = method_map.get(doc_type, "Journal Entry")
-    return getattr(settings, method_setting, "Journal Entry")
-
-def _create_journal_entry(doc, doc_type, member_customer, company):
-    """Create a Journal Entry for the given document"""
-    from shg.shg.utils.account_utils import (
-        get_or_create_shg_contributions_account,
-        get_or_create_shg_loans_account,
-        get_or_create_shg_penalty_income_account,
-        get_or_create_shg_interest_income_account,
-        get_or_create_member_account
-    )
-    
-    # Valid voucher types mapping
-    valid_voucher_type = {
-        "SHG Contribution": "Bank Entry",
-        "SHG Loan": "Journal Entry",
-        "SHG Loan Repayment": "Cash Entry",
-        "SHG Meeting Fine": "Journal Entry"
-    }
-    
-    # Get accounts based on document type
-    accounts = []
-    
-    if doc_type == "SHG Contribution":
-        # Debit: Bank/Cash, Credit: Contribution Income
-        accounts = [
-            {
-                "account": _get_cash_account(doc, company),
-                "debit_in_account_currency": flt(doc.amount)
-            },
-            {
-                "account": get_or_create_shg_contributions_account(company),
-                "credit_in_account_currency": flt(doc.amount),
-                "party_type": "SHG Member",
-                "party": doc.member
-            }
-        ]
-        je_remark = f"SHG Contribution {doc.name} from {doc.member_name}"
-        custom_field = "custom_shg_contribution"
-        
-    elif doc_type == "SHG Loan" and doc.status == "Disbursed":
-        # Debit: Loan Asset, Credit: Bank
-        member_account = get_or_create_member_account(
-            frappe.get_doc("SHG Member", doc.member), company)
-        accounts = [
-            {
-                "account": get_or_create_shg_loans_account(company),
-                "debit_in_account_currency": flt(doc.loan_amount),
-                "party_type": "SHG Member",
-                "party": doc.member
-            },
-            {
-                "account": _get_bank_account(doc, company),
-                "credit_in_account_currency": flt(doc.loan_amount)
-            }
-        ]
-        je_remark = f"SHG Loan Disbursement {doc.name} to {doc.member_name}"
-        custom_field = "custom_shg_loan"
-        
-    elif doc_type == "SHG Loan Repayment":
-        # Debit: Bank/Cash, Credit: Loan Receivable + Interest + Penalty
-        cash_account = _get_cash_account(doc, company)
-        loan_account = get_or_create_shg_loans_account(company)
-        interest_account = get_or_create_shg_interest_income_account(company)
-        penalty_account = get_or_create_shg_penalty_income_account(company)
-        
-        accounts = [
-            {
-                "account": cash_account,
-                "debit_in_account_currency": flt(doc.total_paid)
-            }
-        ]
-        
-        # Add credit entries
-        if doc.principal_amount > 0:
-            accounts.append({
-                "account": loan_account,
-                "credit_in_account_currency": flt(doc.principal_amount),
-                "party_type": "SHG Member",
-                "party": doc.member
-            })
-            
-        if doc.interest_amount > 0:
-            accounts.append({
-                "account": interest_account,
-                "credit_in_account_currency": flt(doc.interest_amount),
-                "party_type": "SHG Member",
-                "party": doc.member
-            })
-            
-        if doc.penalty_amount > 0:
-            accounts.append({
-                "account": penalty_account,
-                "credit_in_account_currency": flt(doc.penalty_amount),
-                "party_type": "SHG Member",
-                "party": doc.member
-            })
-            
-        je_remark = f"SHG Loan Repayment {doc.name} from {doc.member_name}"
-        custom_field = "custom_shg_loan_repayment"
-        
-    elif doc_type == "SHG Meeting Fine":
-        # Debit: Member Account, Credit: Penalty Income
-        member_account = get_or_create_member_account(
-            frappe.get_doc("SHG Member", doc.member), company)
-        accounts = [
-            {
-                "account": member_account,
-                "debit_in_account_currency": flt(doc.fine_amount),
-                "party_type": "SHG Member",
-                "party": doc.member
-            },
-            {
-                "account": get_or_create_shg_penalty_income_account(company),
-                "credit_in_account_currency": flt(doc.fine_amount),
-                "party_type": "SHG Member",
-                "party": doc.member
-            }
-        ]
-        je_remark = f"SHG Meeting Fine {doc.name} from {doc.member_name}"
-        custom_field = "custom_shg_meeting_fine"
-        
-    else:
-        frappe.throw(_("Unsupported document type for Journal Entry creation: {0}").format(doc_type))
-    
-    # Validate that we have accounts
-    if not accounts:
-        frappe.throw(_("No accounts found for Journal Entry creation"))
-    
-    # Validate that debits equal credits
-    total_debit = sum(entry.get("debit_in_account_currency", 0) for entry in accounts)
-    total_credit = sum(entry.get("credit_in_account_currency", 0) for entry in accounts)
-    
-    if abs(total_debit - total_credit) > 0.01:  # Allow for small rounding differences
-        frappe.throw(_("Debit amount ({0}) does not equal credit amount ({1})").format(total_debit, total_credit))
-    
-    # Create Journal Entry using new_doc -> insert() -> submit() pattern
-    je = frappe.new_doc("Journal Entry")
-    je.voucher_type = valid_voucher_type.get(doc_type, "Journal Entry")
-    je.posting_date = _get_posting_date(doc, doc_type)
-    je.company = company
-    je.user_remark = je_remark
-    je.set(custom_field, doc.name)
-    je.accounts = []
-    
-    # For Journal Entries, we don't auto-fill reference fields as per requirements
-    # Reference fields will remain empty unless manually set by user
-    
-    for account_entry in accounts:
-        je.append("accounts", account_entry)
-    
-    je.insert(ignore_permissions=True)
-    je.submit()
-    
-    # Update document with journal entry reference
-    _update_document_with_entry(doc, "journal_entry", je.name)
-    
-    return je
-
-def _create_payment_entry(doc, doc_type, member_customer, company):
-    """Create a Payment Entry for the given document"""
-    from shg.shg.utils.account_utils import (
-        get_or_create_shg_contributions_account,
-        get_or_create_shg_loans_account,
-        get_or_create_shg_penalty_income_account,
-        get_or_create_shg_interest_income_account,
-        get_or_create_member_account
-    )
-    
-    if doc_type == "SHG Contribution":
-        # Receive payment for contribution
-        pe = frappe.new_doc("Payment Entry")
-        pe.payment_type = "Receive"
-        pe.posting_date = doc.contribution_date or today()
-        pe.company = company
-        pe.party_type = "SHG Member"
-        pe.party = doc.member
-        # Members bring cash to the group, so:
-        # paid_from = member account (what they're paying from)
-        # paid_to = cash/bank account (where the money goes)
-        pe.paid_from = get_or_create_member_account(
-            frappe.get_doc("SHG Member", doc.member), company)
-        paid_to_account = _get_cash_account(doc, company)
-        pe.paid_to = paid_to_account
-        pe.paid_amount = flt(doc.amount)
-        pe.received_amount = flt(doc.amount)
-        # Auto-fill reference fields if not already set
-        if not pe.reference_no:
-            pe.reference_no = doc.name
-        if not pe.reference_date:
-            pe.reference_date = doc.contribution_date or doc.posting_date or today()
-        # Set mode_of_payment based on account type
-        account_type = frappe.db.get_value("Account", paid_to_account, "account_type")
-        if account_type == "Bank":
-            pe.mode_of_payment = "Bank"
-        elif account_type == "Cash":
-            pe.mode_of_payment = "Cash"
-        # Set voucher type
-        pe.voucher_type = "Bank Entry"
-        pe.set("custom_shg_contribution", doc.name)
-        
-        pe.insert(ignore_permissions=True)
-        pe.submit()
-        _update_document_with_entry(doc, "payment_entry", pe.name)
-        return pe
-        
-    elif doc_type == "SHG Loan Repayment":
-        # Receive payment for loan repayment
-        pe = frappe.new_doc("Payment Entry")
-        pe.payment_type = "Receive"
-        pe.posting_date = doc.repayment_date or today()
-        pe.company = company
-        pe.party_type = "SHG Member"
-        pe.party = doc.member
-        pe.paid_from = get_or_create_member_account(
-            frappe.get_doc("SHG Member", doc.member), company)
-        paid_to_account = _get_cash_account(doc, company)
-        pe.paid_to = paid_to_account
-        pe.paid_amount = flt(doc.total_paid)
-        pe.received_amount = flt(doc.total_paid)
-        # Auto-fill reference fields if not already set
-        if not pe.reference_no:
-            pe.reference_no = doc.name
-        if not pe.reference_date:
-            pe.reference_date = doc.repayment_date or doc.posting_date or today()
-        # Set mode_of_payment based on account type
-        account_type = frappe.db.get_value("Account", paid_to_account, "account_type")
-        if account_type == "Bank":
-            pe.mode_of_payment = "Bank"
-        elif account_type == "Cash":
-            pe.mode_of_payment = "Cash"
-        # Set voucher type
-        pe.voucher_type = "Bank Entry"
-        pe.set("custom_shg_loan_repayment", doc.name)
-        
-        # Add allocations for principal, interest, and penalty
-        if doc.principal_amount > 0:
-            pe.append("references", {
-                "reference_doctype": "SHG Loan",
-                "reference_name": doc.loan,
-                "allocated_amount": flt(doc.principal_amount)
-            })
-            
-        pe.insert(ignore_permissions=True)
-        pe.submit()
-        _update_document_with_entry(doc, "payment_entry", pe.name)
-        return pe
-        
-    elif doc_type == "SHG Loan" and doc.status == "Disbursed":
-        # Pay out loan amount
-        pe = frappe.new_doc("Payment Entry")
-        pe.payment_type = "Pay"
-        pe.posting_date = doc.disbursement_date or today()
-        pe.company = company
-        pe.party_type = "SHG Member"
-        pe.party = doc.member
-        paid_from_account = _get_bank_account(doc, company)
-        pe.paid_from = paid_from_account
-        pe.paid_to = get_or_create_member_account(
-            frappe.get_doc("SHG Member", doc.member), company)
-        pe.paid_amount = flt(doc.loan_amount)
-        pe.received_amount = flt(doc.loan_amount)
-        # Auto-fill reference fields if not already set
-        if not pe.reference_no:
-            pe.reference_no = doc.name
-        if not pe.reference_date:
-            pe.reference_date = doc.disbursement_date or doc.posting_date or today()
-        # Set mode_of_payment based on account type
-        account_type = frappe.db.get_value("Account", paid_from_account, "account_type")
-        if account_type == "Bank":
-            pe.mode_of_payment = "Bank"
-        elif account_type == "Cash":
-            pe.mode_of_payment = "Cash"
-        # Set voucher type
-        pe.voucher_type = "Bank Entry"
-        pe.set("custom_shg_loan", doc.name)
-        
-        pe.insert(ignore_permissions=True)
-        pe.submit()
-        _update_document_with_entry(doc, "disbursement_payment_entry", pe.name)
-        return pe
-        
-    elif doc_type == "SHG Meeting Fine":
-        # Receive payment for meeting fine
-        pe = frappe.new_doc("Payment Entry")
-        pe.payment_type = "Receive"
-        pe.posting_date = doc.fine_date or today()
-        pe.company = company
-        pe.party_type = "SHG Member"
-        pe.party = doc.member
-        pe.paid_from = get_or_create_member_account(
-            frappe.get_doc("SHG Member", doc.member), company)
-        paid_to_account = _get_cash_account(doc, company)
-        pe.paid_to = paid_to_account
-        pe.paid_amount = flt(doc.fine_amount)
-        pe.received_amount = flt(doc.fine_amount)
-        # Auto-fill reference fields if not already set
-        if not pe.reference_no:
-            pe.reference_no = doc.name
-        if not pe.reference_date:
-            pe.reference_date = doc.fine_date or doc.posting_date or today()
-        # Set mode_of_payment based on account type
-        account_type = frappe.db.get_value("Account", paid_to_account, "account_type")
-        if account_type == "Bank":
-            pe.mode_of_payment = "Bank"
-        elif account_type == "Cash":
-            pe.mode_of_payment = "Cash"
-        # Set voucher type
-        pe.voucher_type = "Bank Entry"
-        pe.set("custom_shg_meeting_fine", doc.name)
-        
-        pe.insert(ignore_permissions=True)
-        pe.submit()
-        _update_document_with_entry(doc, "payment_entry", pe.name)
-        return pe
-        
-    else:
-        frappe.throw(_("Payment Entry creation not supported for document type: {0}").format(doc_type))
-
-def _get_cash_account(doc, company):
-    """Get cash or bank account from settings or defaults"""
-    settings = frappe.get_single("SHG Settings")
-    if settings.default_bank_account:
-        return settings.default_bank_account
-    elif settings.default_cash_account:
-        return settings.default_cash_account
-    else:
-        # Try to find a default bank account
-        bank_accounts = frappe.get_all("Account", filters={
-            "company": company,
-            "account_type": "Bank",
-            "is_group": 0
-        }, limit=1)
-        if bank_accounts:
-            return bank_accounts[0].name
-        else:
-            # Try cash account
-            cash_accounts = frappe.get_all("Account", filters={
-                "company": company,
-                "account_type": "Cash",
-                "is_group": 0
-            }, limit=1)
-            if cash_accounts:
-                return cash_accounts[0].name
-            else:
-                frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
-
-def _get_bank_account(doc, company):
-    """Get bank account from settings or defaults"""
-    settings = frappe.get_single("SHG Settings")
-    if settings.default_bank_account:
-        return settings.default_bank_account
-    else:
-        # Try to find a default bank account
-        bank_accounts = frappe.get_all("Account", filters={
-            "company": company,
-            "account_type": "Bank",
-            "is_group": 0
-        }, limit=1)
-        if bank_accounts:
-            return bank_accounts[0].name
-        else:
-            frappe.throw(_("Please configure default bank account in SHG Settings"))
-
-def _get_posting_date(doc, doc_type):
-    """Get appropriate posting date based on document type"""
-    if doc_type == "SHG Contribution":
-        return doc.contribution_date or today()
-    elif doc_type == "SHG Loan":
-        return doc.disbursement_date or today()
-    elif doc_type == "SHG Loan Repayment":
-        return doc.repayment_date or today()
-    elif doc_type == "SHG Meeting Fine":
-        return doc.fine_date or today()
-    else:
-        return today()
-
-def _update_document_with_entry(doc, entry_field, entry_name):
-    """Update document with created entry reference without triggering hooks"""
-    doc.db_set({
-        entry_field: entry_name,
-        "posted_to_gl": 1,
-        "posted_on": frappe.utils.now()
-    }, update_modified=False)
-
-# Additional function for creating contribution journal entries specifically
-def create_contribution_journal(contribution_doc):
-    """
-    Create a Journal Entry for contribution adjustments without reference fields.
-    
-    Args:
-        contribution_doc: SHG Contribution document
-        
-    Returns:
-        str: Name of the created Journal Entry
-    """
-    je = frappe.new_doc("Journal Entry")
-    je.voucher_type = "Journal Entry"
-    je.posting_date = contribution_doc.posting_date or today()
-    je.user_remark = f"Contribution adjustment for {contribution_doc.member}"
-    
-    # Credit Member (liability)
-    je.append("accounts", {
-        "account": contribution_doc.member_account,
-        "party_type": "SHG Member",
-        "party": contribution_doc.member,
-        "credit_in_account_currency": contribution_doc.amount
-    })
-    
-    # Debit Bank or Cash
-    je.append("accounts", {
-        "account": contribution_doc.company_bank_account,
-        "debit_in_account_currency": contribution_doc.amount
-    })
-    
-    # Do NOT set reference fields as per requirements
-    # je.reference_no and je.reference_date are left unset
-    
-    je.insert(ignore_permissions=True)
-    je.submit()
-    return je.name
-
-# Additional function for creating loan disbursement payment entries specifically
-def create_loan_disbursement_payment(loan_doc):
-    """
-    Create a Payment Entry for loan disbursement with reference fields.
+    Create a Payment Entry for loan disbursement.
     
     Args:
         loan_doc: SHG Loan document
         
     Returns:
-        str: Name of the created Payment Entry
+        Payment Entry document
     """
+    # Get company
+    company = frappe.get_value("Global Defaults", None, "default_company")
+    if not company:
+        company = loan_doc.company
+    
+    # Get accounts
+    from shg.shg.utils.account_utils import get_or_create_member_account, get_or_create_shg_loans_account
+    member_account = get_or_create_member_account(
+        frappe.get_doc("SHG Member", loan_doc.member), company)
+    
+    # Get bank/cash account from settings
+    settings = frappe.get_single("SHG Settings")
+    bank_account = settings.default_bank_account or settings.default_cash_account
+    
+    if not bank_account:
+        # Try to find a default bank account
+        bank_accounts = frappe.get_all("Account", filters={
+            "company": company,
+            "account_type": ["in", ["Bank", "Cash"]],
+            "is_group": 0
+        }, limit=1)
+        if bank_accounts:
+            bank_account = bank_accounts[0].name
+        else:
+            frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
+    
+    # Create Payment Entry
     pe = frappe.new_doc("Payment Entry")
     pe.payment_type = "Pay"
-    pe.posting_date = loan_doc.disbursement_date or loan_doc.posting_date or today()
-    pe.company = loan_doc.company
+    pe.posting_date = loan_doc.disbursement_date or today()
+    pe.company = company
     pe.party_type = "SHG Member"
     pe.party = loan_doc.member
-    pe.paid_from = loan_doc.company_bank_account
-    pe.paid_to = loan_doc.member_loan_account
-    pe.paid_amount = loan_doc.loan_amount
-    pe.received_amount = loan_doc.loan_amount
-
-    # Reference details are required for Bank Entry
+    pe.paid_from = bank_account
+    pe.paid_to = member_account
+    pe.paid_amount = flt(loan_doc.loan_amount)
+    pe.received_amount = flt(loan_doc.loan_amount)
+    
+    # Set reference fields (required for Bank Entry)
     pe.reference_no = loan_doc.name
     pe.reference_date = loan_doc.disbursement_date or loan_doc.posting_date or today()
-
+    
+    # Set remarks
     pe.remarks = f"Loan Disbursement for {loan_doc.member} (Loan {loan_doc.name})"
     
-    # Set mode_of_payment based on account type
-    account_type = frappe.db.get_value("Account", loan_doc.company_bank_account, "account_type")
+    # Set mode of payment based on account type
+    account_type = frappe.db.get_value("Account", bank_account, "account_type")
     if account_type == "Bank":
         pe.mode_of_payment = "Bank"
     elif account_type == "Cash":
         pe.mode_of_payment = "Cash"
+    
     # Set voucher type
     pe.voucher_type = "Bank Entry"
+    
+    # Set custom field for traceability
     pe.set("custom_shg_loan", loan_doc.name)
-
+    
+    # Insert and submit
     pe.insert(ignore_permissions=True)
     pe.submit()
-    return pe.name
+    
+    return pe
 
-# Additional function for creating loan repayment payment entries specifically
-def create_loan_repayment_payment(repayment_doc):
+
+
+def create_contribution_journal_entry(contribution_doc):
     """
-    Create a Payment Entry for loan repayment with reference fields.
+    Create a Journal Entry for contribution.
+    
+    Args:
+        contribution_doc: SHG Contribution document
+        
+    Returns:
+        Journal Entry document
+    """
+    # Get company
+    company = frappe.get_value("Global Defaults", None, "default_company")
+    if not company:
+        company = contribution_doc.company
+    
+    # Get accounts
+    from shg.shg.utils.account_utils import (
+        get_or_create_shg_contributions_account,
+        get_or_create_member_account
+    )
+    
+    # Get bank/cash account from settings
+    settings = frappe.get_single("SHG Settings")
+    bank_account = settings.default_bank_account or settings.default_cash_account
+    
+    if not bank_account:
+        # Try to find a default bank/cash account
+        bank_accounts = frappe.get_all("Account", filters={
+            "company": company,
+            "account_type": ["in", ["Bank", "Cash"]],
+            "is_group": 0
+        }, limit=1)
+        if bank_accounts:
+            bank_account = bank_accounts[0].name
+        else:
+            frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
+    
+    # Get member account
+    member_account = get_or_create_member_account(
+        frappe.get_doc("SHG Member", contribution_doc.member), company)
+    
+    # Get contributions income account
+    contributions_account = get_or_create_shg_contributions_account(company)
+    
+    # Create Journal Entry
+    je = frappe.new_doc("Journal Entry")
+    je.voucher_type = "Journal Entry"
+    je.posting_date = contribution_doc.contribution_date or today()
+    je.company = company
+    je.user_remark = f"Contribution by {contribution_doc.member}"
+    
+    # Debit: Company Bank/Cash Account
+    je.append("accounts", {
+        "account": bank_account,
+        "debit_in_account_currency": flt(contribution_doc.amount)
+    })
+    
+    # Credit: Member Liability Account
+    je.append("accounts", {
+        "account": member_account,
+        "credit_in_account_currency": flt(contribution_doc.amount),
+        "party_type": "SHG Member",
+        "party": contribution_doc.member
+    })
+    
+    # Set custom field for traceability
+    je.set("custom_shg_contribution", contribution_doc.name)
+    
+    # Insert and submit
+    je.insert(ignore_permissions=True)
+    je.submit()
+    
+    return je
+
+def create_loan_repayment_payment_entry(repayment_doc):
+    """
+    Create a Payment Entry for loan repayment.
     
     Args:
         repayment_doc: SHG Loan Repayment document
         
     Returns:
-        str: Name of the created Payment Entry
+        Payment Entry document
     """
+    # Get company
+    company = frappe.get_value("Global Defaults", None, "default_company")
+    if not company:
+        company = repayment_doc.company
+    
+    # Get accounts
+    from shg.shg.utils.account_utils import get_or_create_member_account
+    
+    # Get member account
+    member_account = get_or_create_member_account(
+        frappe.get_doc("SHG Member", repayment_doc.member), company)
+    
+    # Get bank/cash account from settings
+    settings = frappe.get_single("SHG Settings")
+    bank_account = settings.default_bank_account or settings.default_cash_account
+    
+    if not bank_account:
+        # Try to find a default bank account
+        bank_accounts = frappe.get_all("Account", filters={
+            "company": company,
+            "account_type": ["in", ["Bank", "Cash"]],
+            "is_group": 0
+        }, limit=1)
+        if bank_accounts:
+            bank_account = bank_accounts[0].name
+        else:
+            frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
+    
+    # Create Payment Entry
     pe = frappe.new_doc("Payment Entry")
     pe.payment_type = "Receive"
-    pe.posting_date = repayment_doc.repayment_date or repayment_doc.posting_date or today()
-    pe.company = repayment_doc.company
+    pe.posting_date = repayment_doc.repayment_date or today()
+    pe.company = company
     pe.party_type = "SHG Member"
     pe.party = repayment_doc.member
-    pe.paid_from = repayment_doc.member_account
-    pe.paid_to = repayment_doc.company_bank_account
-    pe.paid_amount = repayment_doc.total_paid
-    pe.received_amount = repayment_doc.total_paid
-
-    # Reference No & Date are required for Bank Entries
+    pe.paid_from = member_account
+    pe.paid_to = bank_account
+    pe.paid_amount = flt(repayment_doc.total_paid)
+    pe.received_amount = flt(repayment_doc.total_paid)
+    
+    # Set reference fields (required for Bank Entry)
     pe.reference_no = repayment_doc.name
     pe.reference_date = repayment_doc.repayment_date or repayment_doc.posting_date or today()
-
+    
+    # Set remarks
     pe.remarks = f"Loan Repayment (Loan {repayment_doc.loan}) by {repayment_doc.member}"
     
-    # Set mode_of_payment based on account type
-    account_type = frappe.db.get_value("Account", repayment_doc.company_bank_account, "account_type")
+    # Set mode of payment based on account type
+    account_type = frappe.db.get_value("Account", bank_account, "account_type")
     if account_type == "Bank":
         pe.mode_of_payment = "Bank"
     elif account_type == "Cash":
         pe.mode_of_payment = "Cash"
+    
     # Set voucher type
     pe.voucher_type = "Bank Entry"
+    
+    # Set custom field for traceability
     pe.set("custom_shg_loan_repayment", repayment_doc.name)
-
+    
+    # Add allocations for principal, interest, and penalty
+    if repayment_doc.principal_amount > 0:
+        pe.append("references", {
+            "reference_doctype": "SHG Loan",
+            "reference_name": repayment_doc.loan,
+            "allocated_amount": flt(repayment_doc.principal_amount)
+        })
+    
+    # Insert and submit
     pe.insert(ignore_permissions=True)
     pe.submit()
-    return pe.name
+    
+    return pe
+
+def create_meeting_fine_payment_entry(fine_doc):
+    """
+    Create a Payment Entry for meeting fine.
+    
+    Args:
+        fine_doc: SHG Meeting Fine document
+        
+    Returns:
+        Payment Entry document
+    """
+    # Get company
+    company = frappe.get_value("Global Defaults", None, "default_company")
+    if not company:
+        company = fine_doc.company
+    
+    # Get accounts
+    from shg.shg.utils.account_utils import (
+        get_or_create_member_account,
+        get_or_create_shg_penalty_income_account
+    )
+    
+    # Get member account
+    member_account = get_or_create_member_account(
+        frappe.get_doc("SHG Member", fine_doc.member), company)
+    
+    # Get bank/cash account from settings
+    settings = frappe.get_single("SHG Settings")
+    bank_account = settings.default_bank_account or settings.default_cash_account
+    
+    if not bank_account:
+        # Try to find a default bank account
+        bank_accounts = frappe.get_all("Account", filters={
+            "company": company,
+            "account_type": ["in", ["Bank", "Cash"]],
+            "is_group": 0
+        }, limit=1)
+        if bank_accounts:
+            bank_account = bank_accounts[0].name
+        else:
+            frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
+    
+    # Get penalty income account
+    penalty_account = get_or_create_shg_penalty_income_account(company)
+    
+    # Create Payment Entry
+    pe = frappe.new_doc("Payment Entry")
+    pe.payment_type = "Receive"
+    pe.posting_date = fine_doc.fine_date or today()
+    pe.company = company
+    pe.party_type = "SHG Member"
+    pe.party = fine_doc.member
+    pe.paid_from = member_account
+    pe.paid_to = bank_account
+    pe.paid_amount = flt(fine_doc.fine_amount)
+    pe.received_amount = flt(fine_doc.fine_amount)
+    
+    # Set reference fields (required for Bank Entry)
+    pe.reference_no = fine_doc.name
+    pe.reference_date = fine_doc.fine_date or fine_doc.posting_date or today()
+    
+    # Set remarks
+    pe.remarks = f"Meeting Fine for {fine_doc.member}"
+    
+    # Set mode of payment based on account type
+    account_type = frappe.db.get_value("Account", bank_account, "account_type")
+    if account_type == "Bank":
+        pe.mode_of_payment = "Bank"
+    elif account_type == "Cash":
+        pe.mode_of_payment = "Cash"
+    
+    # Set voucher type
+    pe.voucher_type = "Bank Entry"
+    
+    # Set custom field for traceability
+    pe.set("custom_shg_meeting_fine", fine_doc.name)
+    
+    # Handle fine through deductions table if needed
+    # This is for cases where we want to post the fine to a specific income account
+    # pe.append("deductions", {
+    #     "account": penalty_account,
+    #     "amount": flt(fine_doc.fine_amount)
+    # })
+    
+    # Insert and submit
+    pe.insert(ignore_permissions=True)
+    pe.submit()
+    
+    return pe
+
+
+
+
+
+def update_document_with_payment_entry(doc, payment_entry, entry_field="payment_entry"):
+    """
+    Update document with payment entry reference.
+    
+    Args:
+        doc: SHG document
+        payment_entry: Payment Entry document
+        entry_field: Field name to update (default: "payment_entry")
+    """
+    doc.db_set({
+        entry_field: payment_entry.name,
+        "posted_to_gl": 1,
+        "posted_on": frappe.utils.now()
+    }, update_modified=False)
+
+
+def update_document_with_journal_entry(doc, journal_entry):
+    """
+    Update document with journal entry reference.
+    
+    Args:
+        doc: SHG document
+        journal_entry: Journal Entry document
+    """
+    doc.db_set({
+        "journal_entry": journal_entry.name,
+        "posted_to_gl": 1,
+        "posted_on": frappe.utils.now()
+    }, update_modified=False)
+
+
+
+
+
