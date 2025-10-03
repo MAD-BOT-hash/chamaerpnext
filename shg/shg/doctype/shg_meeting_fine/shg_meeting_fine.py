@@ -8,6 +8,10 @@ class SHGMeetingFine(Document):
         self.validate_amount()
         self.validate_duplicate()
         
+        # Ensure fine_amount is rounded to 2 decimal places
+        if self.fine_amount:
+            self.fine_amount = round(float(self.fine_amount), 2)
+        
     def validate_amount(self):
         """Validate fine amount"""
         if self.fine_amount <= 0:
@@ -79,6 +83,7 @@ class SHGMeetingFine(Document):
         member = frappe.get_doc("SHG Member", self.member)
         return member.customer
         
+    @frappe.whitelist()
     def send_fine_notification(self):
         """Send fine notification to member"""
         member = frappe.get_doc("SHG Member", self.member)
@@ -101,6 +106,7 @@ class SHGMeetingFine(Document):
 
 
 # --- Hook functions ---
+# These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
 def validate_fine(doc, method):
     """Hook function called from hooks.py"""
     doc.validate()

@@ -9,6 +9,10 @@ class SHGContribution(Document):
         self.validate_duplicate()
         self.set_contribution_details()
         
+        # Ensure amount is rounded to 2 decimal places
+        if self.amount:
+            self.amount = round(float(self.amount), 2)
+        
     def validate_amount(self):
         """Validate contribution amount"""
         if self.amount <= 0:
@@ -169,6 +173,7 @@ class SHGContribution(Document):
             return {"success": False, "error": str(e)}
 
 # --- Hook functions ---
+# These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
 def validate_contribution(doc, method):
     """Hook function called from hooks.py"""
     doc.validate()

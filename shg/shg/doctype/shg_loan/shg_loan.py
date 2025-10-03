@@ -14,6 +14,10 @@ class SHGLoan(Document):
         if self.loan_type:
             self.load_loan_type_settings()
         
+        # Ensure monthly installment is always rounded to 2 decimals
+        if self.monthly_installment:
+            self.monthly_installment = round(float(self.monthly_installment), 2)
+        
     def validate_amount(self):
         """Validate loan amount"""
         if self.loan_amount <= 0:
@@ -24,6 +28,7 @@ class SHGLoan(Document):
         if self.interest_rate < 0:
             frappe.throw(_("Interest rate cannot be negative"))
             
+    @frappe.whitelist()
     def check_member_eligibility(self):
         """Check if member is eligible for loan"""
         if not self.member:
@@ -83,6 +88,12 @@ class SHGLoan(Document):
                     self.monthly_installment = self.total_payable / self.loan_period_months
                 else:
                     self.monthly_installment = 0
+                
+                # Ensure monetary values are rounded to 2 decimal places
+                if self.total_payable:
+                    self.total_payable = round(float(self.total_payable), 2)
+                if self.monthly_installment:
+                    self.monthly_installment = round(float(self.monthly_installment), 2)
             else:
                 # Reducing balance calculation using standard formula
                 monthly_rate = (self.interest_rate / 100) / 12
@@ -99,6 +110,12 @@ class SHGLoan(Document):
                     
                 # For display purposes, calculate total payable
                 self.total_payable = self.monthly_installment * self.loan_period_months
+                
+            # Ensure monetary values are rounded to 2 decimal places
+            if self.monthly_installment:
+                self.monthly_installment = round(float(self.monthly_installment), 2)
+            if self.total_payable:
+                self.total_payable = round(float(self.total_payable), 2)
                 
     def on_submit(self):
         if self.status == "Approved":
@@ -560,6 +577,7 @@ class SHGLoan(Document):
         # send_sms(member.phone_number, message)
 
 # --- Hook functions ---
+# These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
 def validate_loan(doc, method):
     """Hook function called from hooks.py"""
     doc.validate()

@@ -9,6 +9,18 @@ class SHGLoanRepayment(Document):
         self.calculate_repayment_breakdown()
         self.validate_repayment_amount()
         self.validate_loan_status()
+        
+        # Ensure monetary values are rounded to 2 decimal places
+        if self.total_paid:
+            self.total_paid = round(float(self.total_paid), 2)
+        if self.principal_amount:
+            self.principal_amount = round(float(self.principal_amount), 2)
+        if self.interest_amount:
+            self.interest_amount = round(float(self.interest_amount), 2)
+        if self.penalty_amount:
+            self.penalty_amount = round(float(self.penalty_amount), 2)
+        if self.balance_after_payment:
+            self.balance_after_payment = round(float(self.balance_after_payment), 2)
 
     def validate_repayment_amount(self):
         if self.total_paid <= 0:
@@ -95,6 +107,16 @@ class SHGLoanRepayment(Document):
 
         # Calculate new balance
         self.balance_after_payment = max(0, loan.balance_amount - self.principal_amount)
+        
+        # Ensure monetary values are rounded to 2 decimal places
+        if self.penalty_amount:
+            self.penalty_amount = round(float(self.penalty_amount), 2)
+        if self.interest_amount:
+            self.interest_amount = round(float(self.interest_amount), 2)
+        if self.principal_amount:
+            self.principal_amount = round(float(self.principal_amount), 2)
+        if self.balance_after_payment:
+            self.balance_after_payment = round(float(self.balance_after_payment), 2)
 
     def on_submit(self):
         """Update loan balance, GL, and schedule"""
@@ -167,6 +189,7 @@ class SHGLoanRepayment(Document):
         except Exception as e:
             frappe.log_error(f"Failed to update member totals: {str(e)}")
 
+    @frappe.whitelist()
     def send_payment_confirmation(self):
         """Send SMS confirmation"""
         try:
@@ -321,6 +344,7 @@ class SHGLoanRepayment(Document):
 
 
 # --- Hook functions ---
+# These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
 def validate_repayment(doc, method):
     """Hook function called from hooks.py"""
     doc.validate()

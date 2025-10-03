@@ -10,6 +10,7 @@ class SHGNotificationLog(Document):
             if member_name:
                 self.member_name = member_name
 
+    @frappe.whitelist()
     def mark_as_sent(self):
         """Mark notification as sent"""
         self.status = "Sent"
@@ -17,6 +18,7 @@ class SHGNotificationLog(Document):
         # Avoid re-triggering full validation, just update DB fields
         self.db_update()
 
+    @frappe.whitelist()
     def mark_as_failed(self, error_message):
         """Mark notification as failed"""
         self.status = "Failed"

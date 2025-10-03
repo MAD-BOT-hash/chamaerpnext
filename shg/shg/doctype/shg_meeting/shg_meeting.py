@@ -75,6 +75,7 @@ class SHGMeeting(Document):
                 except Exception as e:
                     frappe.log_error(f"Failed to create fine entry for {row.member}: {str(e)}")
                     
+    @frappe.whitelist()
     def get_member_list(self):
         """Get all active members for attendance"""
         active_members = frappe.get_all(
@@ -92,6 +93,7 @@ class SHGMeeting(Document):
             for m in active_members
         ]
 
+# This is a hook function called from hooks.py and should NOT have @frappe.whitelist()
 def process_attendance_fines(doc, method):
     """Hook function called from hooks.py"""
     doc.process_attendance_fines()
