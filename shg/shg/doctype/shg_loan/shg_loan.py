@@ -151,12 +151,14 @@ class SHGLoan(Document):
                 
     def disburse_loan(self):
         """
-        Create Payment Entry automatically when a loan is disbursed.
+        Auto-create Journal Entry when loan is disbursed.
+        Debit: Loans Receivable
+        Credit: Cash/Bank
         """
-        # Prevent duplicate disbursements
-        existing_payment = frappe.db.exists("Payment Entry", {"reference_name": self.name, "reference_doctype": "SHG Loan"})
-        if existing_payment:
-            frappe.msgprint(f"Loan {self.name} already disbursed via Payment Entry {existing_payment}")
+        # Check for existing Journal Entry
+        existing_je = frappe.db.exists("Journal Entry Account", {"reference_name": self.name, "reference_type": "SHG Loan"})
+        if existing_je:
+            frappe.msgprint(f"Loan {self.name} already disbursed via Journal Entry {existing_je}")
             return
 
         # Get company
@@ -168,54 +170,68 @@ class SHGLoan(Document):
             else:
                 frappe.throw(_("Please create a company first"))
 
-        # Get accounts
-        disbursement_account = self.get_bank_account(company)
-        member_account = self.get_member_account()
+        # Get Accounts
+        debit_account = self.get_loan_account(company)  # Loans Receivable account
+        credit_account = self.get_bank_account(company)  # Cash/Bank account
 
-        # Create Payment Entry
-        pe = frappe.new_doc("Payment Entry")
-        pe.payment_type = "Pay"
-        pe.posting_date = nowdate()
-        pe.party_type = "Customer"
-        pe.party = self.get_member_customer()
-        pe.company = company
-        pe.reference_doctype = "SHG Loan"
-        pe.reference_name = self.name
-        pe.paid_from = disbursement_account
-        pe.paid_to = member_account
-        pe.paid_amount = self.loan_amount
-        pe.received_amount = self.loan_amount
-        pe.reference_no = self.name
-        pe.reference_date = nowdate()
+        # Create Journal Entry
+        je = frappe.new_doc("Journal Entry")
+        je.voucher_type = "Bank Entry"
+        je.posting_date = nowdate()
+        je.user_remark = f"Loan disbursement for {self.member_name or self.member} ({self.name})"
+        je.reference_date = nowdate()
+        je.reference_no = self.name
+        je.company = company
 
-        # Save and submit
-        pe.insert(ignore_permissions=True)
-        pe.submit()
+        # Row 1: Debit Loans Receivable
+        je.append("accounts", {
+            "account": debit_account,
+            "party_type": "Customer",
+            "party": self.get_member_customer(),
+            "debit_in_account_currency": self.loan_amount,
+            "reference_type": "SHG Loan",
+            "reference_name": self.name
+        })
 
-        frappe.msgprint(f"Loan {self.name} successfully disbursed. Payment Entry: {pe.name}")
+        # Row 2: Credit Cash/Bank
+        je.append("accounts", {
+            "account": credit_account,
+            "credit_in_account_currency": self.loan_amount,
+            "reference_type": "SHG Loan",
+            "reference_name": self.name
+        })
 
-        # Update loan status and link
+        # Insert and Submit
+        je.insert(ignore_permissions=True)
+        je.submit()
+
+        frappe.msgprint(f"✅ Loan {self.name} disbursed successfully.\nJournal Entry: {je.name}")
+
+        # Update status and link the journal entry
         self.db_set("status", "Disbursed")
-        self.db_set("disbursement_payment_entry", pe.name)
+        self.db_set("disbursement_journal_entry", je.name)
         self.db_set("disbursed_amount", self.loan_amount)
         self.db_set("balance_amount", self.loan_amount)
-
-        # Commit to DB
         frappe.db.commit()
-                
+
     def on_update_after_submit(self):
+        """
+        Allow limited status transitions after submit.
+        """
         allowed_fields = ["status"]
 
-        if any(f not in allowed_fields for f in self.get_dirty_fields()):
-            frappe.throw("Only status can be updated after submission.")
+        # Restrict edits
+        for field in self.get_dirty_fields():
+            if field not in allowed_fields:
+                frappe.throw(f"Not allowed to change {field} after submission.")
 
         old_status = self.get_db_value("status")
 
-        if old_status != self.status:
-            if old_status == "Approved" and self.status == "Disbursed":
-                self.disburse_loan()
-            else:
-                frappe.msgprint(f"Status updated from {old_status} → {self.status}")
+        # Auto-disburse when moving from Approved to Disbursed
+        if old_status == "Approved" and self.status == "Disbursed":
+            self.disburse_loan()
+        else:
+            frappe.msgprint(f"Status updated from {old_status} → {self.status}")
                 
     def on_submit(self):
         if self.status == "Approved":
