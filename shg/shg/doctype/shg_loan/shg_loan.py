@@ -149,35 +149,73 @@ class SHGLoan(Document):
             if getattr(self, field, None):
                 setattr(self, field, round(flt(getattr(self, field)), 2))
                 
+    def disburse_loan(self):
+        """
+        Create Payment Entry automatically when a loan is disbursed.
+        """
+        # Prevent duplicate disbursements
+        existing_payment = frappe.db.exists("Payment Entry", {"reference_name": self.name, "reference_doctype": "SHG Loan"})
+        if existing_payment:
+            frappe.msgprint(f"Loan {self.name} already disbursed via Payment Entry {existing_payment}")
+            return
+
+        # Get company
+        company = frappe.defaults.get_user_default("Company")
+        if not company:
+            companies = frappe.get_all("Company", limit=1)
+            if companies:
+                company = companies[0].name
+            else:
+                frappe.throw(_("Please create a company first"))
+
+        # Get accounts
+        disbursement_account = self.get_bank_account(company)
+        member_account = self.get_member_account()
+
+        # Create Payment Entry
+        pe = frappe.new_doc("Payment Entry")
+        pe.payment_type = "Pay"
+        pe.posting_date = nowdate()
+        pe.party_type = "Customer"
+        pe.party = self.get_member_customer()
+        pe.company = company
+        pe.reference_doctype = "SHG Loan"
+        pe.reference_name = self.name
+        pe.paid_from = disbursement_account
+        pe.paid_to = member_account
+        pe.paid_amount = self.loan_amount
+        pe.received_amount = self.loan_amount
+        pe.reference_no = self.name
+        pe.reference_date = nowdate()
+
+        # Save and submit
+        pe.insert(ignore_permissions=True)
+        pe.submit()
+
+        frappe.msgprint(f"Loan {self.name} successfully disbursed. Payment Entry: {pe.name}")
+
+        # Update loan status and link
+        self.db_set("status", "Disbursed")
+        self.db_set("disbursement_payment_entry", pe.name)
+        self.db_set("disbursed_amount", self.loan_amount)
+        self.db_set("balance_amount", self.loan_amount)
+
+        # Commit to DB
+        frappe.db.commit()
+                
     def on_update_after_submit(self):
-        """
-        Allow only specific controlled updates after submission.
-        """
         allowed_fields = ["status"]
 
-        # Track changed fields
-        changed_fields = [f for f in self.get_dirty_fields() if f not in allowed_fields]
+        if any(f not in allowed_fields for f in self.get_dirty_fields()):
+            frappe.throw("Only status can be updated after submission.")
 
-        if changed_fields:
-            # Prevent other fields from being changed
-            frappe.throw(
-                f"You can only update {', '.join(allowed_fields)} after submission. "
-                f"These fields cannot change: {', '.join(changed_fields)}"
-            )
-
-        # Allow status change with controlled workflow
         old_status = self.get_db_value("status")
+
         if old_status != self.status:
-            allowed_transitions = {
-                "Applied": ["Approved"],
-                "Approved": ["Disbursed"],
-                "Disbursed": ["Closed"],
-            }
-
-            if old_status not in allowed_transitions or self.status not in allowed_transitions[old_status]:
-                frappe.throw(f"Invalid status transition from {old_status} → {self.status}")
-
-            frappe.msgprint(f"Status updated from {old_status} → {self.status}")
+            if old_status == "Approved" and self.status == "Disbursed":
+                self.disburse_loan()
+            else:
+                frappe.msgprint(f"Status updated from {old_status} → {self.status}")
                 
     def on_submit(self):
         if self.status == "Approved":
