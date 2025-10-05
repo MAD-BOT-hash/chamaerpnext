@@ -20,7 +20,7 @@ class SHGLoan(Document):
 
         # Auto populate repayment schedule if missing
         if not self.repayment_schedule or len(self.repayment_schedule) == 0:
-            self.make_repayment_schedule()
+            self.generate_repayment_schedule()
             
         self.validate_amount()
         self.validate_interest_rate()
@@ -129,19 +129,67 @@ class SHGLoan(Document):
             if self.total_payable:
                 self.total_payable = round(float(self.total_payable), 2)
                 
-    def make_repayment_schedule(self):
-        """Generate repayment schedule before submit."""
-        self.repayment_schedule = []
-        if not self.loan_amount or not self.loan_period_months:
-            return
+    def generate_repayment_schedule(self):
+        """
+        Generate repayment schedule with principal, interest, and total per installment.
+        Supports flat and reducing balance interest types.
+        """
+        if not self.loan_amount or not self.loan_period_months or not self.interest_rate:
+            frappe.throw("Please set Loan Amount, Repayment Periods, and Interest Rate before generating schedule.")
 
-        installment_amount = round(self.loan_amount / self.loan_period_months, 2)
-        start_date = self.repayment_start_date or self.disbursement_date or nowdate()
-        for i in range(self.loan_period_months):
+        # Clean existing child table
+        self.set("repayment_schedule", [])
+
+        principal = flt(self.loan_amount)
+        rate = flt(self.interest_rate) / 100
+        months = int(self.loan_period_months)
+        balance = principal
+
+        # Interest mode — default to Flat if not specified
+        interest_type = self.interest_type or "Flat Rate"
+
+        # Calculate flat interest per month
+        if interest_type == "Flat Rate":
+            monthly_interest = (principal * rate) / 12
+            principal_component = principal / months
+        else:
+            # Reducing balance: interest recalculated each month
+            monthly_interest = None
+            principal_component = principal / months
+
+        # Start date for first installment
+        start_date = getdate(self.repayment_start_date or self.disbursement_date or frappe.utils.nowdate())
+
+        total_interest = 0
+        total_payment = 0
+
+        for i in range(months):
+            if interest_type == "Reducing Balance":
+                interest_component = (balance * rate) / 12
+            else:
+                interest_component = monthly_interest
+
+            principal_paid = principal_component
+            total_installment = principal_paid + interest_component
+            balance = max(balance - principal_paid, 0)
+
+            total_interest += interest_component
+            total_payment += total_installment
+
             self.append("repayment_schedule", {
                 "payment_date": add_months(start_date, i + 1),
-                "total_payment": installment_amount
+                "principal_amount": round(principal_paid, 2),
+                "interest_amount": round(interest_component, 2),
+                "total_payment": round(total_installment, 2),
+                "balance_amount": round(balance, 2)
             })
+
+        # Update totals on parent loan
+        self.total_interest_payable = round(total_interest, 2)
+        self.total_payable_amount = round(total_payment, 2)
+        self.monthly_installment = round(total_payment / months, 2)
+
+        frappe.msgprint(f"✅ Repayment schedule generated successfully for {months} months.")
                 
     def before_save(self):
         """Ensure all numeric fields are rounded."""
@@ -396,32 +444,6 @@ class SHGLoan(Document):
         member = frappe.get_doc("SHG Member", self.member)
         return member.customer
                 
-    def generate_repayment_schedule(self):
-        """Generate repayment schedule based on frequency"""
-        # Clear existing schedule
-        self.repayment_schedule = []
-        
-        # Generate schedule based on frequency
-        if self.repayment_frequency == "Daily":
-            self.generate_daily_schedule()
-        elif self.repayment_frequency == "Weekly":
-            self.generate_weekly_schedule()
-        elif self.repayment_frequency == "Bi-Weekly":
-            self.generate_biweekly_schedule()
-        elif self.repayment_frequency == "Monthly":
-            self.generate_monthly_schedule()
-        elif self.repayment_frequency == "Bi-Monthly":
-            self.generate_bimonthly_schedule()
-        elif self.repayment_frequency == "Quarterly":
-            self.generate_quarterly_schedule()
-        elif self.repayment_frequency == "Yearly":
-            self.generate_yearly_schedule()
-        else:
-            # Default to monthly
-            self.generate_monthly_schedule()
-            
-        self.save()
-        
     def generate_daily_schedule(self):
         """Generate daily repayment schedule"""
         outstanding_balance = self.loan_amount

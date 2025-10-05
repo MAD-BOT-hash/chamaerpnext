@@ -37,6 +37,8 @@
         "repayment_start_date",
         "monthly_installment",
         "total_payable",
+        "total_interest_payable",
+        "total_payable_amount",
         "column_break_17",
         "balance_amount",
         "last_repayment_date",
@@ -236,6 +238,20 @@
             "fieldname": "total_payable",
             "fieldtype": "Currency",
             "label": "Total Payable",
+            "precision": 2,
+            "read_only": 1
+        },
+        {
+            "fieldname": "total_interest_payable",
+            "fieldtype": "Currency",
+            "label": "Total Interest Payable",
+            "precision": 2,
+            "read_only": 1
+        },
+        {
+            "fieldname": "total_payable_amount",
+            "fieldtype": "Currency",
+            "label": "Total Payable Amount",
             "precision": 2,
             "read_only": 1
         },
