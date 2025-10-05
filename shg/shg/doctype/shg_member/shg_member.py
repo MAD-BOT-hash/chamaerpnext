@@ -212,3 +212,58 @@ class SHGMember(Document):
         self.validate_phone_number()
         # Update financial summary
         self.update_financial_summary()
+
+
+@frappe.whitelist()
+def update_financial_summary(member):
+    """
+    Update the member's financial summary safely
+    """
+    member_doc = frappe.get_doc("SHG Member", member)
+
+    # Update total contributions
+    total_contributions = frappe.db.sql("""
+        SELECT SUM(amount) 
+        FROM `tabSHG Contribution` 
+        WHERE member = %s AND docstatus = 1
+    """, member)[0][0] or 0
+    
+    # Update loan information
+    total_loans = frappe.db.sql("""
+        SELECT SUM(loan_amount) 
+        FROM `tabSHG Loan` 
+        WHERE member = %s AND status IN ('Disbursed', 'Closed')
+    """, member)[0][0] or 0
+    
+    # Update loan balance
+    loan_balance = frappe.db.sql("""
+        SELECT SUM(balance_amount) 
+        FROM `tabSHG Loan` 
+        WHERE member = %s AND status = 'Disbursed'
+    """, member)[0][0] or 0
+    
+    # Update last contribution date
+    last_contribution = frappe.db.sql("""
+        SELECT MAX(contribution_date) 
+        FROM `tabSHG Contribution` 
+        WHERE member = %s AND docstatus = 1
+    """, member)[0][0]
+    
+    # Update last loan date
+    last_loan = frappe.db.sql("""
+        SELECT MAX(disbursement_date) 
+        FROM `tabSHG Loan` 
+        WHERE member = %s AND status = 'Disbursed'
+    """, member)[0][0]
+    
+    # Update document using db_set to avoid recursion
+    member_doc.db_set({
+        "total_contributions": total_contributions,
+        "total_loans_taken": total_loans,
+        "current_loan_balance": loan_balance,
+        "last_contribution_date": last_contribution,
+        "last_loan_date": last_loan
+    }, update_modified=False)
+
+    frappe.db.commit()
+    return {"status": "success"}

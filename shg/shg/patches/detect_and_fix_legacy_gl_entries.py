@@ -63,7 +63,7 @@ def execute():
                     frappe.db.set_value("SHG Contribution", entry.reference_name, "posted_to_gl", 0)
                     updated_docs += 1
                     
-            elif entry.reference_type == "SHG Loan" and entry.reference_name:
+            elif entry.reference_type == "Loan" and entry.reference_name:
                 if frappe.db.exists("SHG Loan", entry.reference_name):
                     frappe.db.set_value("SHG Loan", entry.reference_name, "posted_to_gl", 0)
                     updated_docs += 1

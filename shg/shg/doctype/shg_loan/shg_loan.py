@@ -197,18 +197,18 @@ class SHGLoan(Document):
             if getattr(self, field, None):
                 setattr(self, field, round(flt(getattr(self, field)), 2))
                 
+    @frappe.whitelist()
     def disburse_loan(self):
-        """
-        Auto-create Journal Entry when loan is disbursed.
-        Debit: Loans Receivable
-        Credit: Cash/Bank
-        """
+        """Disburse the loan and create accounting entries."""
+        if self.status != "Approved":
+            frappe.throw("Loan must be Approved before disbursement.")
+        
         # Check for existing Journal Entry
-        existing_je = frappe.db.exists("Journal Entry Account", {"reference_name": self.name, "reference_type": "SHG Loan"})
+        existing_je = frappe.db.exists("Journal Entry Account", {"reference_name": self.name, "reference_type": "Loan"})
         if existing_je:
             frappe.msgprint(f"Loan {self.name} already disbursed via Journal Entry {existing_je}")
             return
-
+        
         # Get company
         company = frappe.defaults.get_user_default("Company")
         if not company:
@@ -222,45 +222,39 @@ class SHGLoan(Document):
         debit_account = self.get_loan_account(company)  # Loans Receivable account
         credit_account = self.get_bank_account(company)  # Cash/Bank account
 
-        # Create Journal Entry
         je = frappe.new_doc("Journal Entry")
+        je.posting_date = frappe.utils.nowdate()
         je.voucher_type = "Bank Entry"
-        je.posting_date = nowdate()
         je.user_remark = f"Loan disbursement for {self.member_name or self.member} ({self.name})"
-        je.reference_date = nowdate()
-        je.reference_no = self.name
-        je.company = company
-
-        # Row 1: Debit Loans Receivable
+        
+        # Debit member loan receivable
         je.append("accounts", {
             "account": debit_account,
             "party_type": "Customer",
             "party": self.get_member_customer(),
             "debit_in_account_currency": self.loan_amount,
-            "reference_type": "SHG Loan",
+            "reference_type": "Loan",
             "reference_name": self.name
         })
-
-        # Row 2: Credit Cash/Bank
+        
+        # Credit the bank or cash account
         je.append("accounts", {
             "account": credit_account,
             "credit_in_account_currency": self.loan_amount,
-            "reference_type": "SHG Loan",
+            "reference_type": "Loan",
             "reference_name": self.name
         })
-
-        # Insert and Submit
+        
         je.insert(ignore_permissions=True)
         je.submit()
 
-        frappe.msgprint(f"✅ Loan {self.name} disbursed successfully.\nJournal Entry: {je.name}")
-
-        # Update status and link the journal entry
+        # Update loan status
         self.db_set("status", "Disbursed")
         self.db_set("disbursement_journal_entry", je.name)
         self.db_set("disbursed_amount", self.loan_amount)
         self.db_set("balance_amount", self.loan_amount)
-        frappe.db.commit()
+
+        frappe.msgprint(f"Loan {self.name} successfully disbursed. Journal Entry: {je.name}")
 
     def before_cancel(self):
         """
@@ -279,7 +273,7 @@ class SHGLoan(Document):
             frappe.delete_doc("SHG Loan Repayment Schedule", s.name, force=True, ignore_permissions=True)
 
         # Cancel and delete related Journal Entries
-        jes = frappe.get_all("Journal Entry Account", {"reference_name": self.name, "reference_type": "SHG Loan"}, pluck="parent")
+        jes = frappe.get_all("Journal Entry Account", {"reference_name": self.name, "reference_type": "Loan"}, pluck="parent")
         for je in jes:
             try:
                 doc = frappe.get_doc("Journal Entry", je)
@@ -290,7 +284,7 @@ class SHGLoan(Document):
                 frappe.log_error(f"Error deleting Journal Entry {je}: {e}")
 
         # Cancel and delete related Payment Entries
-        pes = frappe.get_all("Payment Entry Reference", {"reference_name": self.name, "reference_doctype": "SHG Loan"}, pluck="parent")
+        pes = frappe.get_all("Payment Entry Reference", {"reference_name": self.name, "reference_doctype": "Loan"}, pluck="parent")
         for pe in pes:
             try:
                 doc = frappe.get_doc("Payment Entry", pe)
