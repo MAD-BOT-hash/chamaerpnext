@@ -214,6 +214,71 @@ class SHGLoan(Document):
         self.db_set("balance_amount", self.loan_amount)
         frappe.db.commit()
 
+    def before_cancel(self):
+        """
+        Allow cancelling a loan only if not yet disbursed.
+        Clean up related repayment schedules, journal entries, and payments.
+        Reset member eligibility and overdue status.
+        """
+        if self.status == "Disbursed":
+            frappe.throw("You cannot cancel a loan that has already been disbursed.")
+
+        frappe.msgprint(f"🧹 Cancelling Loan {self.name} — removing related records and resetting member eligibility...")
+
+        # Delete related repayment schedules
+        schedules = frappe.get_all("SHG Loan Repayment Schedule", {"parent": self.name})
+        for s in schedules:
+            frappe.delete_doc("SHG Loan Repayment Schedule", s.name, force=True, ignore_permissions=True)
+
+        # Cancel and delete related Journal Entries
+        jes = frappe.get_all("Journal Entry Account", {"reference_name": self.name, "reference_type": "SHG Loan"}, pluck="parent")
+        for je in jes:
+            try:
+                doc = frappe.get_doc("Journal Entry", je)
+                if doc.docstatus == 1:
+                    doc.cancel()
+                frappe.delete_doc("Journal Entry", je, force=True, ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(f"Error deleting Journal Entry {je}: {e}")
+
+        # Cancel and delete related Payment Entries
+        pes = frappe.get_all("Payment Entry Reference", {"reference_name": self.name, "reference_doctype": "SHG Loan"}, pluck="parent")
+        for pe in pes:
+            try:
+                doc = frappe.get_doc("Payment Entry", pe)
+                if doc.docstatus == 1:
+                    doc.cancel()
+                frappe.delete_doc("Payment Entry", pe, force=True, ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(f"Error deleting Payment Entry {pe}: {e}")
+
+        # Reset loan eligibility and overdue flag for member
+        if self.member:
+            frappe.msgprint(f"🔄 Resetting eligibility for member {self.member}")
+            
+            # Reset flags directly in SHG Member
+            frappe.db.set_value("SHG Member", self.member, {
+                "loan_eligibility_flag": 1,
+                "has_overdue_loans": 0
+            })
+
+            # Optional: Update Financial Summary if it exists
+            summary = frappe.get_all("SHG Financial Summary", {"member": self.member}, pluck="name")
+            if summary:
+                summary_doc = frappe.get_doc("SHG Financial Summary", summary[0])
+                summary_doc.total_outstanding_loans = 0
+                summary_doc.total_overdue_amount = 0
+                summary_doc.save(ignore_permissions=True)
+
+            frappe.msgprint(f"✅ Member {self.member} eligibility restored and financial summary cleared.")
+
+    def before_trash(self):
+        """
+        Allow deletion only if loan is not disbursed.
+        """
+        if self.status == "Disbursed":
+            frappe.throw("You cannot delete a disbursed loan record.")
+                
     def on_update_after_submit(self):
         """
         Allow limited status transitions after submit.
