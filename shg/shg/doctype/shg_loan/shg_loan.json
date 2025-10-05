@@ -29,6 +29,7 @@
         "disbursed_amount",
         "accounting_section",
         "voucher_type",
+        "erpnext_loan_ref",
         "disbursement_journal_entry",
         "disbursement_payment_entry",
         "posted_to_gl",
@@ -188,6 +189,13 @@
             "options": "Loan Entry\nBank Entry\nCash Entry\nCredit Card Entry\nWrite Off Entry\nOpening Entry\nContra Entry\nExcise Entry\nAdjustment Entry\nPurchase Entry\nSales Entry\nStock Entry\nDebit Note\nCredit Note\nInter Company Journal Entry\nInter Company Payment\nBill of Entry",
             "default": "Journal Entry",
             "reqd": 1
+        },
+        {
+            "fieldname": "erpnext_loan_ref",
+            "fieldtype": "Link",
+            "label": "ERPNext Loan Reference",
+            "options": "Loan",
+            "read_only": 1
         },
         {
             "fieldname": "disbursement_journal_entry",

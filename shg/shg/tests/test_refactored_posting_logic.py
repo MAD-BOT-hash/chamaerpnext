@@ -225,7 +225,7 @@ class TestRefactoredPostingLogic(unittest.TestCase):
         
         # Verify reference allocation
         self.assertEqual(len(pe.references), 1)
-        self.assertEqual(pe.references[0].reference_doctype, "SHG Loan")
+        self.assertEqual(pe.references[0].reference_doctype, "Loan")
         self.assertEqual(pe.references[0].reference_name, loan.name)
         self.assertAlmostEqual(pe.references[0].allocated_amount, 1000, places=2)  # Principal amount
         
