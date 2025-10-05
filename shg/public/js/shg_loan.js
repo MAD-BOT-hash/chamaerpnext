@@ -12,7 +12,7 @@ frappe.ui.form.on('SHG Loan', {
             if (frm.doc.status === 'Approved') {
                 frm.add_custom_button(__('Disburse Loan'), function() {
                     frappe.call({
-                        method: 'disburse_loan',
+                        method: 'shg.shg.doctype.shg_loan.shg_loan.disburse_loan',
                         doc: frm.doc,
                         callback: function(r) {
                             if (!r.exc) {

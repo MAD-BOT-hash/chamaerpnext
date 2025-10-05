@@ -291,7 +291,7 @@ class SHGLoan(Document):
         update_document_with_payment_entry(self, payment_entry, "disbursement_payment_entry")
         
     def get_member_account(self):
-        """Get member's account, create if not exists"""
+        """Get member's ledger account, create if not exists"""
         member = frappe.get_doc("SHG Member", self.member)
         company = frappe.defaults.get_user_default("Company")
         if not company:
@@ -325,20 +325,6 @@ class SHGLoan(Document):
                 return bank_accounts[0].name
             else:
                 frappe.throw(_("Please configure default bank account in SHG Settings"))
-            
-    def get_member_account(self):
-        """Get member's ledger account, create if not exists"""
-        member = frappe.get_doc("SHG Member", self.member)
-        company = frappe.defaults.get_user_default("Company")
-        if not company:
-            companies = frappe.get_all("Company", limit=1)
-            if companies:
-                company = companies[0].name
-            else:
-                frappe.throw(_("Please create a company first"))
-                
-        from shg.shg.utils.account_utils import get_or_create_member_account
-        return get_or_create_member_account(member, company)
         
     def get_member_customer(self):
         """Get member's customer link"""
