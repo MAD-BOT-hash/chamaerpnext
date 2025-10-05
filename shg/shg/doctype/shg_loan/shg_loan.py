@@ -6,6 +6,22 @@ import math
 
 class SHGLoan(Document):
     def validate(self):
+        """Round numeric fields before save."""
+        if self.loan_amount:
+            self.loan_amount = round(flt(self.loan_amount), 2)
+        if self.monthly_installment:
+            self.monthly_installment = round(flt(self.monthly_installment), 2)
+        if self.total_payable:
+            self.total_payable = round(flt(self.total_payable), 2)
+        if self.balance_amount:
+            self.balance_amount = round(flt(self.balance_amount), 2)
+        if self.disbursed_amount:
+            self.disbursed_amount = round(flt(self.disbursed_amount), 2)
+
+        # Auto populate repayment schedule if missing
+        if not self.repayment_schedule or len(self.repayment_schedule) == 0:
+            self.make_repayment_schedule()
+            
         self.validate_amount()
         self.validate_interest_rate()
         self.check_member_eligibility()
@@ -13,10 +29,6 @@ class SHGLoan(Document):
         # Load loan type settings if selected
         if self.loan_type:
             self.load_loan_type_settings()
-        
-        # Ensure monthly installment is always rounded to 2 decimals
-        if self.monthly_installment:
-            self.monthly_installment = round(float(self.monthly_installment), 2)
         
     def validate_amount(self):
         """Validate loan amount"""
@@ -116,6 +128,56 @@ class SHGLoan(Document):
                 self.monthly_installment = round(float(self.monthly_installment), 2)
             if self.total_payable:
                 self.total_payable = round(float(self.total_payable), 2)
+                
+    def make_repayment_schedule(self):
+        """Generate repayment schedule before submit."""
+        self.repayment_schedule = []
+        if not self.loan_amount or not self.loan_period_months:
+            return
+
+        installment_amount = round(self.loan_amount / self.loan_period_months, 2)
+        start_date = self.repayment_start_date or self.disbursement_date or nowdate()
+        for i in range(self.loan_period_months):
+            self.append("repayment_schedule", {
+                "payment_date": add_months(start_date, i + 1),
+                "total_payment": installment_amount
+            })
+                
+    def before_save(self):
+        """Ensure all numeric fields are rounded."""
+        for field in ["loan_amount", "monthly_installment", "total_payable", "balance_amount", "disbursed_amount"]:
+            if getattr(self, field, None):
+                setattr(self, field, round(flt(getattr(self, field)), 2))
+                
+    def on_update_after_submit(self):
+        """
+        Allow only specific controlled updates after submission.
+        """
+        allowed_fields = ["status"]
+
+        # Track changed fields
+        changed_fields = [f for f in self.get_dirty_fields() if f not in allowed_fields]
+
+        if changed_fields:
+            # Prevent other fields from being changed
+            frappe.throw(
+                f"You can only update {', '.join(allowed_fields)} after submission. "
+                f"These fields cannot change: {', '.join(changed_fields)}"
+            )
+
+        # Allow status change with controlled workflow
+        old_status = self.get_db_value("status")
+        if old_status != self.status:
+            allowed_transitions = {
+                "Applied": ["Approved"],
+                "Approved": ["Disbursed"],
+                "Disbursed": ["Closed"],
+            }
+
+            if old_status not in allowed_transitions or self.status not in allowed_transitions[old_status]:
+                frappe.throw(f"Invalid status transition from {old_status} → {self.status}")
+
+            frappe.msgprint(f"Status updated from {old_status} → {self.status}")
                 
     def on_submit(self):
         if self.status == "Approved":

@@ -144,7 +144,10 @@
             "fieldtype": "Select",
             "label": "Status",
             "options": "Applied\nApproved\nDisbursed\nClosed\nDefaulted",
-            "default": "Applied"
+            "default": "Applied",
+            "allow_on_submit": 1,
+            "reqd": 1,
+            "in_list_view": 1
         },
         {
             "fieldname": "approved_by",
