@@ -210,7 +210,21 @@ class SHGLoan(Document):
             return
         
         # Ensure ERPNext Loan exists
-        self.ensure_erpnext_loan_exists()
+        if not frappe.db.exists("Loan", self.name):
+            loan_doc = frappe.new_doc("Loan")
+            loan_doc.applicant_type = "Customer"  # Changed from "Member" to "Customer" to match existing implementation
+            loan_doc.applicant = self.get_member_customer()
+            loan_doc.loan_type = self.loan_type or "Personal Loan"  # Default if not set
+            loan_doc.loan_amount = self.loan_amount
+            loan_doc.rate_of_interest = self.interest_rate  # Changed from "interest_rate" to "rate_of_interest"
+            loan_doc.posting_date = self.disbursement_date or frappe.utils.nowdate()
+            loan_doc.repayment_method = "Repay Over Number of Periods"
+            loan_doc.repayment_periods = self.loan_period_months
+            loan_doc.loan_name = self.name  # Using loan_name instead of name to match ERPNext Loan structure
+            loan_doc.company = frappe.defaults.get_global_default("company") or frappe.defaults.get_user_default("Company")
+            loan_doc.insert(ignore_permissions=True)
+            loan_doc.submit()
+            frappe.msgprint(f"✅ Created temporary ERPNext Loan record: {self.name}")
         
         frappe.msgprint(f"💸 Disbursing SHG Loan {self.name} via Payment Entry...")
         
@@ -224,147 +238,81 @@ class SHGLoan(Document):
                 frappe.throw(_("Please create a company first"))
 
         # Get Accounts
-        debit_account = self.get_loan_account(company)  # Loans Receivable account
-        credit_account = self.get_bank_account(company)  # Cash/Bank account
-
-        # Create Payment Entry for loan disbursement
-        pe = self.create_loan_disbursement_payment_entry()
+        from shg.shg.utils.account_utils import get_or_create_member_account, get_or_create_shg_loans_account
         
-        # Update loan status and fields
-        self.db_set("status", "Disbursed")
-        self.db_set("disbursement_payment_entry", pe.name)
-        self.db_set("disbursed_amount", self.loan_amount)
-        self.db_set("balance_amount", self.loan_amount)
+        # Get member account
+        member_account = get_or_create_member_account(
+            frappe.get_doc("SHG Member", self.member), company)
         
-        frappe.msgprint(f"✅ Linked SHG Loan {self.name} to ERPNext Loan and disbursed successfully via Payment Entry {pe.name}")
-
-    def ensure_erpnext_loan_exists(self):
-        """Ensure a standard ERPNext Loan record exists for this SHG Loan."""
-        try:
-            # Check if ERPNext Loan already exists
-            if frappe.db.exists("Loan", self.name):
-                # Link to existing loan
-                self.db_set("erpnext_loan_ref", self.name)
-                frappe.msgprint(f"✅ Linked to existing ERPNext Loan {self.name}")
-                return
-            
-            # Create a new ERPNext Loan record
-            loan = frappe.new_doc("Loan")
-            loan.loan_name = self.name
-            loan.applicant_type = "Customer"
-            loan.applicant = self.get_member_customer()
-            loan.loan_type = self.loan_type or "Personal Loan"  # Default type if not specified
-            loan.company = frappe.defaults.get_global_default("company") or frappe.defaults.get_user_default("Company")
-            loan.posting_date = self.disbursement_date or frappe.utils.nowdate()
-            loan.loan_amount = self.loan_amount
-            loan.rate_of_interest = self.interest_rate
-            loan.repayment_method = "Repay Over Number of Periods"
-            loan.repayment_periods = self.loan_period_months
-            loan.status = "Disbursed"
-            
-            # Save and submit the loan
-            loan.insert(ignore_permissions=True)
-            loan.submit()
-            
-            # Update the reference
-            self.db_set("erpnext_loan_ref", loan.name)
-            frappe.msgprint(f"✅ Created and submitted ERPNext Loan record {loan.name}")
-            
-        except Exception as e:
-            frappe.log_error(f"Error ensuring ERPNext Loan exists for {self.name}: {str(e)}")
-            frappe.throw(f"Failed to create/link ERPNext Loan: {str(e)}")
-
-    def create_loan_disbursement_payment_entry(self):
-        """
-        Create a Payment Entry for loan disbursement with proper reference to ERPNext Loan.
+        # Get bank/cash account from settings
+        settings = frappe.get_single("SHG Settings")
+        bank_account = settings.default_bank_account or settings.default_cash_account
         
-        Returns:
-            Payment Entry document
-        """
-        try:
-            frappe.msgprint(f"💸 Creating Payment Entry for SHG Loan {self.name}...")
-            
-            # Get company
-            company = frappe.defaults.get_global_default("company") or frappe.defaults.get_user_default("Company")
-            if not company:
-                companies = frappe.get_all("Company", limit=1)
-                if companies:
-                    company = companies[0].name
-                else:
-                    frappe.throw(_("Please create a company first"))
-
-            # Get accounts
-            from shg.shg.utils.account_utils import get_or_create_member_account, get_or_create_shg_loans_account
-            
-            # Get member account
-            member_account = get_or_create_member_account(
-                frappe.get_doc("SHG Member", self.member), company)
-            
-            # Get bank/cash account from settings
-            settings = frappe.get_single("SHG Settings")
-            bank_account = settings.default_bank_account or settings.default_cash_account
-            
-            if not bank_account:
-                # Try to find a default bank account
-                bank_accounts = frappe.get_all("Account", filters={
-                    "company": company,
-                    "account_type": ["in", ["Bank", "Cash"]],
-                    "is_group": 0
-                }, limit=1)
-                if bank_accounts:
-                    bank_account = bank_accounts[0].name
-                else:
-                    frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
-            
-            # Create Payment Entry
-            pe = frappe.new_doc("Payment Entry")
-            pe.payment_type = "Pay"
-            pe.posting_date = self.disbursement_date or frappe.utils.nowdate()
-            pe.company = company
-            pe.party_type = "Customer"
-            pe.party = self.get_member_customer()
-            pe.paid_from = bank_account
-            pe.paid_to = member_account
-            pe.paid_amount = flt(self.loan_amount)
-            pe.received_amount = flt(self.loan_amount)
-            
-            # Set reference fields
-            pe.reference_no = self.name
-            pe.reference_date = self.disbursement_date or self.posting_date or frappe.utils.nowdate()
-            
-            # Set remarks
-            pe.remarks = f"Loan Disbursement for {self.member} (Loan {self.name})"
-            
-            # Set mode of payment based on account type
-            account_type = frappe.db.get_value("Account", bank_account, "account_type")
-            if account_type == "Bank":
-                pe.mode_of_payment = "Bank"
-            elif account_type == "Cash":
-                pe.mode_of_payment = "Cash"
-            
-            # Set voucher type
-            pe.voucher_type = "Bank Entry"
-            
-            # Add reference to ERPNext Loan (now guaranteed to exist)
-            pe.append("references", {
-                "reference_doctype": "Loan",
-                "reference_name": self.erpnext_loan_ref or self.name,
-                "allocated_amount": flt(self.loan_amount)
-            })
-            
-            # Set custom field for traceability
-            pe.set("custom_shg_loan", self.name)
-            
-            # Insert and submit
-            pe.insert(ignore_permissions=True)
-            pe.submit()
-            
-            frappe.msgprint(f"✅ Payment Entry {pe.name} created successfully")
-            
-            return pe
-        except Exception as e:
-            frappe.log_error(f"Error creating Payment Entry for loan {self.name}: {str(e)}")
-            frappe.throw(f"Failed to create Payment Entry for loan disbursement: {str(e)}")
+        if not bank_account:
+            # Try to find a default bank account
+            bank_accounts = frappe.get_all("Account", filters={
+                "company": company,
+                "account_type": ["in", ["Bank", "Cash"]],
+                "is_group": 0
+            }, limit=1)
+            if bank_accounts:
+                bank_account = bank_accounts[0].name
+            else:
+                frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
+        
+        # Create Payment Entry
+        pe = frappe.new_doc("Payment Entry")
+        pe.payment_type = "Pay"
+        pe.posting_date = self.disbursement_date or frappe.utils.nowdate()
+        pe.company = company
+        pe.party_type = "Customer"
+        pe.party = self.get_member_customer()
+        pe.paid_from = bank_account
+        pe.paid_to = member_account
+        pe.paid_amount = flt(self.loan_amount)
+        pe.received_amount = flt(self.loan_amount)
+        
+        # Set reference fields
+        pe.reference_no = self.name
+        pe.reference_date = self.disbursement_date or self.posting_date or frappe.utils.nowdate()
+        
+        # Set remarks
+        pe.remarks = f"Loan Disbursement for {self.member} (Loan {self.name})"
+        
+        # Set mode of payment based on account type
+        account_type = frappe.db.get_value("Account", bank_account, "account_type")
+        if account_type == "Bank":
+            pe.mode_of_payment = "Bank"
+        elif account_type == "Cash":
+            pe.mode_of_payment = "Cash"
+        
+        # Set voucher type
+        pe.voucher_type = "Bank Entry"
+        
+        # Add reference to ERPNext Loan (now guaranteed to exist)
+        pe.append("references", {
+            "reference_doctype": "Loan",  # Standard ERPNext Loan
+            "reference_name": self.name,  # Now exists!
+            "allocated_amount": flt(self.loan_amount)
+        })
+        
+        # Set custom field for traceability
+        pe.set("custom_shg_loan", self.name)
+        
+        # Insert and submit
+        pe.insert(ignore_permissions=True)
+        pe.submit()
+        
+        frappe.msgprint(f"✅ Disbursement linked successfully to ERPNext Loan {self.name}")
+        
+        # After Payment Entry submission, update SHG Loan
+        self.disbursement_payment_entry = pe.name
+        self.disbursed_amount = self.loan_amount
+        self.status = "Disbursed"
+        self.save(ignore_permissions=True)
+        frappe.db.commit()
+        
+        frappe.msgprint(f"✅ SHG Loan {self.name} successfully disbursed via Payment Entry {pe.name}")
 
     def before_cancel(self):
         """
@@ -417,17 +365,16 @@ class SHGLoan(Document):
             frappe.log_error(f"Error fetching Payment Entries for {self.name}: {e}")
 
         # If a linked ERPNext Loan exists, cancel and delete it as well
-        if self.erpnext_loan_ref:
+        if frappe.db.exists("Loan", self.name):
             try:
-                if frappe.db.exists("Loan", self.erpnext_loan_ref):
-                    erpnext_loan = frappe.get_doc("Loan", self.erpnext_loan_ref)
-                    if erpnext_loan.docstatus == 1:
-                        erpnext_loan.cancel()
-                    frappe.delete_doc("Loan", self.erpnext_loan_ref, force=True, ignore_permissions=True)
-                    frappe.msgprint(f"✅ Cancelled and deleted linked ERPNext Loan {self.erpnext_loan_ref}")
+                erpnext_loan = frappe.get_doc("Loan", self.name)
+                if erpnext_loan.docstatus == 1:
+                    erpnext_loan.cancel()
+                frappe.delete_doc("Loan", self.name, force=True, ignore_permissions=True)
+                frappe.msgprint(f"✅ Cancelled and deleted linked ERPNext Loan {self.name}")
             except Exception as e:
-                frappe.log_error(f"Error cancelling/deleting ERPNext Loan {self.erpnext_loan_ref}: {e}")
-                frappe.msgprint(f"⚠️ Warning: Could not cancel/delete linked ERPNext Loan {self.erpnext_loan_ref}")
+                frappe.log_error(f"Error cancelling/deleting ERPNext Loan {self.name}: {e}")
+                frappe.msgprint(f"⚠️ Warning: Could not cancel/delete linked ERPNext Loan {self.name}")
 
         # Reset loan eligibility and overdue flag for member
         if self.member:
