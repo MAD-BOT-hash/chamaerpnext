@@ -1,2 +1,3 @@
 shg.shg.patches.detect_and_fix_legacy_gl_entries
 shg.patches.patch_remove_old_gl_logic
+shg.shg.patches.patch_add_missing_member_fields

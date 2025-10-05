@@ -12,6 +12,12 @@ class SHGMember(Document):
         # Set default party_type to Customer for GL entries
         if not self.party_type:
             self.party_type = "Customer"
+        # Set default values for loan eligibility fields
+        if self.is_new():
+            if not self.loan_eligibility_flag:
+                self.loan_eligibility_flag = 1
+            if not self.has_overdue_loans:
+                self.has_overdue_loans = 0
         
     def after_insert(self):
         """Create customer link after member is inserted to avoid recursion"""

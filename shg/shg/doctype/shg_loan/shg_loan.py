@@ -354,6 +354,8 @@ class SHGLoan(Document):
         elif self.status == "Disbursed":
             self.generate_repayment_schedule()
             self.update_member_summary()
+            # Disburse the loan
+            self.disburse_loan()
             # ensure idempotent: if already posted -> skip
             if not self.get("posted_to_gl"):
                 self.post_to_ledger()
@@ -362,27 +364,31 @@ class SHGLoan(Document):
     def on_update(self):
         """Update balance when status changes"""
         if self.status == "Disbursed" and not self.disbursed_amount:
-            self.disbursed_amount = self.loan_amount
-            self.balance_amount = self.loan_amount
-            # Set next due date based on repayment frequency
-            if self.repayment_frequency == "Daily":
-                self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 1)
-            elif self.repayment_frequency == "Weekly":
-                self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 7)
-            elif self.repayment_frequency == "Bi-Weekly":
-                self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 14)
-            elif self.repayment_frequency == "Monthly":
-                self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 1)
-            elif self.repayment_frequency == "Bi-Monthly":
-                self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 2)
-            elif self.repayment_frequency == "Quarterly":
-                self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 3)
-            elif self.repayment_frequency == "Yearly":
-                self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 12)
+            # Disburse the loan if not already done
+            if not self.disbursement_journal_entry:
+                self.disburse_loan()
             else:
-                # Default to monthly
-                self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 1)
-            self.save()
+                self.disbursed_amount = self.loan_amount
+                self.balance_amount = self.loan_amount
+                # Set next due date based on repayment frequency
+                if self.repayment_frequency == "Daily":
+                    self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 1)
+                elif self.repayment_frequency == "Weekly":
+                    self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 7)
+                elif self.repayment_frequency == "Bi-Weekly":
+                    self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 14)
+                elif self.repayment_frequency == "Monthly":
+                    self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 1)
+                elif self.repayment_frequency == "Bi-Monthly":
+                    self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 2)
+                elif self.repayment_frequency == "Quarterly":
+                    self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 3)
+                elif self.repayment_frequency == "Yearly":
+                    self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 12)
+                else:
+                    # Default to monthly
+                    self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 1)
+                self.save()
             
     def validate_gl_entries(self):
         """Validate that GL entries were created properly"""
@@ -782,3 +788,11 @@ def generate_repayment_schedule(doc, method):
     """Hook function called from hooks.py"""
     if doc.status == "Disbursed":
         doc.generate_repayment_schedule()
+
+
+@frappe.whitelist()
+def disburse_loan(docname):
+    """Public API to disburse a loan manually from button or client script"""
+    loan = frappe.get_doc("SHG Loan", docname)
+    loan.disburse_loan()
+    return "Loan disbursed successfully."

@@ -13,7 +13,7 @@ frappe.ui.form.on('SHG Loan', {
                 frm.add_custom_button(__('Disburse Loan'), function() {
                     frappe.call({
                         method: 'shg.shg.doctype.shg_loan.shg_loan.disburse_loan',
-                        doc: frm.doc,
+                        args: { docname: frm.doc.name },
                         callback: function(r) {
                             if (!r.exc) {
                                 frm.reload_doc();
