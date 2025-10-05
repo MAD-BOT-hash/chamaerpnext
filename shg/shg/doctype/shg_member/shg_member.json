@@ -35,7 +35,9 @@
         "column_break_19",
         "last_contribution_date",
         "last_loan_date",
-        "credit_score"
+        "credit_score",
+        "member_statement_section",
+        "member_statement"
     ],
     "fields": [
         {
@@ -219,6 +221,17 @@
             "fieldtype": "Int",
             "label": "Credit Score",
             "allow_on_submit": 1            
+        },
+        {
+            "fieldname": "member_statement_section",
+            "fieldtype": "Section Break",
+            "label": "Member Statement"
+        },
+        {
+            "fieldname": "member_statement",
+            "fieldtype": "Table",
+            "label": "Member Statement",
+            "options": "SHG Member Statement"
         }
     ],
     "is_submittable": 1,

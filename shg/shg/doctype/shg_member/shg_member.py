@@ -193,151 +193,16 @@ class SHGMember(Document):
             "credit_score": self.credit_score
         }, update_modified=False)
         
+    @frappe.whitelist()
+    def update_member_statement(self):
+        """Update member statement"""
+        from shg.shg.utils.member_statement_utils import populate_member_statement
+        populate_member_statement(self.name)
+        
     def on_update_after_submit(self):
         """Handle updates to member information after submission"""
         # Re-validate the member data when fields are updated after submission
         self.validate_id_number()
         self.validate_phone_number()
-        self.validate_next_of_kin()
         # Update financial summary
         self.update_financial_summary()
-        
-    def validate_next_of_kin(self):
-        """Validate next of kin information"""
-        if self.next_of_kin_id_number:
-            # Remove any spaces or dashes
-            id_number = ''.join(filter(str.isdigit, self.next_of_kin_id_number))
-            
-            # Check if it's exactly 8 digits
-            if len(id_number) != 8:
-                frappe.throw(_("Next of Kin ID Number must be exactly 8 digits"))
-            
-            # Update the field with cleaned ID number
-            self.next_of_kin_id_number = id_number
-            
-        if self.next_of_kin_phone:
-            # Remove any spaces or dashes
-            phone = ''.join(filter(str.isdigit, self.next_of_kin_phone))
-            
-            # Format for Kenya
-            if phone.startswith('0'):
-                self.next_of_kin_phone = '+254' + phone[1:]
-            elif phone.startswith('254'):
-                self.next_of_kin_phone = '+' + phone
-            else:
-                frappe.throw(_("Please enter a valid Kenyan phone number for Next of Kin"))
-        
-    def handle_member_amendment(self):
-        """Handle member amendment to ensure data consistency"""
-        # Re-validate the member data
-        self.validate()
-        # Update financial summary if needed
-        self.update_financial_summary()
-
-# --- Hook functions ---
-# These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
-def validate_member(doc, method):
-    """Hook function called from hooks.py"""
-    doc.validate()
-
-def create_member_ledger(doc, method):
-    """Hook function called from hooks.py"""
-    doc.create_member_ledger_account()
-
-def handle_member_amendment(doc, method):
-    """Handle member amendment to ensure data consistency"""
-    # Re-validate the member data
-    doc.validate()
-    # Update financial summary if needed
-    doc.update_financial_summary()
-
-def handle_member_update_after_submit(doc, method):
-    """Handle member updates after submission"""
-    # Directly call the method to avoid recursion through hooks
-    doc.validate_id_number()
-    doc.validate_phone_number()
-    doc.validate_next_of_kin()
-    doc.update_financial_summary()
-
-# --- Client callable functions ---
-@frappe.whitelist()
-def update_financial_summary(member_id=None):
-    """
-    Update financial summary for a member.
-    This function can be called from the client side.
-    
-    Args:
-        member_id (str): The ID of the member to update
-        
-    Returns:
-        dict: Status and summary information
-    """
-    if not member_id:
-        frappe.throw("Member ID required")
-
-    try:
-        # Get the member document
-        member = frappe.get_doc("SHG Member", member_id)
-        
-        # Update the financial summary
-        member.update_financial_summary()
-        
-        # Return success message with updated information
-        return {
-            "status": "success",
-            "message": "Financial summary updated successfully",
-            "summary": {
-                "total_contributions": member.total_contributions,
-                "total_loans_taken": member.total_loans_taken,
-                "current_loan_balance": member.current_loan_balance,
-                "credit_score": member.credit_score
-            }
-        }
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "SHG Member - Update Financial Summary Failed")
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-
-@frappe.whitelist()
-def get_member_summary(member_id=None):
-    """
-    Get member summary information.
-    This function can be called from the client side.
-    
-    Args:
-        member_id (str): The ID of the member to get summary for
-        
-    Returns:
-        dict: Member summary information
-    """
-    if not member_id:
-        frappe.throw("Member ID required")
-
-    try:
-        # Get the member document
-        member = frappe.get_doc("SHG Member", member_id)
-        
-        # Return member summary information
-        return {
-            "status": "success",
-            "member_info": {
-                "name": member.name,
-                "member_name": member.member_name,
-                "account_number": member.account_number,
-                "total_contributions": member.total_contributions,
-                "total_loans_taken": member.total_loans_taken,
-                "current_loan_balance": member.current_loan_balance,
-                "credit_score": member.credit_score,
-                "last_contribution_date": member.last_contribution_date,
-                "last_loan_date": member.last_loan_date,
-                "membership_status": member.membership_status
-            }
-        }
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "SHG Member - Get Member Summary Failed")
-        return {
-            "status": "error",
-            "message": str(e)
-        }

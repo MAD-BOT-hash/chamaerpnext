@@ -35,6 +35,17 @@ frappe.ui.form.on('SHG Member', {
                     }
                 });
             });
+            
+            frm.add_custom_button(__('Update Statement'), function() {
+                frappe.call({
+                    method: 'update_member_statement',
+                    doc: frm.doc,
+                    callback: function(r) {
+                        frm.refresh();
+                        frappe.msgprint('Member statement updated');
+                    }
+                });
+            });
         }
         
         // Add dashboard indicators
