@@ -265,54 +265,86 @@ class SHGLoan(Document):
         if self.status == "Disbursed":
             frappe.throw("You cannot cancel a loan that has already been disbursed.")
 
-        frappe.msgprint(f"🧹 Cancelling Loan {self.name} — removing related records and resetting member eligibility...")
+        frappe.msgprint(f"🧹 Cancelling Loan {self.name} — cleaning up related records...")
 
         # Delete related repayment schedules
-        schedules = frappe.get_all("SHG Loan Repayment Schedule", {"parent": self.name})
-        for s in schedules:
-            frappe.delete_doc("SHG Loan Repayment Schedule", s.name, force=True, ignore_permissions=True)
+        try:
+            schedules = frappe.get_all("SHG Loan Repayment Schedule", {"parent": self.name})
+            for s in schedules:
+                try:
+                    frappe.delete_doc("SHG Loan Repayment Schedule", s.name, force=True, ignore_permissions=True)
+                except Exception as e:
+                    frappe.log_error(f"Error deleting SHG Loan Repayment Schedule {s.name}: {e}")
+        except Exception as e:
+            frappe.log_error(f"Error fetching SHG Loan Repayment Schedules for {self.name}: {e}")
 
         # Cancel and delete related Journal Entries
-        jes = frappe.get_all("Journal Entry Account", {"reference_name": self.name, "reference_type": "Loan"}, pluck="parent")
-        for je in jes:
-            try:
-                doc = frappe.get_doc("Journal Entry", je)
-                if doc.docstatus == 1:
-                    doc.cancel()
-                frappe.delete_doc("Journal Entry", je, force=True, ignore_permissions=True)
-            except Exception as e:
-                frappe.log_error(f"Error deleting Journal Entry {je}: {e}")
+        try:
+            jes = frappe.get_all("Journal Entry Account", {"reference_name": self.name, "reference_type": "Loan"}, pluck="parent")
+            for je in jes:
+                try:
+                    doc = frappe.get_doc("Journal Entry", je)
+                    if doc.docstatus == 1:
+                        doc.cancel()
+                    frappe.delete_doc("Journal Entry", je, force=True, ignore_permissions=True)
+                except Exception as e:
+                    frappe.log_error(f"Error deleting Journal Entry {je}: {e}")
+        except Exception as e:
+            frappe.log_error(f"Error fetching Journal Entries for {self.name}: {e}")
 
         # Cancel and delete related Payment Entries
-        pes = frappe.get_all("Payment Entry Reference", {"reference_name": self.name, "reference_doctype": "Loan"}, pluck="parent")
-        for pe in pes:
-            try:
-                doc = frappe.get_doc("Payment Entry", pe)
-                if doc.docstatus == 1:
-                    doc.cancel()
-                frappe.delete_doc("Payment Entry", pe, force=True, ignore_permissions=True)
-            except Exception as e:
-                frappe.log_error(f"Error deleting Payment Entry {pe}: {e}")
+        try:
+            pes = frappe.get_all("Payment Entry Reference", {"reference_name": self.name, "reference_doctype": "SHG Loan"}, pluck="parent")
+            for pe in pes:
+                try:
+                    doc = frappe.get_doc("Payment Entry", pe)
+                    if doc.docstatus == 1:
+                        doc.cancel()
+                    frappe.delete_doc("Payment Entry", pe, force=True, ignore_permissions=True)
+                except Exception as e:
+                    frappe.log_error(f"Error deleting Payment Entry {pe}: {e}")
+        except Exception as e:
+            frappe.log_error(f"Error fetching Payment Entries for {self.name}: {e}")
 
         # Reset loan eligibility and overdue flag for member
         if self.member:
-            frappe.msgprint(f"🔄 Resetting eligibility for member {self.member}")
-            
-            # Reset flags directly in SHG Member
-            frappe.db.set_value("SHG Member", self.member, {
-                "loan_eligibility_flag": 1,
-                "has_overdue_loans": 0
-            })
+            # Safe lookup to ensure member exists
+            if frappe.db.exists("SHG Member", self.member):
+                frappe.msgprint(f"🔄 Resetting eligibility for member {self.member}")
+                
+                # Reset flags directly in SHG Member
+                try:
+                    frappe.db.set_value("SHG Member", self.member, {
+                        "loan_eligibility_flag": 1,
+                        "has_overdue_loans": 0
+                    })
+                except Exception as e:
+                    frappe.log_error(f"Error updating eligibility flags for member {self.member}: {e}")
 
-            # Optional: Update Financial Summary if it exists
-            summary = frappe.get_all("SHG Financial Summary", {"member": self.member}, pluck="name")
-            if summary:
-                summary_doc = frappe.get_doc("SHG Financial Summary", summary[0])
-                summary_doc.total_outstanding_loans = 0
-                summary_doc.total_overdue_amount = 0
-                summary_doc.save(ignore_permissions=True)
+                # Optional: Update Financial Summary if it exists
+                try:
+                    if frappe.db.exists("DocType", "SHG Financial Summary"):
+                        try:
+                            summary = frappe.get_all("SHG Financial Summary", {"member": self.member}, pluck="name")
+                            if summary:
+                                summary_doc = frappe.get_doc("SHG Financial Summary", summary[0])
+                                summary_doc.total_outstanding_loans = 0
+                                summary_doc.total_overdue_amount = 0
+                                summary_doc.save(ignore_permissions=True)
+                            else:
+                                frappe.msgprint("⚠️ Financial Summary record not found, skipped.")
+                        except Exception as e:
+                            frappe.log_error(f"Error updating Financial Summary for member {self.member}: {e}", "SHG Loan Cancel Cleanup Warning")
+                            frappe.msgprint("⚠️ Financial Summary record not found, skipped.")
+                    else:
+                        frappe.msgprint("⚠️ Financial Summary record not found, skipped.")
+                except Exception as e:
+                    frappe.log_error(f"Error checking Financial Summary doctype: {e}", "SHG Loan Cancel Cleanup Warning")
+                    frappe.msgprint("⚠️ Financial Summary record not found, skipped.")
 
-            frappe.msgprint(f"✅ Member {self.member} eligibility restored and financial summary cleared.")
+                frappe.msgprint(f"✅ Member eligibility reset for {self.member}")
+            else:
+                frappe.msgprint(f"⚠️ Member {self.member} not found, skipping eligibility reset.")
 
     def before_trash(self):
         """
@@ -790,3 +822,82 @@ def disburse_loan(docname):
     loan = frappe.get_doc("SHG Loan", docname)
     loan.disburse_loan()
     return "Loan disbursed successfully."
+
+
+@frappe.whitelist()
+def cancel_loan_and_cleanup(docname):
+    """
+    Cancel a submitted SHG Loan, delete related Payment Entries and Repayment Schedules,
+    and reset member eligibility safely (only if SHG Financial Summary exists).
+    """
+    try:
+        loan = frappe.get_doc("SHG Loan", docname)
+
+        if loan.docstatus != 1:
+            frappe.throw(f"Loan {docname} must be submitted before cancellation.")
+
+        frappe.msgprint(f"🧹 Cancelling Loan {docname} — removing related records and resetting member eligibility...")
+
+        # Cancel related Payment Entries
+        pes = frappe.get_all("Payment Entry Reference", {"reference_name": docname, "reference_doctype": "SHG Loan"}, pluck="parent")
+        for pe in pes:
+            try:
+                doc = frappe.get_doc("Payment Entry", pe)
+                if doc.docstatus == 1:
+                    doc.cancel()
+                frappe.delete_doc("Payment Entry", pe, force=True, ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(f"Error cancelling/deleting Payment Entry {pe}: {e}")
+
+        # Cancel related Journal Entries
+        jes = frappe.get_all("Journal Entry Account", {"reference_name": docname, "reference_type": "Loan"}, pluck="parent")
+        for je in jes:
+            try:
+                doc = frappe.get_doc("Journal Entry", je)
+                if doc.docstatus == 1:
+                    doc.cancel()
+                frappe.delete_doc("Journal Entry", je, force=True, ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(f"Error cancelling/deleting Journal Entry {je}: {e}")
+
+        # Remove repayment schedules
+        frappe.db.delete("SHG Loan Repayment Schedule", {"parent": docname})
+
+        # Reset eligibility safely in SHG Member
+        if loan.member:
+            frappe.msgprint(f"🔄 Resetting eligibility for member {loan.member}")
+            
+            # Reset flags directly in SHG Member
+            frappe.db.set_value("SHG Member", loan.member, {
+                "loan_eligibility_flag": 1,
+                "has_overdue_loans": 0
+            })
+
+            # Optional: Update Financial Summary if it exists
+            try:
+                if frappe.db.exists("DocType", "SHG Financial Summary"):
+                    summary = frappe.get_all("SHG Financial Summary", {"member": loan.member}, pluck="name")
+                    if summary:
+                        summary_doc = frappe.get_doc("SHG Financial Summary", summary[0])
+                        summary_doc.total_outstanding_loans = 0
+                        summary_doc.total_overdue_amount = 0
+                        summary_doc.save(ignore_permissions=True)
+                        frappe.msgprint(f"✅ Member {loan.member} eligibility restored and financial summary cleared.")
+                    else:
+                        frappe.msgprint(f"⚠️ No Financial Summary found for {loan.member} — skipping reset.")
+                else:
+                    frappe.msgprint(f"⚠️ SHG Financial Summary doctype not found — skipping reset.")
+            except Exception as e:
+                frappe.log_error(f"Error updating Financial Summary for member {loan.member}: {e}", "SHG Loan Cancel Cleanup Warning")
+                frappe.msgprint(f"⚠️ Error updating Financial Summary for {loan.member} — skipping reset.")
+
+        # Finally cancel the loan
+        loan.cancel()
+
+        frappe.db.commit()
+        frappe.msgprint(f"✅ Loan {docname} and related records successfully cancelled and cleaned up.")
+        return "Loan cancelled and cleaned up successfully."
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "SHG Loan Cancel Error")
+        frappe.throw(f"Error while cancelling loan {docname}: {str(e)}")

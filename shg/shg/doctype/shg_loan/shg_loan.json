@@ -37,8 +37,6 @@
         "repayment_start_date",
         "monthly_installment",
         "total_payable",
-        "total_interest_payable",
-        "total_payable_amount",
         "column_break_17",
         "balance_amount",
         "last_repayment_date",
