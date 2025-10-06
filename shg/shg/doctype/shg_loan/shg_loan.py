@@ -382,14 +382,6 @@ class SHGLoan(Document):
         """
         Allow limited status transitions after submit.
         """
-        allowed_fields = ["status"]
-
-        # Restrict edits - check if any field other than status has changed
-        if hasattr(self, '_original_values'):
-            for field, value in self._original_values.items():
-                if field not in allowed_fields and getattr(self, field, None) != value:
-                    frappe.throw(f"Not allowed to change {field} after submission.")
-
         old_status = self.get_db_value("status")
 
         # Auto-disburse when moving from Approved to Disbursed
