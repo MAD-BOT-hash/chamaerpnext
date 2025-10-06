@@ -384,10 +384,11 @@ class SHGLoan(Document):
         """
         allowed_fields = ["status"]
 
-        # Restrict edits
-        for field in self.get_dirty_fields():
-            if field not in allowed_fields:
-                frappe.throw(f"Not allowed to change {field} after submission.")
+        # Restrict edits - check if any field other than status has changed
+        if hasattr(self, '_original_values'):
+            for field, value in self._original_values.items():
+                if field not in allowed_fields and getattr(self, field, None) != value:
+                    frappe.throw(f"Not allowed to change {field} after submission.")
 
         old_status = self.get_db_value("status")
 
