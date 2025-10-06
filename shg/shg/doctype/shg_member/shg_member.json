@@ -112,8 +112,7 @@
         {
             "fieldname": "member_id",
             "fieldtype": "Data",
-            "label": "Member ID",
-            "read_only": 1
+            "label": "Member ID"
         },
         {
             "fieldname": "account_number",
