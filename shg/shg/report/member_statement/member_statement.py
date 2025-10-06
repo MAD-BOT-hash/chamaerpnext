@@ -48,14 +48,29 @@ def get_columns():
     ]
 
 def get_data(filters):
-    if not filters.get("member"):
-        return []
+    if not filters or not filters.get("member"):
+        return [{
+            "particulars": "Please select a member to view their statement",
+            "debit": "",
+            "credit": "",
+            "balance": "",
+            "reference": ""
+        }]
     
     data = []
     balance = 0
     
     # Get member details
-    member = frappe.get_doc("SHG Member", filters.member)
+    try:
+        member = frappe.get_doc("SHG Member", filters.member)
+    except frappe.DoesNotExistError:
+        return [{
+            "particulars": f"Member {filters.member} not found",
+            "debit": "",
+            "credit": "",
+            "balance": "",
+            "reference": ""
+        }]
     
     # Add member summary at the top
     data.append({
@@ -67,7 +82,7 @@ def get_data(filters):
     })
     
     data.append({
-        "particulars": f"Account Number: {member.account_number}",
+        "particulars": f"Account Number: {member.account_number or 'N/A'}",
         "debit": "",
         "credit": "",
         "balance": "",
@@ -102,7 +117,7 @@ def get_data(filters):
     contributions = frappe.db.sql("""
         SELECT 
             contribution_date as date,
-            CONCAT('Contribution - ', contribution_type) as particulars,
+            CONCAT('Contribution - ', COALESCE(contribution_type, contribution_type_link)) as particulars,
             0 as debit,
             amount as credit,
             name as reference
@@ -115,7 +130,7 @@ def get_data(filters):
     loans = frappe.db.sql("""
         SELECT 
             disbursement_date as date,
-            CONCAT('Loan Disbursement - ', loan_type) as particulars,
+            CONCAT('Loan Disbursement - ', COALESCE(loan_type, 'Loan')) as particulars,
             loan_amount as debit,
             0 as credit,
             name as reference
@@ -141,7 +156,7 @@ def get_data(filters):
     fines = frappe.db.sql("""
         SELECT 
             fine_date as date,
-            CONCAT('Meeting Fine - ', fine_reason) as particulars,
+            CONCAT('Meeting Fine - ', COALESCE(fine_reason, 'Fine')) as particulars,
             fine_amount as debit,
             0 as credit,
             name as reference
@@ -165,6 +180,16 @@ def get_data(filters):
             
         transaction.balance = balance
         data.append(transaction)
+    
+    # If no transactions, add a message
+    if len(all_transactions) == 0:
+        data.append({
+            "particulars": "No transactions found for this member",
+            "debit": "",
+            "credit": "",
+            "balance": "",
+            "reference": ""
+        })
     
     # Add loan details section
     data.append({
@@ -198,70 +223,79 @@ def get_data(filters):
         ORDER BY disbursement_date
     """, filters.member, as_dict=1)
     
-    for loan in outstanding_loans:
+    if not outstanding_loans:
         data.append({
-            "particulars": f"Loan: {loan.loan_type}",
-            "debit": "",
-            "credit": "",
-            "balance": "",
-            "reference": loan.name
-        })
-        
-        data.append({
-            "particulars": f"  Amount: KES {flt(loan.loan_amount):,.2f}",
+            "particulars": "No outstanding loans",
             "debit": "",
             "credit": "",
             "balance": "",
             "reference": ""
         })
-        
-        data.append({
-            "particulars": f"  Outstanding: KES {flt(loan.balance_amount):,.2f}",
-            "debit": "",
-            "credit": "",
-            "balance": "",
-            "reference": ""
-        })
-        
-        # Get repayment schedule for this loan
-        schedule = frappe.db.sql("""
-            SELECT 
-                due_date,
-                principal_amount,
-                interest_amount,
-                total_amount,
-                status
-            FROM `tabSHG Loan Repayment Schedule`
-            WHERE loan = %s
-            ORDER BY due_date
-        """, loan.name, as_dict=1)
-        
-        data.append({
-            "particulars": "  Repayment Schedule:",
-            "debit": "",
-            "credit": "",
-            "balance": "",
-            "reference": ""
-        })
-        
-        for entry in schedule:
-            status_indicator = "✓" if entry.status == "Paid" else "○"
+    else:
+        for loan in outstanding_loans:
             data.append({
-                "date": entry.due_date,
-                "particulars": f"    {status_indicator} Due: {entry.due_date} - Principal: KES {flt(entry.principal_amount):,.2f}, Interest: KES {flt(entry.interest_amount):,.2f}",
+                "particulars": f"Loan: {loan.loan_type or 'N/A'}",
+                "debit": "",
+                "credit": "",
+                "balance": "",
+                "reference": loan.name
+            })
+            
+            data.append({
+                "particulars": f"  Amount: KES {flt(loan.loan_amount):,.2f}",
                 "debit": "",
                 "credit": "",
                 "balance": "",
                 "reference": ""
             })
-        
-        data.append({
-            "particulars": "",
-            "debit": "",
-            "credit": "",
-            "balance": "",
-            "reference": ""
-        })
+            
+            data.append({
+                "particulars": f"  Outstanding: KES {flt(loan.balance_amount):,.2f}",
+                "debit": "",
+                "credit": "",
+                "balance": "",
+                "reference": ""
+            })
+            
+            # Get repayment schedule for this loan
+            schedule = frappe.db.sql("""
+                SELECT 
+                    due_date,
+                    principal_amount,
+                    interest_amount,
+                    total_amount,
+                    status
+                FROM `tabSHG Loan Repayment Schedule`
+                WHERE loan = %s
+                ORDER BY due_date
+            """, loan.name, as_dict=1)
+            
+            data.append({
+                "particulars": "  Repayment Schedule:",
+                "debit": "",
+                "credit": "",
+                "balance": "",
+                "reference": ""
+            })
+            
+            for entry in schedule:
+                status_indicator = "✓" if entry.status == "Paid" else "○"
+                data.append({
+                    "date": entry.due_date,
+                    "particulars": f"    {status_indicator} Due: {entry.due_date} - Principal: KES {flt(entry.principal_amount):,.2f}, Interest: KES {flt(entry.interest_amount):,.2f}",
+                    "debit": "",
+                    "credit": "",
+                    "balance": "",
+                    "reference": ""
+                })
+            
+            data.append({
+                "particulars": "",
+                "debit": "",
+                "credit": "",
+                "balance": "",
+                "reference": ""
+            })
     
     return data
 
@@ -298,7 +332,6 @@ def get_members(doctype, txt, searchfield, start, page_len, filters):
         WHERE docstatus = 1
         AND (name LIKE %(txt)s OR member_name LIKE %(txt)s)
         ORDER BY member_name
-        LIMIT %(start)s, %(page_len)s
     """, {
         'txt': "%%%s%%" % txt,
         'start': start,
