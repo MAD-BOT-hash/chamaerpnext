@@ -10,6 +10,7 @@
         "loan_details_section",
         "loan",
         "member",
+        "posting_date",
         "member_name",
         "column_break_4",
         "repayment_date",
@@ -56,6 +57,14 @@
             "label": "Member",
             "options": "SHG Member",
             "read_only": 1
+        },
+        {
+            "fieldname": "posting_date",
+            "fieldtype": "Date",
+            "label": "Posting Date",
+            "reqd": 1,
+            "default": "Today",
+            "description": "Date when the transaction was posted"
         },
         {
             "fieldname": "member_name",

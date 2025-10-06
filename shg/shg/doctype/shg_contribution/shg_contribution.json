@@ -9,6 +9,7 @@
         "naming_series",
         "member_section",
         "member",
+        "posting_date",
         "member_name",
         "contribution_date",
         "column_break_4",
@@ -47,6 +48,14 @@
             "label": "Member",
             "options": "SHG Member",
             "reqd": 1
+        },
+        {
+            "fieldname": "posting_date",
+            "fieldtype": "Date",
+            "label": "Posting Date",
+            "reqd": 1,
+            "default": "Today",
+            "description": "Date when the transaction was posted"
         },
         {
             "fieldname": "member_name",
