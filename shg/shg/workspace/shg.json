@@ -9,7 +9,193 @@
    "label": "Financial Summary"
   }
  ],
- "content": "[{\"id\":\"member_management_section\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">👥 Member Management</span>\",\"col\":12}},{\"id\":\"member_shortcuts\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Member Shortcuts\",\"col\":12}},{\"id\":\"member_stats\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Active Members\",\"col\":6}},{\"id\":\"member_management_cards\",\"type\":\"card\",\"data\":{\"card_name\":\"Member Management\",\"col\":12}},{\"id\":\"financial_management_section\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">💰 Financial Management</span>\",\"col\":12}},{\"id\":\"financial_shortcuts\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Financial Shortcuts\",\"col\":12}},{\"id\":\"financial_stats\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Outstanding Loans\",\"col\":6}},{\"id\":\"contributions_stats\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Monthly Contributions\",\"col\":6}},{\"id\":\"financial_management_cards\",\"type\":\"card\",\"data\":{\"card_name\":\"Financial Management\",\"col\":12}},{\"id\":\"contribution_types_cards\",\"type\":\"card\",\"data\":{\"card_name\":\"Contribution Types\",\"col\":6}},{\"id\":\"loan_types_cards\",\"type\":\"card\",\"data\":{\"card_name\":\"Loan Types\",\"col\":6}},{\"id\":\"meeting_management_section\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">📅 Meeting Management</span>\",\"col\":12}},{\"id\":\"meeting_shortcuts\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Meeting Shortcuts\",\"col\":12}},{\"id\":\"meeting_stats\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Upcoming Meetings\",\"col\":6}},{\"id\":\"meeting_management_cards\",\"type\":\"card\",\"data\":{\"card_name\":\"Meeting Management\",\"col\":12}},{\"id\":\"reports_analytics_section\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">📊 Reports & Analytics</span>\",\"col\":12}},{\"id\":\"reports_cards\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports & Analytics\",\"col\":12}},{\"id\":\"settings_section\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">⚙️ Settings & Logs</span>\",\"col\":12}},{\"id\":\"settings_cards\",\"type\":\"card\",\"data\":{\"card_name\":\"Settings\",\"col\":12}}]",
+ "content": [
+  {
+   "id": "member_management_section",
+   "type": "header",
+   "data": {
+    "text": "<span class=\"h4\">👥 Member Management</span>",
+    "col": 12
+   }
+  },
+  {
+   "id": "member_shortcuts",
+   "type": "shortcut",
+   "data": {
+    "shortcuts": [
+      {
+        "label": "SHG Member",
+        "link_type": "DocType",
+        "link_to": "SHG Member"
+      },
+      {
+        "label": "SHG Member Statement",
+        "link_type": "DocType",
+        "link_to": "SHG Member Statement"
+      }
+    ],
+    "col": 12
+   }
+  },
+  {
+   "id": "member_stats",
+   "type": "number_card",
+   "data": {
+    "number_card_name": "Active Members",
+    "col": 6
+   }
+  },
+  {
+   "id": "member_management_cards",
+   "type": "card",
+   "data": {
+    "card_name": "Member Management",
+    "col": 12
+   }
+  },
+  {
+   "id": "financial_management_section",
+   "type": "header",
+   "data": {
+    "text": "<span class=\"h4\">💰 Financial Management</span>",
+    "col": 12
+   }
+  },
+  {
+   "id": "financial_shortcuts",
+   "type": "shortcut",
+   "data": {
+    "shortcuts": [
+      {
+        "label": "SHG Loan",
+        "link_type": "DocType",
+        "link_to": "SHG Loan"
+      },
+      {
+        "label": "SHG Contribution",
+        "link_type": "DocType",
+        "link_to": "SHG Contribution"
+      }
+    ],
+    "col": 12
+   }
+  },
+  {
+   "id": "financial_stats",
+   "type": "number_card",
+   "data": {
+    "number_card_name": "Outstanding Loans",
+    "col": 6
+   }
+  },
+  {
+   "id": "contributions_stats",
+   "type": "number_card",
+   "data": {
+    "number_card_name": "Monthly Contributions",
+    "col": 6
+   }
+  },
+  {
+   "id": "financial_management_cards",
+   "type": "card",
+   "data": {
+    "card_name": "Financial Management",
+    "col": 12
+   }
+  },
+  {
+   "id": "contribution_types_cards",
+   "type": "card",
+   "data": {
+    "card_name": "Contribution Types",
+    "col": 6
+   }
+  },
+  {
+   "id": "loan_types_cards",
+   "type": "card",
+   "data": {
+    "card_name": "Loan Types",
+    "col": 6
+   }
+  },
+  {
+   "id": "meeting_management_section",
+   "type": "header",
+   "data": {
+    "text": "<span class=\"h4\">📅 Meeting Management</span>",
+    "col": 12
+   }
+  },
+  {
+   "id": "meeting_shortcuts",
+   "type": "shortcut",
+   "data": {
+    "shortcuts": [
+      {
+        "label": "SHG Meeting",
+        "link_type": "DocType",
+        "link_to": "SHG Meeting"
+      },
+      {
+        "label": "SHG Notification Log",
+        "link_type": "DocType",
+        "link_to": "SHG Notification Log"
+      }
+    ],
+    "col": 12
+   }
+  },
+  {
+   "id": "meeting_stats",
+   "type": "number_card",
+   "data": {
+    "number_card_name": "Upcoming Meetings",
+    "col": 6
+   }
+  },
+  {
+   "id": "meeting_management_cards",
+   "type": "card",
+   "data": {
+    "card_name": "Meeting Management",
+    "col": 12
+   }
+  },
+  {
+   "id": "reports_analytics_section",
+   "type": "header",
+   "data": {
+    "text": "<span class=\"h4\">📊 Reports & Analytics</span>",
+    "col": 12
+   }
+  },
+  {
+   "id": "reports_cards",
+   "type": "card",
+   "data": {
+    "card_name": "Reports & Analytics",
+    "col": 12
+   }
+  },
+  {
+   "id": "settings_section",
+   "type": "header",
+   "data": {
+    "text": "<span class=\"h4\">⚙️ Settings & Logs</span>",
+    "col": 12
+   }
+  },
+  {
+   "id": "settings_cards",
+   "type": "card",
+   "data": {
+    "card_name": "Settings",
+    "col": 12
+   }
+  }
+ ],
  "creation": "2025-09-29 12:00:00",
  "docstatus": 0,
  "doctype": "Workspace",
