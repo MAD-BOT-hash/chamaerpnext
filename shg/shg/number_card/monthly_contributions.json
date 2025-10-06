@@ -5,7 +5,7 @@
  "doctype": "Number Card",
  "document_type": "SHG Contribution",
  "dynamic_filters_json": "[]",
- "filters_json": "[]",
+ "filters_json": "[[\"SHG Contribution\",\"contribution_date\",\"Timespan\",\"this month\"]]",
  "function": "Sum",
  "idx": 0,
  "is_public": 1,
