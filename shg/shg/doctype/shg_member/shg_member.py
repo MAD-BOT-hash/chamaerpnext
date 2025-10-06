@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import today, getdate
+from shg.shg.doctype.shg_member.shg_member import sync_member_changes
 
 class SHGMember(Document):
     def validate(self):
@@ -212,6 +213,20 @@ class SHGMember(Document):
         self.validate_phone_number()
         # Update financial summary
         self.update_financial_summary()
+        # Sync changes to related records
+        sync_member_changes(self)
+
+    def handle_member_amendment(self):
+        """Handle member amendment"""
+        # Re-validate the member data when the document is amended
+        self.validate_id_number()
+        self.validate_phone_number()
+        # Update financial summary
+        self.update_financial_summary()
+
+    def handle_member_update_after_submit(self):
+        """Handle member update after submit (backward compatibility)"""
+        self.on_update_after_submit()
 
 
 @frappe.whitelist()
@@ -267,3 +282,73 @@ def update_financial_summary(member):
 
     frappe.db.commit()
     return {"status": "success"}
+
+
+def sync_member_changes(doc, method=None):
+    """
+    Sync updated member info across related doctypes when key fields are edited after submit.
+    """
+    if frappe.flags.in_test or frappe.flags.in_patch:
+        return
+    
+    frappe.msgprint(f"🔄 Syncing updates for member {doc.name} across related records...")
+
+    # Fields to sync across related doctypes (field_name: display_name)
+    fields_to_sync = {
+        "member_name": "Member Name",
+        "phone_number": "Phone Number",
+        "joining_date": "Joining Date",
+        "member_id": "Member ID"
+    }
+
+    # List of doctypes where member details are referenced
+    # Format: (doctype, field_name, fields_to_update)
+    related_doctypes = [
+        ("SHG Loan", "member", ["member_name", "phone_number", "member_id"]),
+        ("SHG Contribution", "member", ["member_name", "phone_number", "member_id"]),
+        ("SHG Loan Repayment", "member", ["member_name", "phone_number", "member_id"]),
+        ("SHG Meeting Attendance", "member", ["member_name", "phone_number"]),
+        ("SHG Member Statement", "member", ["member_name", "phone_number", "member_id"])
+    ]
+
+    updated_count = 0
+    
+    for doctype, field_name, update_fields in related_doctypes:
+        try:
+            # Get all related records
+            records = frappe.get_all(doctype, filters={field_name: doc.name}, fields=["name"])
+            
+            for record in records:
+                try:
+                    rdoc = frappe.get_doc(doctype, record.name)
+                    
+                    # Update only specified fields that exist in the target doctype
+                    updated = False
+                    for field_key in update_fields:
+                        if hasattr(rdoc, field_key) and field_key in fields_to_sync:
+                            field_value = getattr(doc, field_key, None)
+                            if field_value is not None:
+                                setattr(rdoc, field_key, field_value)
+                                updated = True
+                    
+                    # Save only if changes were made
+                    if updated:
+                        rdoc.save(ignore_permissions=True)
+                        updated_count += 1
+                        
+                except Exception as e:
+                    frappe.log_error(
+                        f"Error updating {doctype} {record.name}: {str(e)}",
+                        "Sync Member Changes Error"
+                    )
+                    continue
+                    
+        except Exception as e:
+            frappe.log_error(
+                f"Error fetching {doctype} records: {str(e)}",
+                "Sync Member Changes Error"
+            )
+            continue
+    
+    frappe.msgprint(f"✅ Member {doc.member_name} details synced successfully across {updated_count} linked records.")
+

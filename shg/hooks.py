@@ -15,7 +15,7 @@ doc_events = {
         "validate": "shg.install.validate_member",
         "on_submit": "shg.install.create_member_ledger",
         "on_amend": "shg.shg.doctype.shg_member.shg_member.handle_member_amendment",
-        "on_update_after_submit": "shg.shg.doctype.shg_member.shg_member.handle_member_update_after_submit"
+        "on_update_after_submit": "shg.shg.doctype.shg_member.shg_member.on_update_after_submit"
     },
     "SHG Contribution": {
         "validate": "shg.shg.doctype.shg_contribution.shg_contribution.validate_contribution",
