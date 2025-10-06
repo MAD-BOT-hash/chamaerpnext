@@ -1,0 +1,48 @@
+{
+ "add_total_row": 1,
+ "columns": [],
+ "creation": "2025-10-06 12:00:00",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date"
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date"
+  },
+  {
+   "fieldname": "contribution_type",
+   "fieldtype": "Link",
+   "label": "Contribution Type",
+   "options": "SHG Contribution Type"
+  }
+ ],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letterhead": null,
+ "modified": "2025-10-06 12:00:00",
+ "module": "SHG",
+ "name": "Contribution Summary",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "SHG Contribution",
+ "report_name": "Contribution Summary",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "SHG Admin"
+  },
+  {
+   "role": "SHG Treasurer"
+  },
+  {
+   "role": "SHG Auditor"
+  }
+ ]
+}
