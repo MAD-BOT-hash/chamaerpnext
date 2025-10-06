@@ -2,6 +2,9 @@ import frappe
 from frappe import _
 
 def execute(filters=None):
+    if not filters:
+        filters = {}
+        
     columns = get_columns()
     data = get_data(filters)
     return columns, data
@@ -56,26 +59,48 @@ def get_columns():
 
 def get_data(filters):
     conditions = ""
+    params = {}
+    
     if filters.get("from_date"):
         conditions += " AND ma.meeting_date >= %(from_date)s"
+        params["from_date"] = filters.get("from_date")
     if filters.get("to_date"):
         conditions += " AND ma.meeting_date <= %(to_date)s"
+        params["to_date"] = filters.get("to_date")
     if filters.get("meeting"):
         conditions += " AND ma.meeting = %(meeting)s"
+        params["meeting"] = filters.get("meeting")
         
-    query = f"""
-        SELECT 
-            ma.meeting_date,
-            mad.meeting,
-            mad.member,
-            mad.member_name,
-            mad.attendance_status,
-            mad.arrival_time,
-            mad.fine_amount
-        FROM `tabSHG Member Attendance Detail` mad
-        JOIN `tabSHG Member Attendance` ma ON mad.parent = ma.name
-        WHERE ma.docstatus = 1 {conditions}
-        ORDER BY ma.meeting_date DESC, mad.member_name
-    """
+    if conditions:
+        conditions = conditions.lstrip(" AND")
+        query = f"""
+            SELECT 
+                ma.meeting_date,
+                mad.meeting,
+                mad.member,
+                mad.member_name,
+                mad.attendance_status,
+                mad.arrival_time,
+                mad.fine_amount
+            FROM `tabSHG Member Attendance Detail` mad
+            JOIN `tabSHG Member Attendance` ma ON mad.parent = ma.name
+            WHERE ma.docstatus = 1 AND {conditions}
+            ORDER BY ma.meeting_date DESC, mad.member_name
+        """
+    else:
+        query = """
+            SELECT 
+                ma.meeting_date,
+                mad.meeting,
+                mad.member,
+                mad.member_name,
+                mad.attendance_status,
+                mad.arrival_time,
+                mad.fine_amount
+            FROM `tabSHG Member Attendance Detail` mad
+            JOIN `tabSHG Member Attendance` ma ON mad.parent = ma.name
+            WHERE ma.docstatus = 1
+            ORDER BY ma.meeting_date DESC, mad.member_name
+        """
     
-    return frappe.db.sql(query, filters, as_dict=1)
+    return frappe.db.sql(query, params, as_dict=1)

@@ -2,6 +2,9 @@ import frappe
 from frappe import _
 
 def execute(filters=None):
+    if not filters:
+        filters = {}
+        
     columns = get_columns()
     data = get_data(filters)
     return columns, data
@@ -54,7 +57,8 @@ def get_columns():
 
 def get_data(filters):
     if not filters.get("member"):
-        return [], []
+        frappe.msgprint(_("Please select a Member"))
+        return []
     
     result = []
     running_balance = 0
@@ -62,13 +66,13 @@ def get_data(filters):
     # Get loan disbursements
     loans = frappe.db.sql("""
         SELECT 
-            disbursement_date as date,
+            COALESCE(disbursement_date, posting_date) as date,
             name as loan_id,
             loan_amount,
             'Loan Disbursement' as description
         FROM `tabSHG Loan`
         WHERE member = %(member)s AND docstatus = 1 AND status = 'Disbursed'
-        ORDER BY disbursement_date
+        ORDER BY date
     """, filters, as_dict=1)
     
     # Get loan repayments
@@ -90,7 +94,7 @@ def get_data(filters):
     all_transactions = []
     all_transactions.extend(loans)
     all_transactions.extend(repayments)
-    all_transactions.sort(key=lambda x: x['date'])
+    all_transactions.sort(key=lambda x: x['date'] or '')
     
     # Process transactions
     for transaction in all_transactions:
@@ -118,5 +122,8 @@ def get_data(filters):
                 'penalty_paid': transaction.penalty_amount,
                 'balance': running_balance
             })
+    
+    if not all_transactions:
+        result.append({"description": _("No loan transactions found for this member.")})
     
     return result

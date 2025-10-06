@@ -2,6 +2,9 @@ import frappe
 from frappe import _
 
 def execute(filters=None):
+    if not filters:
+        filters = {}
+        
     columns = get_columns()
     data = get_data(filters)
     return columns, data
@@ -67,8 +70,11 @@ def get_columns():
 
 def get_data(filters):
     conditions = ""
+    params = {}
+    
     if filters.get("membership_status"):
         conditions += " AND m.membership_status = %(membership_status)s"
+        params["membership_status"] = filters.get("membership_status")
         
     query = f"""
         SELECT 
@@ -86,4 +92,4 @@ def get_data(filters):
         ORDER BY m.member_name
     """
     
-    return frappe.db.sql(query, filters, as_dict=1)
+    return frappe.db.sql(query, params, as_dict=1)

@@ -3,119 +3,47 @@ from frappe import _
 from frappe.utils import getdate, flt
 
 def execute(filters=None):
+    if not filters:
+        filters = {}
+
     columns = get_columns()
     data = get_data(filters)
-    return columns, data
+    chart = get_chart_data(data)
+    return columns, data, None, chart
 
 def get_columns():
     return [
-        {
-            "label": _("Date"),
-            "fieldname": "date",
-            "fieldtype": "Date",
-            "width": 100
-        },
-        {
-            "label": _("Particulars"),
-            "fieldname": "particulars",
-            "fieldtype": "Data",
-            "width": 200
-        },
-        {
-            "label": _("Debit (KES)"),
-            "fieldname": "debit",
-            "fieldtype": "Currency",
-            "width": 120
-        },
-        {
-            "label": _("Credit (KES)"),
-            "fieldname": "credit",
-            "fieldtype": "Currency",
-            "width": 120
-        },
-        {
-            "label": _("Balance (KES)"),
-            "fieldname": "balance",
-            "fieldtype": "Currency",
-            "width": 120
-        },
-        {
-            "label": _("Reference"),
-            "fieldname": "reference",
-            "fieldtype": "Data",
-            "width": 150
-        }
+        {"label": _("Date"), "fieldname": "date", "fieldtype": "Date", "width": 100},
+        {"label": _("Particulars"), "fieldname": "particulars", "fieldtype": "Data", "width": 240},
+        {"label": _("Debit (KES)"), "fieldname": "debit", "fieldtype": "Currency", "width": 120},
+        {"label": _("Credit (KES)"), "fieldname": "credit", "fieldtype": "Currency", "width": 120},
+        {"label": _("Balance (KES)"), "fieldname": "balance", "fieldtype": "Currency", "width": 120},
+        {"label": _("Reference"), "fieldname": "reference", "fieldtype": "Data", "width": 150},
     ]
 
 def get_data(filters):
-    if not filters or not filters.get("member"):
-        return [{
-            "particulars": "Please select a member to view their statement",
-            "debit": "",
-            "credit": "",
-            "balance": "",
-            "reference": ""
-        }]
-    
-    data = []
-    balance = 0
-    
-    # Get member details
-    try:
-        member = frappe.get_doc("SHG Member", filters.member)
-    except frappe.DoesNotExistError:
-        return [{
-            "particulars": f"Member {filters.member} not found",
-            "debit": "",
-            "credit": "",
-            "balance": "",
-            "reference": ""
-        }]
-    
-    # Add member summary at the top
-    data.append({
-        "particulars": f"Member: {member.member_name}",
-        "debit": "",
-        "credit": "",
-        "balance": "",
-        "reference": ""
-    })
-    
-    data.append({
-        "particulars": f"Account Number: {member.account_number or 'N/A'}",
-        "debit": "",
-        "credit": "",
-        "balance": "",
-        "reference": ""
-    })
-    
-    data.append({
-        "particulars": f"Current Loan Balance: KES {flt(member.current_loan_balance):,.2f}",
-        "debit": "",
-        "credit": "",
-        "balance": "",
-        "reference": ""
-    })
-    
-    data.append({
-        "particulars": f"Total Contributions: KES {flt(member.total_contributions):,.2f}",
-        "debit": "",
-        "credit": "",
-        "balance": "",
-        "reference": ""
-    })
-    
-    data.append({
-        "particulars": "",
-        "debit": "",
-        "credit": "",
-        "balance": "",
-        "reference": ""
-    })
-    
-    # Get contributions
+    member = filters.get("member")
+    if not member:
+        frappe.msgprint(_("Please select a Member"))
+        return []
+
+    data, balance = [], 0
+
+    # Member Summary Header
+    member_doc = frappe.get_doc("SHG Member", member)
+    summary = [
+        {"particulars": f"Member: {member_doc.member_name}"},
+        {"particulars": f"Member ID: {member_doc.name}"},
+        {"particulars": f"Phone: {member_doc.phone_number or '-'}"},
+        {"particulars": f"Total Contributions: KES {flt(member_doc.total_contributions):,.2f}"},
+        {"particulars": f"Current Loan Balance: KES {flt(member_doc.current_loan_balance):,.2f}"},
+        {}
+    ]
+    data.extend(summary)
+
+    # Contributions
     contributions = frappe.db.sql("""
-        SELECT 
+        SELECT
             contribution_date as date,
             CONCAT('Contribution - ', COALESCE(contribution_type, contribution_type_link)) as particulars,
             0 as debit,
@@ -123,25 +51,23 @@ def get_data(filters):
             name as reference
         FROM `tabSHG Contribution`
         WHERE member = %s AND docstatus = 1
-        ORDER BY contribution_date
-    """, filters.member, as_dict=1)
-    
-    # Get loan disbursements
+    """, member, as_dict=True)
+
+    # Loans
     loans = frappe.db.sql("""
-        SELECT 
-            disbursement_date as date,
+        SELECT
+            COALESCE(disbursement_date, posting_date) as date,
             CONCAT('Loan Disbursement - ', COALESCE(loan_type, 'Loan')) as particulars,
             loan_amount as debit,
             0 as credit,
             name as reference
         FROM `tabSHG Loan`
         WHERE member = %s AND status IN ('Disbursed', 'Closed') AND docstatus = 1
-        ORDER BY disbursement_date
-    """, filters.member, as_dict=1)
-    
-    # Get loan repayments
+    """, member, as_dict=True)
+
+    # Repayments
     repayments = frappe.db.sql("""
-        SELECT 
+        SELECT
             repayment_date as date,
             'Loan Repayment' as particulars,
             0 as debit,
@@ -149,12 +75,11 @@ def get_data(filters):
             name as reference
         FROM `tabSHG Loan Repayment`
         WHERE member = %s AND docstatus = 1
-        ORDER BY repayment_date
-    """, filters.member, as_dict=1)
-    
-    # Get meeting fines
+    """, member, as_dict=True)
+
+    # Meeting Fines
     fines = frappe.db.sql("""
-        SELECT 
+        SELECT
             fine_date as date,
             CONCAT('Meeting Fine - ', COALESCE(fine_reason, 'Fine')) as particulars,
             fine_amount as debit,
@@ -162,166 +87,40 @@ def get_data(filters):
             name as reference
         FROM `tabSHG Meeting Fine`
         WHERE member = %s AND docstatus = 1
-        ORDER BY fine_date
-    """, filters.member, as_dict=1)
-    
-    # Combine all transactions
-    all_transactions = contributions + loans + repayments + fines
-    
+    """, member, as_dict=True)
+
+    all_txns = contributions + loans + repayments + fines
+    all_txns = [t for t in all_txns if t.date]
+
     # Sort by date
-    all_transactions.sort(key=lambda x: x.date if x.date else getdate())
-    
-    # Calculate running balance
-    for transaction in all_transactions:
-        if transaction.debit > 0:
-            balance += transaction.debit
-        if transaction.credit > 0:
-            balance -= transaction.credit
-            
-        transaction.balance = balance
-        data.append(transaction)
-    
-    # If no transactions, add a message
-    if len(all_transactions) == 0:
-        data.append({
-            "particulars": "No transactions found for this member",
-            "debit": "",
-            "credit": "",
-            "balance": "",
-            "reference": ""
-        })
-    
-    # Add loan details section
-    data.append({
-        "particulars": "",
-        "debit": "",
-        "credit": "",
-        "balance": "",
-        "reference": ""
-    })
-    
-    data.append({
-        "particulars": "OUTSTANDING LOANS",
-        "debit": "",
-        "credit": "",
-        "balance": "",
-        "reference": ""
-    })
-    
-    # Get outstanding loans with repayment schedules
-    outstanding_loans = frappe.db.sql("""
-        SELECT 
-            name,
-            loan_type,
-            loan_amount,
-            balance_amount,
-            disbursement_date,
-            next_due_date,
-            monthly_installment
-        FROM `tabSHG Loan`
-        WHERE member = %s AND status = 'Disbursed' AND docstatus = 1
-        ORDER BY disbursement_date
-    """, filters.member, as_dict=1)
-    
-    if not outstanding_loans:
-        data.append({
-            "particulars": "No outstanding loans",
-            "debit": "",
-            "credit": "",
-            "balance": "",
-            "reference": ""
-        })
-    else:
-        for loan in outstanding_loans:
-            data.append({
-                "particulars": f"Loan: {loan.loan_type or 'N/A'}",
-                "debit": "",
-                "credit": "",
-                "balance": "",
-                "reference": loan.name
-            })
-            
-            data.append({
-                "particulars": f"  Amount: KES {flt(loan.loan_amount):,.2f}",
-                "debit": "",
-                "credit": "",
-                "balance": "",
-                "reference": ""
-            })
-            
-            data.append({
-                "particulars": f"  Outstanding: KES {flt(loan.balance_amount):,.2f}",
-                "debit": "",
-                "credit": "",
-                "balance": "",
-                "reference": ""
-            })
-            
-            # Get repayment schedule for this loan
-            schedule = frappe.db.sql("""
-                SELECT 
-                    due_date,
-                    principal_amount,
-                    interest_amount,
-                    total_amount,
-                    status
-                FROM `tabSHG Loan Repayment Schedule`
-                WHERE loan = %s
-                ORDER BY due_date
-            """, loan.name, as_dict=1)
-            
-            data.append({
-                "particulars": "  Repayment Schedule:",
-                "debit": "",
-                "credit": "",
-                "balance": "",
-                "reference": ""
-            })
-            
-            for entry in schedule:
-                status_indicator = "✓" if entry.status == "Paid" else "○"
-                data.append({
-                    "date": entry.due_date,
-                    "particulars": f"    {status_indicator} Due: {entry.due_date} - Principal: KES {flt(entry.principal_amount):,.2f}, Interest: KES {flt(entry.interest_amount):,.2f}",
-                    "debit": "",
-                    "credit": "",
-                    "balance": "",
-                    "reference": ""
-                })
-            
-            data.append({
-                "particulars": "",
-                "debit": "",
-                "credit": "",
-                "balance": "",
-                "reference": ""
-            })
-    
+    all_txns.sort(key=lambda x: getdate(x.date))
+
+    # Running Balance
+    for txn in all_txns:
+        balance += (flt(txn.debit) - flt(txn.credit))
+        txn.balance = balance
+        data.append(txn)
+
+    if not all_txns:
+        data.append({"particulars": _("No financial activity found for this member.")})
+
     return data
 
 def get_chart_data(data):
-    balance_data = []
-    dates = []
-    
+    dates, balances = [], []
     for row in data:
-        if row.date and (row.debit > 0 or row.credit > 0):
-            dates.append(row.date)
-            balance_data.append(row.balance)
-    
+        if row.get("date"):
+            dates.append(str(row["date"]))
+            balances.append(flt(row.get("balance", 0)))
+
     if not dates:
-        return []
-    
-    chart = {
-        "data": {
-            "labels": dates,
-            "datasets": [
-                {"name": "Account Balance", "type": "line", "values": balance_data}
-            ]
-        },
-        "chart_type": "line"
+        return None
+
+    return {
+        "data": {"labels": dates, "datasets": [{"name": "Balance", "type": "line", "values": balances}]},
+        "type": "line",
+        "colors": ["#5e64ff"]
     }
-    
-    return chart
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
@@ -330,10 +129,7 @@ def get_members(doctype, txt, searchfield, start, page_len, filters):
         SELECT name, member_name
         FROM `tabSHG Member`
         WHERE docstatus = 1
-        AND (name LIKE %(txt)s OR member_name LIKE %(txt)s)
+          AND (name LIKE %(txt)s OR member_name LIKE %(txt)s)
         ORDER BY member_name
-    """, {
-        'txt': "%%%s%%" % txt,
-        'start': start,
-        'page_len': page_len
-    })
+        LIMIT %(start)s, %(page_len)s
+    """, {'txt': f"%{txt}%", 'start': start, 'page_len': page_len})
