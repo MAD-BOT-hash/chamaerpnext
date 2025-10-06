@@ -85,6 +85,13 @@
    "label": "Apply Fine",
    "link_to": "SHG Meeting Fine",
    "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "SHG Dashboard",
+   "link_to": "shg-dashboard",
+   "type": "Page"
   }
  ],
  "title": "SHG"

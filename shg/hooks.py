@@ -67,8 +67,13 @@ doctype_js = {
 }
 
 # Fix for workspace path issue
-app_include_js = "/assets/shg/js/shg.js"
-app_include_css = "/assets/shg/css/shg.css"
+app_include_js = ["/assets/shg/js/shg.js", "/assets/shg/js/shg_dashboard.js"]
+app_include_css = ["/assets/shg/css/shg.css", "/assets/shg/css/shg_dashboard.css"]
+
+# Page extensions
+has_website_permission = {
+    "SHG Dashboard": "shg.shg.page.shg_dashboard.shg_dashboard.has_website_permission"
+}
 
 # API endpoints
 website_route_rules = [

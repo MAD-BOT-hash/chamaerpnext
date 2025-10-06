@@ -1,0 +1,31 @@
+{
+    "content": "[{\"name\":\"shg_dashboard\",\"type\":\"html\",\"data\":{\"html\":\"<div class=\\\"shg-dashboard-page\\\"></div>\",\"col\":12}}]",
+    "creation": "2025-10-06 16:00:00",
+    "docstatus": 0,
+    "doctype": "Page",
+    "idx": 0,
+    "modified": "2025-10-06 16:00:00",
+    "module": "SHG",
+    "name": "shg-dashboard",
+    "owner": "Administrator",
+    "page_name": "SHG Dashboard",
+    "roles": [
+        {
+            "role": "SHG Admin"
+        },
+        {
+            "role": "SHG Treasurer"
+        },
+        {
+            "role": "SHG Member"
+        },
+        {
+            "role": "SHG Auditor"
+        }
+    ],
+    "script": "",
+    "standard": "Yes",
+    "style": "",
+    "system_page": 0,
+    "title": "SHG Dashboard"
+}
