@@ -130,7 +130,8 @@
     "shortcuts": [
       {"label": "Member Statement", "link_type": "Report", "link_to": "Member Statement"},
       {"label": "Loan Portfolio Report", "link_type": "Report", "link_to": "Loan Portfolio"},
-      {"label": "Contribution Summary", "link_type": "Report", "link_to": "Contribution Summary"}
+      {"label": "Contribution Summary", "link_type": "Report", "link_to": "Contribution Summary"},
+      {"label": "Loan Repayment Schedule", "link_type": "Report", "link_to": "Loan Repayment Schedule"}
     ],
     "col": 12
    }

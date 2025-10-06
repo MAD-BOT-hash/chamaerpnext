@@ -19,14 +19,16 @@ This patch fixes the `pymysql.err.OperationalError: (1054, "Unknown column 'post
 
 3. **Created patch scripts:**
    - `add_posting_date_field.py` - Adds the field via Custom Field if not already present
+   - `fix_posting_date_columns.py` - Directly adds the column to database tables if missing
    - `update_date_filters.py` - Documentation for updating code references
    - `reload_and_migrate.sh` - Commands to reload doctypes and run migrations
 
 ## Implementation Steps
 
-1. Run the patch to add the posting_date field:
+1. Run the patches to add the posting_date field:
    ```bash
    bench --site erpmain execute shg.patches.add_posting_date_field.execute
+   bench --site erpmain execute shg.patches.fix_posting_date_columns.execute
    ```
 
 2. Reload the doctypes:

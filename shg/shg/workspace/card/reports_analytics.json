@@ -48,6 +48,12 @@
      "type": "Report",
      "name": "Yearly Attendance Report",
      "is_query_report": 1
+    },
+    {
+     "label": "Loan Repayment Schedule",
+     "type": "Report",
+     "name": "Loan Repayment Schedule",
+     "is_query_report": 1
     }
    ]
   }
