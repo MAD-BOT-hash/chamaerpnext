@@ -42,7 +42,8 @@ doc_events = {
 scheduler_events = {
     "daily": [
         "shg.tasks.send_daily_reminders",
-        "shg.tasks.calculate_loan_penalties"
+        "shg.tasks.calculate_loan_penalties",
+        "shg.tasks.generate_billable_contribution_invoices"
     ],
     "weekly": [
         "shg.tasks.send_weekly_contribution_reminders"
@@ -50,7 +51,8 @@ scheduler_events = {
     "monthly": [
         "shg.tasks.generate_monthly_reports",
         "shg.utils.email.send_monthly_statements",
-        "shg.utils.whatsapp.send_monthly_statements_whatsapp"
+        "shg.utils.whatsapp.send_monthly_statements_whatsapp",
+        "shg.tasks.send_monthly_member_statements"
     ]
 }
 

@@ -12,7 +12,13 @@
   "frequency",
   "minimum_amount",
   "maximum_amount",
-  "enabled"
+  "enabled",
+  "is_billable",
+  "billing_frequency",
+  "due_day",
+  "grace_period",
+  "auto_invoice",
+  "item_code"
  ],
  "fields": [
   {
@@ -56,6 +62,48 @@
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enabled"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_billable",
+   "fieldtype": "Check",
+   "label": "Is Billable"
+  },
+  {
+   "depends_on": "is_billable",
+   "fieldname": "billing_frequency",
+   "fieldtype": "Select",
+   "label": "Billing Frequency",
+   "options": "Monthly\nWeekly\nQuarterly\nAnnually\nBi monthly"
+  },
+  {
+   "depends_on": "is_billable",
+   "fieldname": "due_day",
+   "fieldtype": "Int",
+   "label": "Due Day",
+   "description": "Day of month when payment becomes due (e.g., 5 means due every 5th)"
+  },
+  {
+   "depends_on": "is_billable",
+   "fieldname": "grace_period",
+   "fieldtype": "Int",
+   "label": "Grace Period",
+   "description": "Optional days before the invoice is marked overdue"
+  },
+  {
+   "default": "0",
+   "depends_on": "is_billable",
+   "fieldname": "auto_invoice",
+   "fieldtype": "Check",
+   "label": "Auto Invoice"
+  },
+  {
+   "depends_on": "is_billable",
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "label": "Item Code",
+   "options": "Item",
+   "description": "Item to use for invoicing this contribution type"
   }
  ],
  "links": [],

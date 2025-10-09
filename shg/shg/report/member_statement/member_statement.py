@@ -23,6 +23,10 @@ def get_columns():
 
 def get_data(filters):
     member = filters.get("member")
+    from_date = filters.get("from_date")
+    to_date = filters.get("to_date")
+    transaction_type = filters.get("transaction_type")
+    
     if not member:
         frappe.msgprint(_("Please select a Member"))
         return []
@@ -41,58 +45,74 @@ def get_data(filters):
     ]
     data.extend(summary)
 
-    # Contributions
-    contributions = frappe.db.sql("""
-        SELECT
-            contribution_date as date,
-            CONCAT('Contribution - ', COALESCE(contribution_type, contribution_type_link)) as particulars,
-            0 as debit,
-            amount as credit,
-            name as reference
-        FROM `tabSHG Contribution`
-        WHERE member = %s AND docstatus = 1
-    """, member, as_dict=True)
+    # Base query conditions
+    date_condition = ""
+    if from_date and to_date:
+        date_condition = f" AND t.date BETWEEN '{from_date}' AND '{to_date}'"
+    elif from_date:
+        date_condition = f" AND t.date >= '{from_date}'"
+    elif to_date:
+        date_condition = f" AND t.date <= '{to_date}'"
 
-    # Loans
-    loans = frappe.db.sql("""
-        SELECT
-            COALESCE(disbursement_date, posting_date) as date,
-            CONCAT('Loan Disbursement - ', COALESCE(loan_type, 'Loan')) as particulars,
-            loan_amount as debit,
-            0 as credit,
-            name as reference
-        FROM `tabSHG Loan`
-        WHERE member = %s AND status IN ('Disbursed', 'Closed') AND docstatus = 1
-    """, member, as_dict=True)
+    # Build query based on transaction type filter
+    if not transaction_type or transaction_type == "Contribution":
+        # Contributions
+        contributions = frappe.db.sql(f"""
+            SELECT
+                contribution_date as date,
+                CONCAT('Contribution - ', COALESCE(contribution_type, contribution_type_link)) as particulars,
+                0 as debit,
+                amount as credit,
+                name as reference
+            FROM `tabSHG Contribution`
+            WHERE member = %s AND docstatus = 1 {date_condition}
+        """, member, as_dict=True)
+        data.extend(contributions)
 
-    # Repayments
-    repayments = frappe.db.sql("""
-        SELECT
-            repayment_date as date,
-            'Loan Repayment' as particulars,
-            0 as debit,
-            total_paid as credit,
-            name as reference
-        FROM `tabSHG Loan Repayment`
-        WHERE member = %s AND docstatus = 1
-    """, member, as_dict=True)
+    if not transaction_type or transaction_type == "Loan":
+        # Loans
+        loans = frappe.db.sql(f"""
+            SELECT
+                COALESCE(disbursement_date, posting_date) as date,
+                CONCAT('Loan Disbursement - ', COALESCE(loan_type, 'Loan')) as particulars,
+                loan_amount as debit,
+                0 as credit,
+                name as reference
+            FROM `tabSHG Loan`
+            WHERE member = %s AND status IN ('Disbursed', 'Closed') AND docstatus = 1 {date_condition}
+        """, member, as_dict=True)
+        data.extend(loans)
 
-    # Meeting Fines
-    fines = frappe.db.sql("""
-        SELECT
-            fine_date as date,
-            CONCAT('Meeting Fine - ', COALESCE(fine_reason, 'Fine')) as particulars,
-            fine_amount as debit,
-            0 as credit,
-            name as reference
-        FROM `tabSHG Meeting Fine`
-        WHERE member = %s AND docstatus = 1
-    """, member, as_dict=True)
+    if not transaction_type or transaction_type == "Repayment":
+        # Repayments
+        repayments = frappe.db.sql(f"""
+            SELECT
+                repayment_date as date,
+                'Loan Repayment' as particulars,
+                0 as debit,
+                total_paid as credit,
+                name as reference
+            FROM `tabSHG Loan Repayment`
+            WHERE member = %s AND docstatus = 1 {date_condition}
+        """, member, as_dict=True)
+        data.extend(repayments)
 
-    all_txns = contributions + loans + repayments + fines
-    all_txns = [t for t in all_txns if t.date]
+    if not transaction_type or transaction_type == "Fine":
+        # Meeting Fines
+        fines = frappe.db.sql(f"""
+            SELECT
+                fine_date as date,
+                CONCAT('Meeting Fine - ', COALESCE(fine_reason, 'Fine')) as particulars,
+                fine_amount as debit,
+                0 as credit,
+                name as reference
+            FROM `tabSHG Meeting Fine`
+            WHERE member = %s AND docstatus = 1 {date_condition}
+        """, member, as_dict=True)
+        data.extend(fines)
 
-    # Sort by date
+    # Filter out entries without dates and sort by date
+    all_txns = [t for t in data if t.get("date")]
     all_txns.sort(key=lambda x: getdate(x.date))
 
     # Running Balance

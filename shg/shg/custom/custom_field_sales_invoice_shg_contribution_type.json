@@ -1,0 +1,13 @@
+{
+ "custom_fields": [
+  {
+   "dt": "Sales Invoice",
+   "fieldname": "shg_contribution_type",
+   "fieldtype": "Link",
+   "label": "SHG Contribution Type",
+   "options": "SHG Contribution Type",
+   "insert_after": "customer_name",
+   "read_only": 1
+  }
+ ]
+}

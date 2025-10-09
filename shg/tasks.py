@@ -1,6 +1,7 @@
 import frappe
-from frappe.utils import today, add_days, getdate
+from frappe.utils import today, add_days, getdate, get_last_day, get_first_day
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 
 def all():
     """Task that runs every few minutes"""
@@ -296,4 +297,325 @@ def send_sms(phone_number, message):
             return False
     except Exception as e:
         frappe.log_error(f"Failed to send SMS: {str(e)}")
+        return False
+
+def generate_billable_contribution_invoices():
+    """Generate invoices for billable contributions that are due"""
+    try:
+        # Get all billable contribution types that have auto-invoicing enabled
+        billable_types = frappe.get_all("SHG Contribution Type",
+                                       filters={
+                                           "is_billable": 1,
+                                           "auto_invoice": 1,
+                                           "enabled": 1
+                                       },
+                                       fields=["name", "contribution_type_name", "default_amount", 
+                                              "billing_frequency", "due_day", "grace_period", "item_code"])
+        
+        for contrib_type in billable_types:
+            # Check if it's time to generate invoices for this contribution type
+            if is_due_for_invoicing(contrib_type):
+                generate_invoices_for_contribution_type(contrib_type)
+                
+    except Exception as e:
+        frappe.log_error(f"Failed to generate billable contribution invoices: {str(e)}")
+
+def is_due_for_invoicing(contrib_type):
+    """Check if it's time to generate invoices for a contribution type"""
+    today_date = getdate(today())
+    
+    # For monthly billing, check if today is the due day
+    if contrib_type.billing_frequency == "Monthly":
+        return today_date.day == contrib_type.due_day
+    
+    # For weekly billing, we could check if it's a specific day of the week
+    elif contrib_type.billing_frequency == "Weekly":
+        # Assuming due_day represents day of week (1=Monday, 7=Sunday)
+        return today_date.weekday() + 1 == contrib_type.due_day
+    
+    # For quarterly billing
+    elif contrib_type.billing_frequency == "Quarterly":
+        # Check if it's the due day of the first month of the quarter
+        quarter_start_months = [1, 4, 7, 10]  # Jan, Apr, Jul, Oct
+        return (today_date.day == contrib_type.due_day and 
+                today_date.month in quarter_start_months)
+    
+    # For annual billing
+    elif contrib_type.billing_frequency == "Annually":
+        # Check if it's the due day of a specific month (e.g., January)
+        return (today_date.day == contrib_type.due_day and 
+                today_date.month == 1)
+    
+    # For bi-monthly billing
+    elif contrib_type.billing_frequency == "Bi monthly":
+        # Check if it's the due day of even months
+        return (today_date.day == contrib_type.due_day and 
+                today_date.month % 2 == 0)
+    
+    return False
+
+def generate_invoices_for_contribution_type(contrib_type):
+    """Generate invoices for all active members for a specific contribution type"""
+    try:
+        # Get all active members
+        active_members = frappe.get_all("SHG Member",
+                                       filters={"membership_status": "Active"},
+                                       fields=["name", "member_name", "customer", "email"])
+        
+        for member in active_members:
+            # Check if an invoice already exists for this member and contribution type for this period
+            if not invoice_exists_for_period(member, contrib_type):
+                # Create sales invoice for the member
+                create_sales_invoice_for_member(member, contrib_type)
+            
+    except Exception as e:
+        frappe.log_error(f"Failed to generate invoices for contribution type {contrib_type.name}: {str(e)}")
+
+def invoice_exists_for_period(member, contrib_type):
+    """Check if an invoice already exists for a member and contribution type for the current period"""
+    today_date = getdate(today())
+    
+    # Determine the period based on billing frequency
+    if contrib_type.billing_frequency == "Monthly":
+        period_start = today_date.replace(day=1)
+        period_end = get_last_day(today_date)
+    elif contrib_type.billing_frequency == "Weekly":
+        period_start = add_days(today_date, -today_date.weekday())
+        period_end = add_days(period_start, 6)
+    elif contrib_type.billing_frequency == "Quarterly":
+        quarter = (today_date.month - 1) // 3
+        period_start = today_date.replace(month=quarter * 3 + 1, day=1)
+        period_end = get_last_day(today_date.replace(month=quarter * 3 + 3))
+    elif contrib_type.billing_frequency == "Annually":
+        period_start = today_date.replace(month=1, day=1)
+        period_end = today_date.replace(month=12, day=31)
+    elif contrib_type.billing_frequency == "Bi monthly":
+        if today_date.month % 2 == 0:
+            period_start = today_date.replace(month=today_date.month - 1, day=1)
+        else:
+            period_start = today_date.replace(day=1)
+        period_end = get_last_day(today_date)
+    else:
+        period_start = today_date.replace(day=1)
+        period_end = get_last_day(today_date)
+    
+    # Check if invoice exists for this period
+    existing_invoice = frappe.db.exists("Sales Invoice", {
+        "customer": member.customer,
+        "shg_contribution_type": contrib_type.name,
+        "posting_date": ["between", [period_start, period_end]],
+        "docstatus": ["!=", 2]  # Not cancelled
+    })
+    
+    return existing_invoice is not None
+
+def create_sales_invoice_for_member(member, contrib_type):
+    """Create a sales invoice for a member"""
+    try:
+        # Create a new Sales Invoice
+        invoice = frappe.get_doc({
+            "doctype": "Sales Invoice",
+            "customer": member.customer,
+            "posting_date": today(),
+            "due_date": get_due_date(contrib_type),
+            "shg_contribution_type": contrib_type.name,
+            "items": [{
+                "item_code": contrib_type.item_code or "SHG Contribution",
+                "item_name": contrib_type.contribution_type_name,
+                "description": f"{contrib_type.contribution_type_name} for {get_contribution_period(contrib_type)}",
+                "qty": 1,
+                "rate": contrib_type.default_amount,
+                "amount": contrib_type.default_amount
+            }]
+        })
+        
+        # Insert and submit the invoice
+        invoice.insert()
+        invoice.submit()
+        
+        # Send email notification to member
+        send_invoice_email(member, invoice, contrib_type)
+        
+        # Log the invoice creation
+        frappe.log(f"Created invoice {invoice.name} for member {member.name} for contribution type {contrib_type.name}")
+        
+        return invoice
+        
+    except Exception as e:
+        frappe.log_error(f"Failed to create sales invoice for member {member.name}: {str(e)}")
+        return None
+
+def get_due_date(contrib_type):
+    """Calculate the due date for an invoice"""
+    today_date = getdate(today())
+    
+    if contrib_type.billing_frequency == "Monthly":
+        # Due date is the specified day of the current month
+        try:
+            return today_date.replace(day=contrib_type.due_day)
+        except ValueError:
+            # Handle case where due_day doesn't exist in current month (e.g., 31st in February)
+            return get_last_day(today_date)
+    
+    elif contrib_type.billing_frequency == "Weekly":
+        # Due date is today (weekly billing)
+        return today_date
+    
+    elif contrib_type.billing_frequency == "Quarterly":
+        # Due date is the specified day of the current quarter start month
+        return today_date.replace(day=contrib_type.due_day)
+    
+    elif contrib_type.billing_frequency == "Annually":
+        # Due date is the specified day of January
+        return today_date.replace(month=1, day=contrib_type.due_day)
+    
+    elif contrib_type.billing_frequency == "Bi monthly":
+        # Due date is the specified day of the current even month
+        return today_date.replace(day=contrib_type.due_day)
+    
+    return today_date
+
+def get_contribution_period(contrib_type):
+    """Get the contribution period description"""
+    today_date = getdate(today())
+    
+    if contrib_type.billing_frequency == "Monthly":
+        return today_date.strftime("%B %Y")
+    
+    elif contrib_type.billing_frequency == "Weekly":
+        return f"Week of {today_date.strftime('%B %d, %Y')}"
+    
+    elif contrib_type.billing_frequency == "Quarterly":
+        quarter = (today_date.month - 1) // 3 + 1
+        return f"Q{quarter} {today_date.year}"
+    
+    elif contrib_type.billing_frequency == "Annually":
+        return f"Year {today_date.year}"
+    
+    elif contrib_type.billing_frequency == "Bi monthly":
+        return f"{today_date.strftime('%B %Y')} (Bi-monthly)"
+    
+    return today_date.strftime("%B %Y")
+
+def send_invoice_email(member, invoice, contrib_type):
+    """Send invoice email to member"""
+    try:
+        if not member.email:
+            frappe.log_error(f"Member {member.name} does not have an email address")
+            return False
+            
+        # Get SHG Settings
+        settings = frappe.get_single("SHG Settings")
+        
+        # Prepare email content
+        subject = f"Your {get_contribution_period(contrib_type)} SHG Contribution Invoice"
+        
+        message = f"""Dear {member.member_name},
+
+Your SHG contribution for {get_contribution_period(contrib_type)} is now due.
+
+Amount Due: KES {contrib_type.default_amount:,.2f}
+Due Date: {get_due_date(contrib_type).strftime('%B %d, %Y')}
+
+Please find your attached invoice.
+
+Regards,
+SHG Management"""
+        
+        # Send email with invoice attachment
+        frappe.sendmail(
+            recipients=[member.email],
+            subject=subject,
+            message=message,
+            attachments=[frappe.attach_print("Sales Invoice", invoice.name, file_name=invoice.name)]
+        )
+        
+        # Log the notification
+        notification = frappe.get_doc({
+            "doctype": "SHG Notification Log",
+            "member": member.name,
+            "notification_type": "Invoice Generated",
+            "message": f"Invoice {invoice.name} generated for {get_contribution_period(contrib_type)}",
+            "channel": "Email",
+            "status": "Sent",
+            "sent_date": frappe.utils.now(),
+            "reference_document": "Sales Invoice",
+            "reference_name": invoice.name
+        })
+        notification.insert()
+        frappe.db.commit()
+        
+        return True
+        
+    except Exception as e:
+        frappe.log_error(f"Failed to send invoice email to member {member.name}: {str(e)}")
+        return False
+
+def send_monthly_member_statements():
+    """Send monthly statements to all active members"""
+    try:
+        # Get all active members with email addresses
+        members = frappe.get_all("SHG Member",
+                               filters={
+                                   "membership_status": "Active",
+                                   "email": ["!=", ""]
+                               },
+                               fields=["name", "member_name", "email", "customer"])
+        
+        for member in members:
+            send_member_statement(member)
+            
+    except Exception as e:
+        frappe.log_error(f"Failed to send monthly member statements: {str(e)}")
+
+def send_member_statement(member):
+    """Send monthly statement to a member"""
+    try:
+        if not member.email:
+            frappe.log_error(f"Member {member.name} does not have an email address")
+            return False
+            
+        # Get current month and year
+        current_date = getdate(today())
+        month = current_date.strftime("%B")
+        year = current_date.year
+        
+        # Prepare email content
+        subject = f"Monthly SHG Statement - {month} {year}"
+        
+        message = f"""Dear {member.member_name},
+
+Please find your monthly statement for {month} {year} attached.
+
+Thank you for your continued support.
+
+SHG Management"""
+        
+        # Generate and attach the statement
+        # Note: In a real implementation, you would generate a PDF of the statement
+        # For now, we'll just send a simple email
+        
+        frappe.sendmail(
+            recipients=[member.email],
+            subject=subject,
+            message=message
+        )
+        
+        # Log the notification
+        notification = frappe.get_doc({
+            "doctype": "SHG Notification Log",
+            "member": member.name,
+            "notification_type": "Monthly Statement",
+            "message": f"Monthly statement sent for {month} {year}",
+            "channel": "Email",
+            "status": "Sent",
+            "sent_date": frappe.utils.now()
+        })
+        notification.insert()
+        frappe.db.commit()
+        
+        return True
+        
+    except Exception as e:
+        frappe.log_error(f"Failed to send monthly statement to member {member.name}: {str(e)}")
         return False

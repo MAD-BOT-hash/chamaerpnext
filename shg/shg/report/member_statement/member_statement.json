@@ -7,14 +7,30 @@
     "docstatus": 0,
     "doctype": "Report",
     "filters": [
-  {
-   "fieldname": "member",
-   "fieldtype": "Link",
-   "label": "Member",
-   "options": "SHG Member",
-   "reqd": 1
-  }
- ],
+        {
+            "fieldname": "member",
+            "fieldtype": "Link",
+            "label": "Member",
+            "options": "SHG Member",
+            "reqd": 1
+        },
+        {
+            "fieldname": "from_date",
+            "fieldtype": "Date",
+            "label": "From Date"
+        },
+        {
+            "fieldname": "to_date",
+            "fieldtype": "Date",
+            "label": "To Date"
+        },
+        {
+            "fieldname": "transaction_type",
+            "fieldtype": "Select",
+            "label": "Transaction Type",
+            "options": "\nContribution\nLoan\nRepayment\nFine"
+        }
+    ],
     "idx": 0,
     "is_standard": "Yes",
     "letterhead": null,
