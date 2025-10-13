@@ -35,6 +35,7 @@ class SHGMeeting(Document):
     def on_submit(self):
         """Process attendance and apply fines"""
         self.process_attendance_fines()
+        self.auto_invoice_absent_members()
         
     def process_attendance_fines(self):
         """Apply fines for absentees and late comers"""
@@ -74,6 +75,114 @@ class SHGMeeting(Document):
                     fine_entry.insert(ignore_permissions=True)
                 except Exception as e:
                     frappe.log_error(f"Failed to create fine entry for {row.member}: {str(e)}")
+                    
+    def auto_invoice_absent_members(self):
+        """Generate invoices for absent members when meeting is submitted"""
+        try:
+            # Check if auto invoicing is enabled
+            settings = frappe.get_single("SHG Settings")
+            if not settings.auto_invoice_absentees:
+                return
+                
+            # Validate required settings
+            if not settings.absent_fee or settings.absent_fee <= 0:
+                frappe.log("Auto-invoicing skipped: absent fee not configured")
+                return
+                
+            if not settings.invoice_item:
+                frappe.log("Auto-invoicing skipped: invoice item not configured")
+                return
+                
+            absent_members = [row for row in self.attendance if row.attendance_status == "Absent"]
+            if not absent_members:
+                return
+                
+            generated_invoices = []
+            for row in absent_members:
+                invoice = self.create_absentee_invoice(row.member, settings)
+                if invoice:
+                    generated_invoices.append(invoice)
+                    
+            if generated_invoices:
+                frappe.log(f"Generated {len(generated_invoices)} invoices for absent members in meeting {self.name}")
+                
+        except Exception as e:
+            frappe.log_error(f"Failed to auto-invoice absent members for meeting {self.name}: {str(e)}")
+            
+    def create_absentee_invoice(self, member, settings):
+        """Create a sales invoice for an absent member"""
+        try:
+            # Get member details
+            member_doc = frappe.get_doc("SHG Member", member)
+            if not member_doc.customer:
+                frappe.log(f"Skipped invoicing for member {member_doc.name} - no customer record")
+                return None
+                
+            # Create sales invoice
+            invoice = frappe.get_doc({
+                "doctype": "Sales Invoice",
+                "customer": member_doc.customer,
+                "posting_date": self.meeting_date,
+                "due_date": self.meeting_date,
+                "items": [{
+                    "item_code": settings.invoice_item,
+                    "item_name": frappe.get_value("Item", settings.invoice_item, "item_name"),
+                    "description": f"Absence fine for meeting on {self.meeting_date}",
+                    "qty": 1,
+                    "rate": settings.absent_fee,
+                    "amount": settings.absent_fee,
+                    "cost_center": settings.cost_center,
+                    "income_account": settings.income_account
+                }],
+                "remarks": f"Absence fine for meeting on {self.meeting_date}",
+                "shg_meeting": self.name
+            })
+            
+            invoice.insert()
+            invoice.submit()
+            
+            # Send email notification
+            self.send_absentee_invoice_email(member_doc, invoice, settings)
+            
+            return invoice
+            
+        except Exception as e:
+            frappe.log_error(f"Failed to create invoice for absent member {member}: {str(e)}")
+            return None
+            
+    def send_absentee_invoice_email(self, member_doc, invoice, settings):
+        """Send email notification to absent member with invoice attachment"""
+        try:
+            if not member_doc.email:
+                frappe.log(f"Member {member_doc.name} has no email address")
+                return False
+                
+            # Prepare email content
+            subject = f"Absence Fine for Meeting on {self.meeting_date}"
+            
+            message = f"""Dear {member_doc.member_name},
+
+You were marked absent for the SHG meeting held on {self.meeting_date}.
+A fine of KES {settings.absent_fee:,.2f} has been invoiced to your account.
+
+Please find your invoice attached.
+
+Regards,
+SHG Management"""
+            
+            # Send email with invoice attachment
+            frappe.sendmail(
+                recipients=[member_doc.email],
+                subject=subject,
+                message=message,
+                attachments=[frappe.attach_print("Sales Invoice", invoice.name, file_name=invoice.name)]
+            )
+            
+            return True
+            
+        except Exception as e:
+            frappe.log_error(f"Failed to send invoice email to member {member_doc.name}: {str(e)}")
+            return False
                     
     @frappe.whitelist()
     def get_member_list(self):

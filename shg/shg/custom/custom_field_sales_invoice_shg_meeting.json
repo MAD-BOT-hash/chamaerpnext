@@ -1,0 +1,13 @@
+{
+ "doctype": "Custom Field",
+ "dt": "Sales Invoice",
+ "fieldname": "shg_meeting",
+ "fieldtype": "Link",
+ "label": "SHG Meeting",
+ "options": "SHG Meeting",
+ "insert_after": "customer",
+ "reqd": 0,
+ "read_only": 0,
+ "hidden": 0,
+ "description": "Link to the SHG Meeting for which this invoice was generated"
+}
