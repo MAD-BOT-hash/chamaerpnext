@@ -315,3 +315,10 @@ def update_financial_summary(member):
 
     frappe.db.commit()
     return {"status": "success"}
+
+# --- Hook functions ---
+# These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
+
+def handle_member_update_after_submit(doc, method):
+    """Hook function called from hooks.py"""
+    doc.handle_member_update_after_submit()
