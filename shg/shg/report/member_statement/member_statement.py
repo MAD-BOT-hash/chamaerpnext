@@ -8,202 +8,178 @@ def execute(filters=None):
 
     columns = get_columns()
     data = get_data(filters)
+    report_summary = get_report_summary(data)
     chart = get_chart_data(data)
-    report_summary = get_report_summary(filters)
+    
     return columns, data, report_summary, chart
 
 def get_columns():
     return [
-        {"label": _("Date"), "fieldname": "date", "fieldtype": "Date", "width": 100},
-        {"label": _("Particulars"), "fieldname": "particulars", "fieldtype": "Data", "width": 240},
-        {"label": _("Debit (KES)"), "fieldname": "debit", "fieldtype": "Currency", "width": 120},
-        {"label": _("Credit (KES)"), "fieldname": "credit", "fieldtype": "Currency", "width": 120},
-        {"label": _("Balance (KES)"), "fieldname": "balance", "fieldtype": "Currency", "width": 120},
-        {"label": _("Reference"), "fieldname": "reference", "fieldtype": "Data", "width": 150},
+        {"label": _("Member ID"), "fieldname": "member_id", "fieldtype": "Link", "options": "SHG Member", "width": 120},
+        {"label": _("Member Name"), "fieldname": "member_name", "fieldtype": "Data", "width": 150},
+        {"label": _("Total Contributions (KES)"), "fieldname": "total_contributions", "fieldtype": "Currency", "width": 150},
+        {"label": _("Total Fines (KES)"), "fieldname": "total_fines", "fieldtype": "Currency", "width": 120},
+        {"label": _("Total Loan Balance (KES)"), "fieldname": "total_loan_balance", "fieldtype": "Currency", "width": 160},
+        {"label": _("Unpaid Contributions (KES)"), "fieldname": "unpaid_contributions", "fieldtype": "Currency", "width": 170},
+        {"label": _("Unpaid Fines (KES)"), "fieldname": "unpaid_fines", "fieldtype": "Currency", "width": 130},
     ]
 
 def get_data(filters):
-    member = filters.get("member")
+    member_filter = filters.get("member")
     from_date = filters.get("from_date")
     to_date = filters.get("to_date")
-    transaction_type = filters.get("transaction_type")
-    
-    if not member:
-        return []
-
-    # Get member details
-    member_doc = frappe.get_doc("SHG Member", member)
-    
-    # Get all transactions
-    transactions = []
+    show_only_outstanding = filters.get("show_only_with_outstanding")
     
     # Base query conditions
-    date_condition = ""
-    if from_date and to_date:
-        date_condition = f" AND t.date BETWEEN '{from_date}' AND '{to_date}'"
-    elif from_date:
-        date_condition = f" AND t.date >= '{from_date}'"
-    elif to_date:
-        date_condition = f" AND t.date <= '{to_date}'"
-
-    # Build query based on transaction type filter
-    if not transaction_type or transaction_type == "All" or transaction_type == "Contribution":
-        # Contributions
-        contributions = frappe.db.sql(f"""
-            SELECT
-                contribution_date as date,
-                CONCAT('Contribution - ', COALESCE(contribution_type, contribution_type_link)) as particulars,
-                0 as debit,
-                amount as credit,
-                name as reference
-            FROM `tabSHG Contribution`
-            WHERE member = %s AND docstatus = 1 {date_condition}
-            ORDER BY contribution_date
-        """, member, as_dict=True)
-        transactions.extend(contributions)
-
-    if not transaction_type or transaction_type == "All" or transaction_type == "Loan Disbursement":
-        # Loans
-        loans = frappe.db.sql(f"""
-            SELECT
-                COALESCE(disbursement_date, posting_date) as date,
-                CONCAT('Loan Disbursement - ', COALESCE(loan_type, 'Loan')) as particulars,
-                loan_amount as debit,
-                0 as credit,
-                name as reference
-            FROM `tabSHG Loan`
-            WHERE member = %s AND status IN ('Disbursed', 'Closed') AND docstatus = 1 {date_condition}
-            ORDER BY COALESCE(disbursement_date, posting_date)
-        """, member, as_dict=True)
-        transactions.extend(loans)
-
-    if not transaction_type or transaction_type == "All" or transaction_type == "Loan Repayment":
-        # Repayments
-        repayments = frappe.db.sql(f"""
-            SELECT
-                repayment_date as date,
-                'Loan Repayment' as particulars,
-                0 as debit,
-                total_paid as credit,
-                name as reference
-            FROM `tabSHG Loan Repayment`
-            WHERE member = %s AND docstatus = 1 {date_condition}
-            ORDER BY repayment_date
-        """, member, as_dict=True)
-        transactions.extend(repayments)
-
-    if not transaction_type or transaction_type == "All" or transaction_type == "Fine":
-        # Meeting Fines
-        fines = frappe.db.sql(f"""
-            SELECT
-                fine_date as date,
-                CONCAT('Meeting Fine - ', COALESCE(fine_reason, 'Fine')) as particulars,
-                fine_amount as debit,
-                0 as credit,
-                name as reference
-            FROM `tabSHG Meeting Fine`
-            WHERE member = %s AND docstatus = 1 {date_condition}
-            ORDER BY fine_date
-        """, member, as_dict=True)
-        transactions.extend(fines)
-
-    # Sort all transactions by date
-    transactions.sort(key=lambda x: getdate(x.date))
-
-    # Calculate running balance
-    balance = 0
-    for txn in transactions:
-        # Debit increases balance (money owed to SHG), Credit decreases balance (money paid to SHG)
-        balance += flt(txn.debit) - flt(txn.credit)
-        txn.balance = balance
-
-    # Add totals row if there are transactions
-    if transactions:
-        total_debit = sum(flt(t.debit) for t in transactions)
-        total_credit = sum(flt(t.credit) for t in transactions)
-        final_balance = transactions[-1].balance if transactions else 0
+    member_condition = ""
+    if member_filter:
+        member_condition = f" AND m.name = '{member_filter}'"
         
-        totals_row = {
-            "particulars": "Totals",
-            "debit": total_debit,
-            "credit": total_credit,
-            "balance": final_balance,
-            "reference": ""
+    date_condition_contributions = ""
+    date_condition_fines = ""
+    date_condition_loans = ""
+    
+    if from_date and to_date:
+        date_condition_contributions = f" AND c.contribution_date BETWEEN '{from_date}' AND '{to_date}'"
+        date_condition_fines = f" AND f.fine_date BETWEEN '{from_date}' AND '{to_date}'"
+        date_condition_loans = f" AND l.posting_date BETWEEN '{from_date}' AND '{to_date}'"
+    elif from_date:
+        date_condition_contributions = f" AND c.contribution_date >= '{from_date}'"
+        date_condition_fines = f" AND f.fine_date >= '{from_date}'"
+        date_condition_loans = f" AND l.posting_date >= '{from_date}'"
+    elif to_date:
+        date_condition_contributions = f" AND c.contribution_date <= '{to_date}'"
+        date_condition_fines = f" AND f.fine_date <= '{to_date}'"
+        date_condition_loans = f" AND l.posting_date <= '{to_date}'"
+    
+    # Query to get members with their financial data
+    query = f"""
+        SELECT 
+            m.name as member_id,
+            m.member_name as member_name,
+            COALESCE(contrib.total_contributions, 0) as total_contributions,
+            COALESCE(fines.total_fines, 0) as total_fines,
+            COALESCE(loans.total_loan_balance, 0) as total_loan_balance,
+            COALESCE(contrib.unpaid_contributions, 0) as unpaid_contributions,
+            COALESCE(fines.unpaid_fines, 0) as unpaid_fines
+        FROM `tabSHG Member` m
+        LEFT JOIN (
+            SELECT 
+                c.member,
+                SUM(c.amount) as total_contributions,
+                SUM(CASE WHEN c.status != 'Paid' THEN c.amount ELSE 0 END) as unpaid_contributions
+            FROM `tabSHG Contribution` c
+            WHERE c.docstatus = 1 {date_condition_contributions}
+            GROUP BY c.member
+        ) contrib ON m.name = contrib.member
+        LEFT JOIN (
+            SELECT 
+                f.member,
+                SUM(f.fine_amount) as total_fines,
+                SUM(CASE WHEN f.status != 'Paid' THEN f.fine_amount ELSE 0 END) as unpaid_fines
+            FROM `tabSHG Meeting Fine` f
+            WHERE f.docstatus = 1 {date_condition_fines}
+            GROUP BY f.member
+        ) fines ON m.name = fines.member
+        LEFT JOIN (
+            SELECT 
+                l.member,
+                SUM(l.loan_amount - COALESCE(repayments.total_repayment, 0)) as total_loan_balance
+            FROM `tabSHG Loan` l
+            LEFT JOIN (
+                SELECT 
+                    loan,
+                    SUM(total_paid) as total_repayment
+                FROM `tabSHG Loan Repayment`
+                WHERE docstatus = 1
+                GROUP BY loan
+            ) repayments ON l.name = repayments.loan
+            WHERE l.docstatus = 1 AND l.status IN ('Disbursed', 'Active') {date_condition_loans}
+            GROUP BY l.member
+        ) loans ON m.name = loans.member
+        WHERE m.docstatus = 1 {member_condition}
+        ORDER BY m.member_name
+    """
+    
+    data = frappe.db.sql(query, as_dict=True)
+    
+    # Apply "Show Only With Outstanding" filter
+    if show_only_outstanding:
+        data = [row for row in data if (
+            flt(row.total_contributions) > 0 or 
+            flt(row.total_fines) > 0 or 
+            flt(row.total_loan_balance) > 0 or
+            flt(row.unpaid_contributions) > 0 or
+            flt(row.unpaid_fines) > 0
+        )]
+    
+    # Add summary row at bottom
+    if data:
+        total_contributions = sum(flt(row.total_contributions) for row in data)
+        total_fines = sum(flt(row.total_fines) for row in data)
+        total_loan_balance = sum(flt(row.total_loan_balance) for row in data)
+        unpaid_contributions = sum(flt(row.unpaid_contributions) for row in data)
+        unpaid_fines = sum(flt(row.unpaid_fines) for row in data)
+        
+        summary_row = {
+            "member_id": "",
+            "member_name": "<strong>GRAND TOTAL</strong>",
+            "total_contributions": total_contributions,
+            "total_fines": total_fines,
+            "total_loan_balance": total_loan_balance,
+            "unpaid_contributions": unpaid_contributions,
+            "unpaid_fines": unpaid_fines
         }
-        transactions.append(totals_row)
+        data.append(summary_row)
+    
+    return data
 
-    if not transactions:
-        transactions.append({"particulars": _("No financial activity found for this member.")})
-
-    return transactions
-
-def get_report_summary(filters):
-    """Generate the header summary for the report"""
-    member = filters.get("member")
-    if not member:
+def get_report_summary(data):
+    """Generate the summary for the report"""
+    if not data:
         return []
     
-    member_doc = frappe.get_doc("SHG Member", member)
+    # Remove the summary row for calculations
+    report_data = [row for row in data if row.get("member_id")]
+    
+    total_contributions = sum(flt(row.total_contributions) for row in report_data)
+    total_fines = sum(flt(row.total_fines) for row in report_data)
+    total_loan_balance = sum(flt(row.total_loan_balance) for row in report_data)
+    unpaid_contributions = sum(flt(row.unpaid_contributions) for row in report_data)
+    unpaid_fines = sum(flt(row.unpaid_fines) for row in report_data)
     
     return [
         {
-            "label": _("Member Name"),
-            "datatype": "Data",
-            "value": member_doc.member_name or "-"
-        },
-        {
-            "label": _("Member ID"),
-            "datatype": "Data",
-            "value": member_doc.name or "-"
-        },
-        {
-            "label": _("Phone"),
-            "datatype": "Data",
-            "value": member_doc.phone_number or "-"
-        },
-        {
-            "label": _("Total Contributions"),
+            "label": _("Grand Total Contributions"),
             "datatype": "Currency",
-            "value": member_doc.total_contributions or 0
+            "value": total_contributions
         },
         {
-            "label": _("Current Loan Balance"),
+            "label": _("Grand Total Fines"),
             "datatype": "Currency",
-            "value": member_doc.current_loan_balance or 0
+            "value": total_fines
         },
         {
-            "label": _("Total Fines"),
+            "label": _("Total Outstanding Loans"),
             "datatype": "Currency",
-            "value": get_total_fines(member)
+            "value": total_loan_balance
+        },
+        {
+            "label": _("Total Unpaid Contributions"),
+            "datatype": "Currency",
+            "value": unpaid_contributions
+        },
+        {
+            "label": _("Total Unpaid Fines"),
+            "datatype": "Currency",
+            "value": unpaid_fines
         }
     ]
 
-def get_total_fines(member):
-    """Calculate total fines for a member"""
-    total_fines = frappe.db.sql("""
-        SELECT SUM(fine_amount)
-        FROM `tabSHG Meeting Fine`
-        WHERE member = %s AND docstatus = 1
-    """, member)[0][0] or 0
-    
-    return total_fines
-
 def get_chart_data(data):
     """Generate chart data for the report"""
-    dates, balances = [], []
-    for row in data:
-        if row.get("date") and row.get("particulars") != "Totals":
-            dates.append(str(row["date"]))
-            balances.append(flt(row.get("balance", 0)))
-
-    if not dates:
-        return None
-
-    return {
-        "data": {"labels": dates, "datasets": [{"name": "Balance", "type": "line", "values": balances}]},
-        "type": "line",
-        "colors": ["#5e64ff"]
-    }
+    # Since this is a summary report, we won't generate a chart
+    return None
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs

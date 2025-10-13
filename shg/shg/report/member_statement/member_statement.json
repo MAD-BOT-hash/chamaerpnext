@@ -12,7 +12,7 @@
             "fieldtype": "Link",
             "label": "Member",
             "options": "SHG Member",
-            "reqd": 1
+            "reqd": 0
         },
         {
             "fieldname": "from_date",
@@ -25,10 +25,10 @@
             "label": "To Date"
         },
         {
-            "fieldname": "transaction_type",
-            "fieldtype": "Select",
-            "label": "Transaction Type",
-            "options": "\nAll\nContribution\nLoan Disbursement\nLoan Repayment\nFine"
+            "fieldname": "show_only_with_outstanding",
+            "fieldtype": "Check",
+            "label": "Show Only With Outstanding",
+            "default": 0
         }
     ],
     "idx": 0,
