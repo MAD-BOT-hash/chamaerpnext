@@ -122,6 +122,7 @@ class SHGMember(Document):
         from shg.shg.utils.account_utils import get_or_create_member_account
         get_or_create_member_account(self, company)
                 
+    @frappe.whitelist()
     def update_financial_summary(self):
         """Update member's financial summary"""
         # Update total contributions
