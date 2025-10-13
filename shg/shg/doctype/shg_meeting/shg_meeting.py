@@ -72,6 +72,12 @@ class SHGMeeting(Document):
             if row.attendance_status not in ATTENDANCE_FINE_MAP and row.attendance_status in ["Absent", "Late"]:
                 frappe.logger().warning(f"Unmapped attendance status '{row.attendance_status}' — defaulted to '{mapped_fine_reason}'")
                 
+            # Additional validation to ensure fine_reason is valid
+            valid_fine_reasons = ["Late Arrival", "Absentee", "Uniform Violation", "Noise Disturbance", "Other"]
+            if fine_reason and fine_reason not in valid_fine_reasons:
+                frappe.logger().error(f"Invalid fine reason generated: '{fine_reason}' for attendance status '{row.attendance_status}'. Using 'Other' instead.")
+                fine_reason = "Other"
+                
             if fine_amount > 0 and fine_reason:
                 try:
                     fine_entry = frappe.get_doc({
@@ -79,10 +85,11 @@ class SHGMeeting(Document):
                         "member": row.member,
                         "meeting": self.name,
                         "fine_amount": fine_amount,
-                        "fine_reason": fine_reason,
+                        "fine_reason": fine_reason,  # This should be just "Absentee", not "Absentee fine for meeting on..."
                         "fine_date": today()
                     })
                     fine_entry.insert(ignore_permissions=True)
+                    frappe.logger().debug(f"Created fine entry {fine_entry.name} with reason '{fine_reason}' for member {row.member}")
                 except Exception as e:
                     frappe.log_error(f"Failed to create fine entry for {row.member}: {str(e)}")
                     
