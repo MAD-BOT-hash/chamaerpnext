@@ -137,7 +137,7 @@ def create_contribution_journal_entry(contribution_doc):
     
     # Create Journal Entry
     je = frappe.new_doc("Journal Entry")
-    je.voucher_type = "Journal Entry"
+    je.voucher_type = "Bank Entry"
     je.posting_date = contribution_doc.contribution_date or today()
     je.company = company
     je.user_remark = f"Contribution by {contribution_doc.member}"
@@ -320,7 +320,7 @@ def create_meeting_fine_payment_entry(fine_doc):
         pe.mode_of_payment = "Cash"
     
     # Set voucher type
-    pe.voucher_type = "Bank Entry"
+    pe.voucher_type = "Fine Entry"
     
     # Set custom field for traceability
     pe.set("custom_shg_meeting_fine", fine_doc.name)
