@@ -5,12 +5,28 @@ from frappe.utils import today, getdate
 
 class SHGMeetingFine(Document):
     def validate(self):
+        self.validate_fine_reason()
         self.validate_amount()
         self.validate_duplicate()
+        self.autogenerate_description()
         
         # Ensure fine_amount is rounded to 2 decimal places
         if self.fine_amount:
             self.fine_amount = round(float(self.fine_amount), 2)
+        
+    def validate_fine_reason(self):
+        """Validate that fine_reason is one of the allowed options"""
+        allowed_reasons = ["Late Arrival", "Absentee", "Uniform Violation", "Noise Disturbance", "Other"]
+        if self.fine_reason and self.fine_reason not in allowed_reasons:
+            frappe.throw(_("Invalid Fine Reason. Must be one of: {0}").format(", ".join(allowed_reasons)))
+            
+    def autogenerate_description(self):
+        """Auto-generate fine description if not provided"""
+        if not self.fine_description and self.fine_reason and self.meeting:
+            # Get meeting date
+            meeting_date = frappe.db.get_value("SHG Meeting", self.meeting, "meeting_date")
+            if meeting_date:
+                self.fine_description = f"{self.fine_reason} fine for meeting on {meeting_date}"
         
     def validate_amount(self):
         """Validate fine amount"""

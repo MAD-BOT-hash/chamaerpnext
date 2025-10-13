@@ -34,7 +34,13 @@ def get_columns():
             "label": _("Fine Reason"),
             "fieldname": "fine_reason",
             "fieldtype": "Data",
-            "width": 200
+            "width": 150
+        },
+        {
+            "label": _("Fine Description"),
+            "fieldname": "fine_description",
+            "fieldtype": "Data",
+            "width": 250
         },
         {
             "label": _("Fine Amount"),
@@ -79,6 +85,7 @@ def get_data(filters):
                 mf.member,
                 mf.member_name,
                 mf.fine_reason,
+                mf.fine_description,
                 mf.fine_amount,
                 mf.meeting,
                 mf.status
@@ -93,6 +100,7 @@ def get_data(filters):
                 mf.member,
                 mf.member_name,
                 mf.fine_reason,
+                mf.fine_description,
                 mf.fine_amount,
                 mf.meeting,
                 mf.status

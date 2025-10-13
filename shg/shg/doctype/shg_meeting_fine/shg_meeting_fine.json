@@ -14,6 +14,7 @@
         "column_break_4",
         "fine_date",
         "fine_reason",
+        "fine_description",
         "status",
         "paid_date",
         "accounting_section",
@@ -75,6 +76,11 @@
             "label": "Fine Reason",
             "options": "Late Arrival\nAbsentee\nUniform Violation\nNoise Disturbance\nOther",
             "reqd": 1
+        },
+        {
+            "fieldname": "fine_description",
+            "fieldtype": "Small Text",
+            "label": "Fine Description"
         },
         {
             "fieldname": "status",
