@@ -112,7 +112,8 @@
         {
             "fieldname": "member_id",
             "fieldtype": "Data",
-            "label": "Member ID"
+            "label": "Member ID",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "account_number",

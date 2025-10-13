@@ -205,11 +205,44 @@ class SHGMember(Document):
         from shg.shg.utils.member_statement_utils import populate_member_statement
         populate_member_statement(self.name)
         
+    def handle_member_id_change(self, old_id, new_id):
+        """Update member ID in all linked doctypes"""
+        linked_doctypes = [
+            ("SHG Loan", "member"),
+            ("SHG Contribution", "member"),
+            ("SHG Loan Repayment", "member"),
+            ("SHG Meeting Fine", "member")
+        ]
+        
+        updated_count = 0
+        for doctype, field in linked_doctypes:
+            # Count records that will be updated
+            count = frappe.db.count(doctype, {field: old_id})
+            if count > 0:
+                # Update the records
+                frappe.db.sql(f"""
+                    UPDATE `tab{doctype}` 
+                    SET {field} = %s 
+                    WHERE {field} = %s
+                """, (new_id, old_id))
+                updated_count += count
+                
+        frappe.db.commit()
+        if updated_count > 0:
+            frappe.msgprint(f"Updated Member ID in {updated_count} linked records from {old_id} to {new_id}")
+        
     def on_update_after_submit(self):
         """Handle updates to member information after submission"""
         # Re-validate the member data when fields are updated after submission
         self.validate_id_number()
         self.validate_phone_number()
+        
+        # Check if member_id has changed
+        if self.has_value_changed("member_id"):
+            old_id = self.get_doc_before_save().member_id
+            new_id = self.member_id
+            self.handle_member_id_change(old_id, new_id)
+            
         # Update financial summary
         self.update_financial_summary()
 
