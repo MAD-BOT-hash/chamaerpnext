@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import nowdate, getdate
+from frappe.utils import nowdate, getdate, formatdate
 
 class SHGContribution(Document):
     def validate(self):
@@ -75,11 +75,6 @@ class SHGContribution(Document):
             pe = frappe.get_doc("Payment Entry", self.payment_entry)
             if pe.docstatus == 1:
                 pe.cancel()
-                
-    def on_cancel(self):
-        """Cancel the associated journal entry or payment entry"""
-        self.cancel_journal_entry()
-        self.update_member_summary()
                 
     def get_member_account(self):
         """Get member's ledger account, create if not exists"""
@@ -171,6 +166,57 @@ class SHGContribution(Document):
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), "SHG Contribution - Mpesa STK Push Failed")
             return {"success": False, "error": str(e)}
+
+@frappe.whitelist()
+def generate_contribution_invoices(invoice_date, amount, contribution_type=None, remarks=None, send_email=0):
+    active_members = frappe.get_all("SHG Member", filters={"membership_status": "Active"}, fields=["name", "member_name", "email"])
+    created = 0
+
+    for m in active_members:
+        # Calculate due date (30 days from invoice date)
+        due_date = frappe.utils.add_days(invoice_date, 30)
+        
+        inv = frappe.get_doc({
+            "doctype": "SHG Contribution Invoice",
+            "member": m.name,
+            "member_name": m.member_name,
+            "invoice_date": invoice_date,
+            "due_date": due_date,
+            "amount": amount,
+            "contribution_type": contribution_type,
+            "status": "Unpaid",
+            "description": remarks or f"Contribution invoice for {formatdate(invoice_date, 'MMMM yyyy')}"
+        })
+        inv.insert(ignore_permissions=True)
+        inv.submit()
+        created += 1
+
+    frappe.msgprint(_("{0} contribution invoices created successfully.").format(created))
+    return created
+
+@frappe.whitelist()
+def send_contribution_invoice_emails(invoice_date):
+    """Send emails for all contribution invoices created on the given date"""
+    # Get all contribution invoices created on the given date
+    invoices = frappe.get_all("SHG Contribution Invoice", 
+                             filters={
+                                 "invoice_date": invoice_date,
+                                 "status": "Unpaid",
+                                 "docstatus": 1
+                             },
+                             fields=["name"])
+    
+    sent = 0
+    for invoice in invoices:
+        try:
+            inv_doc = frappe.get_doc("SHG Contribution Invoice", invoice.name)
+            inv_doc.send_invoice_email()
+            sent += 1
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), f"Failed to send email for invoice {invoice.name}")
+    
+    frappe.msgprint(_("{0} invoice emails sent successfully.").format(sent))
+    return sent
 
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()

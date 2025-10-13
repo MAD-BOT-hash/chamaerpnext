@@ -1,0 +1,1 @@
+# SHG Contribution Invoice Doctype
