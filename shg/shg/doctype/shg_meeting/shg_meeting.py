@@ -2,6 +2,9 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import today, getdate, flt
 
+# Import the utility function
+from shg.shg.utils.attendance_utils import ATTENDANCE_FINE_MAP, get_fine_reason_from_attendance
+
 class SHGMeeting(Document):
     def validate(self):
         """Validate meeting data"""
@@ -54,18 +57,25 @@ class SHGMeeting(Document):
             fine_amount = 0
             fine_reason = ""
             
+            # Use the mapping to get the correct fine reason
+            mapped_fine_reason = get_fine_reason_from_attendance(row.attendance_status)
+            
             if row.attendance_status == "Absent" and absentee_fine > 0:
                 fine_amount = absentee_fine
-                fine_reason = f"Absentee fine for meeting on {self.meeting_date}"
+                fine_reason = mapped_fine_reason
                 
             elif row.attendance_status == "Late" and lateness_fine > 0:
                 fine_amount = lateness_fine
-                fine_reason = f"Lateness fine for meeting on {self.meeting_date}"
+                fine_reason = mapped_fine_reason
                 
-            if fine_amount > 0:
+            # Log warning for unmapped attendance status
+            if row.attendance_status not in ATTENDANCE_FINE_MAP and row.attendance_status in ["Absent", "Late"]:
+                frappe.logger().warning(f"Unmapped attendance status '{row.attendance_status}' — defaulted to '{mapped_fine_reason}'")
+                
+            if fine_amount > 0 and fine_reason:
                 try:
                     fine_entry = frappe.get_doc({
-                        "doctype": "SHG Meeting Fine",  # Ensure this DocType exists
+                        "doctype": "SHG Meeting Fine",
                         "member": row.member,
                         "meeting": self.name,
                         "fine_amount": fine_amount,
