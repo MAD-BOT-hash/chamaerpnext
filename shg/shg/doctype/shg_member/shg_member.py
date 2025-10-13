@@ -232,6 +232,14 @@ class SHGMember(Document):
         if updated_count > 0:
             frappe.msgprint(f"Updated Member ID in {updated_count} linked records from {old_id} to {new_id}")
         
+    def handle_member_amendment(self):
+        """Handle member amendment"""
+        # Re-validate the member data when the document is amended
+        self.validate_id_number()
+        self.validate_phone_number()
+        # Update financial summary
+        self.update_financial_summary()
+
     def on_update_after_submit(self):
         """Handle updates to member information after submission"""
         # Re-validate the member data when fields are updated after submission
@@ -246,80 +254,80 @@ class SHGMember(Document):
             
         # Update financial summary
         self.update_financial_summary()
+        
+        # Update linked doctypes with member info
+        try:
+            # Update linked Loans
+            frappe.db.sql("""
+                UPDATE `tabSHG Loan`
+                SET member_name = %s, phone_number = %s
+                WHERE member = %s
+            """, (self.member_name, self.phone_number, self.name))
 
-    def handle_member_amendment(self):
-        """Handle member amendment"""
-        # Re-validate the member data when the document is amended
-        self.validate_id_number()
-        self.validate_phone_number()
-        # Update financial summary
-        self.update_financial_summary()
+            # Update linked Contributions
+            frappe.db.sql("""
+                UPDATE `tabSHG Contribution`
+                SET member_name = %s, phone_number = %s
+                WHERE member = %s
+            """, (self.member_name, self.phone_number, self.name))
 
-    def handle_member_update_after_submit(self):
-        """Handle member update after submit"""
-        # Re-validate the member data when fields are updated after submission
-        self.validate_id_number()
-        self.validate_phone_number()
-        # Update financial summary
-        self.update_financial_summary()
+            # Update linked Loan Repayments
+            frappe.db.sql("""
+                UPDATE `tabSHG Loan Repayment`
+                SET member_name = %s
+                WHERE member = %s
+            """, (self.member_name, self.name))
 
-@frappe.whitelist()
-def update_financial_summary(member):
-    """
-    Update the member's financial summary safely
-    """
-    member_doc = frappe.get_doc("SHG Member", member)
+            # Update linked Meeting Fines
+            frappe.db.sql("""
+                UPDATE `tabSHG Meeting Fine`
+                SET member_name = %s
+                WHERE member = %s
+            """, (self.member_name, self.name))
 
-    # Update total contributions
-    total_contributions = frappe.db.sql("""
-        SELECT SUM(amount) 
-        FROM `tabSHG Contribution` 
-        WHERE member = %s AND docstatus = 1
-    """, member)[0][0] or 0
-    
-    # Update loan information
-    total_loans = frappe.db.sql("""
-        SELECT SUM(loan_amount) 
-        FROM `tabSHG Loan` 
-        WHERE member = %s AND status IN ('Disbursed', 'Closed')
-    """, member)[0][0] or 0
-    
-    # Update loan balance
-    loan_balance = frappe.db.sql("""
-        SELECT SUM(balance_amount) 
-        FROM `tabSHG Loan` 
-        WHERE member = %s AND status = 'Disbursed'
-    """, member)[0][0] or 0
-    
-    # Update last contribution date
-    last_contribution = frappe.db.sql("""
-        SELECT MAX(contribution_date) 
-        FROM `tabSHG Contribution` 
-        WHERE member = %s AND docstatus = 1
-    """, member)[0][0]
-    
-    # Update last loan date
-    last_loan = frappe.db.sql("""
-        SELECT MAX(disbursement_date) 
-        FROM `tabSHG Loan` 
-        WHERE member = %s AND status = 'Disbursed'
-    """, member)[0][0]
-    
-    # Update document using db_set to avoid recursion
-    member_doc.db_set({
-        "total_contributions": total_contributions,
-        "total_loans_taken": total_loans,
-        "current_loan_balance": loan_balance,
-        "last_contribution_date": last_contribution,
-        "last_loan_date": last_loan
-    }, update_modified=False)
+            frappe.db.commit()
 
-    frappe.db.commit()
-    return {"status": "success"}
+            frappe.msgprint(f"Linked records updated for Member {self.member_name}")
+
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "handle_member_update_after_submit failed")
+            frappe.throw(f"Failed to update related records: {str(e)}")
 
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
 
-def handle_member_update_after_submit(doc, method):
-    """Hook function called from hooks.py"""
-    doc.handle_member_update_after_submit()
+def handle_member_update_after_submit(doc, method=None):
+    """
+    Triggered when a submitted SHG Member document is edited.
+    Updates all linked doctypes (Loans, Contributions, etc.)
+    with the new member info.
+    """
+    try:
+        # Update linked Loans
+        frappe.db.sql("""
+            UPDATE `tabSHG Loan`
+            SET member_name = %s, phone_number = %s
+            WHERE member = %s
+        """, (doc.member_name, doc.phone_number, doc.name))
+
+        # Update linked Contributions
+        frappe.db.sql("""
+            UPDATE `tabSHG Contribution`
+            SET member_name = %s, phone_number = %s
+            WHERE member = %s
+        """, (doc.member_name, doc.phone_number, doc.name))
+
+        # Update linked Fines or any other related doctypes
+        frappe.db.sql("""
+            UPDATE `tabSHG Fine`
+            SET member_name = %s
+            WHERE member = %s
+        """, (doc.member_name, doc.name))
+
+        frappe.db.commit()
+
+        frappe.msgprint(f"Linked records updated for Member {doc.member_name}")
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "handle_member_update_after_submit failed")
+        frappe.throw(f"Failed to update related records: {str(e)}")
