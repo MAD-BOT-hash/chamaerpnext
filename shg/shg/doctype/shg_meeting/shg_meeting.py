@@ -2,8 +2,8 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import today, getdate, flt
 
-# Import the utility function
-from shg.shg.utils.attendance_utils import ATTENDANCE_FINE_MAP, get_fine_reason_from_attendance
+# Import the utility functions
+from shg.shg.utils.meeting_utils import get_fine_reason_from_attendance, sanitize_fine_reason
 
 class SHGMeeting(Document):
     def validate(self):
@@ -59,6 +59,7 @@ class SHGMeeting(Document):
             
             # Use the mapping to get the correct fine reason
             mapped_fine_reason = get_fine_reason_from_attendance(row.attendance_status)
+            mapped_fine_reason = sanitize_fine_reason(mapped_fine_reason)
             
             if row.attendance_status == "Absent" and absentee_fine > 0:
                 fine_amount = absentee_fine
@@ -68,27 +69,17 @@ class SHGMeeting(Document):
                 fine_amount = lateness_fine
                 fine_reason = mapped_fine_reason
                 
-            # Log warning for unmapped attendance status
-            if row.attendance_status not in ATTENDANCE_FINE_MAP and row.attendance_status in ["Absent", "Late"]:
-                frappe.logger().warning(f"Unmapped attendance status '{row.attendance_status}' — defaulted to '{mapped_fine_reason}'")
-                
-            # Additional validation to ensure fine_reason is valid
-            valid_fine_reasons = ["Late Arrival", "Absentee", "Uniform Violation", "Noise Disturbance", "Other"]
-            if fine_reason and fine_reason not in valid_fine_reasons:
-                frappe.logger().error(f"Invalid fine reason generated: '{fine_reason}' for attendance status '{row.attendance_status}'. Using 'Other' instead.")
-                fine_reason = "Other"
-                
             if fine_amount > 0 and fine_reason:
                 try:
-                    fine_entry = frappe.get_doc({
-                        "doctype": "SHG Meeting Fine",
-                        "member": row.member,
-                        "meeting": self.name,
-                        "fine_amount": fine_amount,
-                        "fine_reason": fine_reason,  # This should be just "Absentee", not "Absentee fine for meeting on..."
-                        "fine_date": today()
-                    })
-                    fine_entry.insert(ignore_permissions=True)
+                    # Create fine using the utility function
+                    from shg.shg.utils.meeting_utils import create_meeting_fine
+                    fine_entry = create_meeting_fine(
+                        member=row.member,
+                        attendance_status=row.attendance_status,
+                        meeting_date=self.meeting_date,
+                        meeting_name=self.name,
+                        amount=fine_amount
+                    )
                     frappe.logger().debug(f"Created fine entry {fine_entry.name} with reason '{fine_reason}' for member {row.member}")
                 except Exception as e:
                     frappe.log_error(f"Failed to create fine entry for {row.member}: {str(e)}")
