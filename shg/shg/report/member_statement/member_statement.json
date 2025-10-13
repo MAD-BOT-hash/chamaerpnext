@@ -28,7 +28,7 @@
             "fieldname": "transaction_type",
             "fieldtype": "Select",
             "label": "Transaction Type",
-            "options": "\nContribution\nLoan\nRepayment\nFine"
+            "options": "\nAll\nContribution\nLoan Disbursement\nLoan Repayment\nFine"
         }
     ],
     "idx": 0,
