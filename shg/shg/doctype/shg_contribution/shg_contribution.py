@@ -1,17 +1,24 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import nowdate, getdate, formatdate
+from frappe.utils import nowdate, getdate, formatdate, add_days
 
 class SHGContribution(Document):
     def validate(self):
         self.validate_amount()
         self.validate_duplicate()
         self.set_contribution_details()
+        self.calculate_unpaid_amount()
         
         # Ensure amount is rounded to 2 decimal places
         if self.amount:
             self.amount = round(float(self.amount), 2)
+        if self.expected_amount:
+            self.expected_amount = round(float(self.expected_amount), 2)
+        if self.amount_paid:
+            self.amount_paid = round(float(self.amount_paid), 2)
+        if self.unpaid_amount:
+            self.unpaid_amount = round(float(self.unpaid_amount), 2)
         
     def validate_amount(self):
         """Validate contribution amount"""
@@ -33,9 +40,44 @@ class SHGContribution(Document):
         """Set contribution details from contribution type"""
         if self.contribution_type_link:
             contrib_type = frappe.get_doc("SHG Contribution Type", self.contribution_type_link)
-            if not self.amount and contrib_type.default_amount:
-                self.amount = contrib_type.default_amount
-                
+            if not self.expected_amount and contrib_type.default_amount:
+                self.expected_amount = contrib_type.default_amount
+        elif self.contribution_type:
+            # Get from settings
+            settings = frappe.get_doc("SHG Settings")
+            if not self.expected_amount:
+                if self.contribution_type == "Regular Weekly":
+                    self.expected_amount = settings.default_contribution_amount
+                elif self.contribution_type == "Regular Monthly":
+                    self.expected_amount = settings.default_contribution_amount * 4  # Approximate
+                elif self.contribution_type == "Bi-Monthly":
+                    self.expected_amount = settings.default_contribution_amount * 8  # Approximate
+                    
+        # If expected_amount is set but amount_paid is not, initialize amount_paid to 0
+        if self.expected_amount and not self.amount_paid:
+            self.amount_paid = 0
+            
+    def calculate_unpaid_amount(self):
+        """Calculate unpaid amount and set status"""
+        # If expected_amount is not set, use the amount field as expected_amount
+        if not self.expected_amount:
+            self.expected_amount = self.amount
+            
+        # If amount_paid is not set, initialize it to 0
+        if not self.amount_paid:
+            self.amount_paid = 0
+            
+        # Calculate unpaid amount
+        self.unpaid_amount = max(0, self.expected_amount - self.amount_paid)
+        
+        # Set status based on unpaid amount
+        if self.unpaid_amount <= 0:
+            self.status = "Paid"
+        elif self.amount_paid > 0:
+            self.status = "Partially Paid"
+        else:
+            self.status = "Unpaid"
+            
     def on_submit(self):
         # ensure idempotent: if already posted -> skip
         if not self.get("posted_to_gl"):
@@ -228,3 +270,52 @@ def post_to_general_ledger(doc, method):
     """Hook function called from hooks.py"""
     if doc.docstatus == 1 and not doc.get("posted_to_gl"):
         doc.post_to_ledger()
+
+def update_overdue_contributions():
+    """Scheduled job to update overdue contributions"""
+    # Get all unpaid contributions where due date has passed
+    overdue_contributions = frappe.db.sql("""
+        SELECT name
+        FROM `tabSHG Contribution`
+        WHERE docstatus = 1 
+        AND status = 'Unpaid'
+        AND contribution_date < %s
+    """, getdate(), as_dict=True)
+    
+    updated_count = 0
+    for contrib in overdue_contributions:
+        try:
+            contribution = frappe.get_doc("SHG Contribution", contrib.name)
+            # Send reminder email
+            send_contribution_reminder(contribution)
+            updated_count += 1
+        except Exception as e:
+            frappe.log_error(f"Failed to process overdue contribution {contrib.name}: {str(e)}")
+    
+    frappe.msgprint(f"Processed {updated_count} overdue contributions")
+
+def send_contribution_reminder(contribution):
+    """Send email reminder for unpaid contribution"""
+    try:
+        member = frappe.get_doc("SHG Member", contribution.member)
+        if member.email:
+            # Create email content
+            subject = "Unpaid Contribution Reminder"
+            message = f"""
+            <p>Dear {member.member_name},</p>
+            <p>This is a reminder that you have an unpaid contribution of KES {contribution.unpaid_amount:,.2f} 
+            due on {formatdate(contribution.contribution_date)}.</p>
+            <p>Please make the payment at your earliest convenience.</p>
+            <p>Thank you for your continued support.</p>
+            """
+            
+            # Send email
+            frappe.sendmail(
+                recipients=[member.email],
+                subject=subject,
+                message=message
+            )
+            
+            frappe.msgprint(f"Reminder email sent to {member.member_name}")
+    except Exception as e:
+        frappe.log_error(f"Failed to send reminder for contribution {contribution.name}: {str(e)}")

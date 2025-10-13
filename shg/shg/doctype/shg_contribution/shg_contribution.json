@@ -16,6 +16,10 @@
         "contribution_type",
         "contribution_type_link",
         "amount",
+        "expected_amount",
+        "amount_paid",
+        "unpaid_amount",
+        "status",
         "payment_method",
         "reference_section",
         "reference_number",
@@ -93,6 +97,37 @@
             "label": "Amount (KES)",
             "reqd": 1,
             "precision": 2
+        },
+        {
+            "fieldname": "expected_amount",
+            "fieldtype": "Currency",
+            "label": "Expected Amount (KES)",
+            "precision": 2,
+            "description": "Total amount due for this contribution period"
+        },
+        {
+            "fieldname": "amount_paid",
+            "fieldtype": "Currency",
+            "label": "Amount Paid (KES)",
+            "precision": 2,
+            "read_only": 1,
+            "description": "Actual amount paid for this contribution"
+        },
+        {
+            "fieldname": "unpaid_amount",
+            "fieldtype": "Currency",
+            "label": "Unpaid Amount (KES)",
+            "precision": 2,
+            "read_only": 1,
+            "description": "Calculated as Expected Amount - Amount Paid"
+        },
+        {
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "label": "Status",
+            "options": "Paid\nPartially Paid\nUnpaid",
+            "read_only": 1,
+            "default": "Unpaid"
         },
         {
             "fieldname": "payment_method",

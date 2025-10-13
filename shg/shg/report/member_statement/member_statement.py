@@ -22,6 +22,7 @@ def get_columns():
         {"label": _("Total Loan Balance (KES)"), "fieldname": "total_loan_balance", "fieldtype": "Currency", "width": 160},
         {"label": _("Unpaid Contributions (KES)"), "fieldname": "unpaid_contributions", "fieldtype": "Currency", "width": 170},
         {"label": _("Unpaid Fines (KES)"), "fieldname": "unpaid_fines", "fieldtype": "Currency", "width": 130},
+        {"label": _("Unpaid Loans (KES)"), "fieldname": "unpaid_loans", "fieldtype": "Currency", "width": 130},
     ]
 
 def get_data(filters):
@@ -61,13 +62,14 @@ def get_data(filters):
             COALESCE(fines.total_fines, 0) as total_fines,
             COALESCE(loans.total_loan_balance, 0) as total_loan_balance,
             COALESCE(contrib.unpaid_contributions, 0) as unpaid_contributions,
-            COALESCE(fines.unpaid_fines, 0) as unpaid_fines
+            COALESCE(fines.unpaid_fines, 0) as unpaid_fines,
+            COALESCE(loans.unpaid_loans, 0) as unpaid_loans
         FROM `tabSHG Member` m
         LEFT JOIN (
             SELECT 
                 c.member,
                 SUM(c.amount) as total_contributions,
-                SUM(CASE WHEN c.status != 'Paid' THEN c.amount ELSE 0 END) as unpaid_contributions
+                SUM(CASE WHEN c.status != 'Paid' THEN c.unpaid_amount ELSE 0 END) as unpaid_contributions
             FROM `tabSHG Contribution` c
             WHERE c.docstatus = 1 {date_condition_contributions}
             GROUP BY c.member
@@ -84,7 +86,8 @@ def get_data(filters):
         LEFT JOIN (
             SELECT 
                 l.member,
-                SUM(l.loan_amount - COALESCE(repayments.total_repayment, 0)) as total_loan_balance
+                SUM(l.loan_amount - COALESCE(repayments.total_repayment, 0)) as total_loan_balance,
+                SUM(CASE WHEN l.next_due_date < CURDATE() THEN l.balance_amount ELSE 0 END) as unpaid_loans
             FROM `tabSHG Loan` l
             LEFT JOIN (
                 SELECT 
@@ -110,7 +113,8 @@ def get_data(filters):
             flt(row.total_fines) > 0 or 
             flt(row.total_loan_balance) > 0 or
             flt(row.unpaid_contributions) > 0 or
-            flt(row.unpaid_fines) > 0
+            flt(row.unpaid_fines) > 0 or
+            flt(row.unpaid_loans) > 0
         )]
     
     # Add summary row at bottom
@@ -120,6 +124,7 @@ def get_data(filters):
         total_loan_balance = sum(flt(row.total_loan_balance) for row in data)
         unpaid_contributions = sum(flt(row.unpaid_contributions) for row in data)
         unpaid_fines = sum(flt(row.unpaid_fines) for row in data)
+        unpaid_loans = sum(flt(row.unpaid_loans) for row in data)
         
         summary_row = {
             "member_id": "",
@@ -128,7 +133,8 @@ def get_data(filters):
             "total_fines": total_fines,
             "total_loan_balance": total_loan_balance,
             "unpaid_contributions": unpaid_contributions,
-            "unpaid_fines": unpaid_fines
+            "unpaid_fines": unpaid_fines,
+            "unpaid_loans": unpaid_loans
         }
         data.append(summary_row)
     
@@ -147,6 +153,7 @@ def get_report_summary(data):
     total_loan_balance = sum(flt(row.total_loan_balance) for row in report_data)
     unpaid_contributions = sum(flt(row.unpaid_contributions) for row in report_data)
     unpaid_fines = sum(flt(row.unpaid_fines) for row in report_data)
+    unpaid_loans = sum(flt(row.unpaid_loans) for row in report_data)
     
     return [
         {
@@ -173,6 +180,11 @@ def get_report_summary(data):
             "label": _("Total Unpaid Fines"),
             "datatype": "Currency",
             "value": unpaid_fines
+        },
+        {
+            "label": _("Total Unpaid Loans"),
+            "datatype": "Currency",
+            "value": unpaid_loans
         }
     ]
 

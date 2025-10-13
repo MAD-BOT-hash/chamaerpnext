@@ -35,14 +35,20 @@ def get_columns():
             "width": 120
         },
         {
-            "label": _("Disbursed Amount"),
-            "fieldname": "disbursed_amount",
+            "label": _("Paid to Date"),
+            "fieldname": "paid_to_date",
             "fieldtype": "Currency",
             "width": 120
         },
         {
-            "label": _("Balance Amount"),
-            "fieldname": "balance_amount",
+            "label": _("Outstanding"),
+            "fieldname": "outstanding",
+            "fieldtype": "Currency",
+            "width": 120
+        },
+        {
+            "label": _("Overdue"),
+            "fieldname": "overdue",
             "fieldtype": "Currency",
             "width": 120
         },
@@ -89,8 +95,12 @@ def get_data(filters):
             l.member,
             l.member_name,
             l.loan_amount,
-            l.disbursed_amount,
-            l.balance_amount,
+            (l.loan_amount - l.balance_amount) as paid_to_date,
+            l.balance_amount as outstanding,
+            CASE 
+                WHEN l.next_due_date < CURDATE() AND l.balance_amount > 0 THEN l.balance_amount
+                ELSE 0
+            END as overdue,
             l.interest_rate,
             l.loan_period_months,
             l.status,

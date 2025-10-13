@@ -132,6 +132,13 @@ class SHGMember(Document):
             WHERE member = %s AND docstatus = 1
         """, self.name)[0][0] or 0
         
+        # Update total unpaid contributions
+        total_unpaid_contributions = frappe.db.sql("""
+            SELECT SUM(unpaid_amount) 
+            FROM `tabSHG Contribution` 
+            WHERE member = %s AND docstatus = 1 AND status IN ('Unpaid', 'Partially Paid')
+        """, self.name)[0][0] or 0
+        
         # Update loan information
         total_loans = frappe.db.sql("""
             SELECT SUM(loan_amount) 
@@ -145,6 +152,13 @@ class SHGMember(Document):
             FROM `tabSHG Loan` 
             WHERE member = %s AND status = 'Disbursed'
         """, self.name)[0][0] or 0
+        
+        # Update total unpaid loans (overdue amounts)
+        total_unpaid_loans = frappe.db.sql("""
+            SELECT SUM(balance_amount) 
+            FROM `tabSHG Loan` 
+            WHERE member = %s AND status = 'Disbursed' AND next_due_date < %s
+        """, (self.name, today()))[0][0] or 0
         
         # Update last contribution date
         last_contribution = frappe.db.sql("""
@@ -193,8 +207,10 @@ class SHGMember(Document):
         # Update document using db_set to avoid recursion
         self.db_set({
             "total_contributions": total_contributions,
+            "total_unpaid_contributions": total_unpaid_contributions,
             "total_loans_taken": total_loans,
             "current_loan_balance": loan_balance,
+            "total_unpaid_loans": total_unpaid_loans,
             "last_contribution_date": last_contribution,
             "last_loan_date": last_loan,
             "credit_score": self.credit_score

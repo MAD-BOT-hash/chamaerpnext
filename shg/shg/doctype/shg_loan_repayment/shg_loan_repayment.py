@@ -1,6 +1,7 @@
 import frappe
+from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, today, getdate, add_months
+from frappe.utils import flt, today, getdate, add_months, add_days
 
 class SHGLoanRepayment(Document):
     def validate(self):
@@ -146,6 +147,15 @@ class SHGLoanRepayment(Document):
         # Update loan balance
         loan.balance_amount = max(0, loan.balance_amount - self.principal_amount)
         loan.last_repayment_date = self.repayment_date
+        
+        # Update total repaid
+        total_repaid = frappe.db.sql("""
+            SELECT SUM(total_paid)
+            FROM `tabSHG Loan Repayment`
+            WHERE loan = %s AND docstatus = 1
+        """, self.loan)[0][0] or 0
+        
+        loan.total_repaid = total_repaid
 
         # Update next due date based on repayment frequency
         if loan.balance_amount > 0:
@@ -325,9 +335,9 @@ class SHGLoanRepayment(Document):
             if schedule_entries:
                 # Update the earliest pending schedule entry
                 schedule_doc = frappe.get_doc("SHG Loan Repayment Schedule", schedule_entries[0].name)
-                schedule_doc.status = "Paid"
+                schedule_doc.amount_paid = self.total_paid
+                schedule_doc.status = "Paid" if self.total_paid >= schedule_doc.total_due else "Partially Paid"
                 schedule_doc.actual_payment_date = self.repayment_date
-                schedule_doc.actual_amount_paid = self.total_paid
                 schedule_doc.save()
 
                 # If this payment was for a specific scheduled amount, check for over/under payment

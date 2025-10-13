@@ -17,6 +17,10 @@ class SHGLoan(Document):
             self.balance_amount = round(flt(self.balance_amount), 2)
         if self.disbursed_amount:
             self.disbursed_amount = round(flt(self.disbursed_amount), 2)
+        if self.total_repaid:
+            self.total_repaid = round(flt(self.total_repaid), 2)
+        if self.overdue_amount:
+            self.overdue_amount = round(flt(self.overdue_amount), 2)
 
         # Auto populate repayment schedule if missing
         if not self.repayment_schedule or len(self.repayment_schedule) == 0:
@@ -154,14 +158,14 @@ class SHGLoan(Document):
             principal_component = principal / months
         else:
             # Reducing balance: interest recalculated each month
-            monthly_interest = None
+            monthly_interest = 0
             principal_component = principal / months
 
         # Start date for first installment
         start_date = getdate(self.repayment_start_date or self.disbursement_date or frappe.utils.nowdate())
 
-        total_interest = 0
-        total_payment = 0
+        total_interest = 0.0
+        total_payment = 0.0
 
         for i in range(months):
             if interest_type == "Reducing Balance":
@@ -173,15 +177,15 @@ class SHGLoan(Document):
             total_installment = principal_paid + interest_component
             balance = max(balance - principal_paid, 0)
 
-            total_interest += interest_component
-            total_payment += total_installment
+            total_interest += flt(interest_component)
+            total_payment += flt(total_installment)
 
             self.append("repayment_schedule", {
                 "payment_date": add_months(start_date, i + 1),
-                "principal_amount": round(principal_paid, 2),
-                "interest_amount": round(interest_component, 2),
-                "total_payment": round(total_installment, 2),
-                "balance_amount": round(balance, 2)
+                "principal_amount": round(flt(principal_paid), 2),
+                "interest_amount": round(flt(interest_component), 2),
+                "total_payment": round(flt(total_installment), 2),
+                "balance_amount": round(flt(balance), 2)
             })
 
         # Update totals on parent loan
@@ -193,627 +197,42 @@ class SHGLoan(Document):
                 
     def before_save(self):
         """Ensure all numeric fields are rounded."""
-        for field in ["loan_amount", "monthly_installment", "total_payable", "balance_amount", "disbursed_amount"]:
+        for field in ["loan_amount", "monthly_installment", "total_payable", "balance_amount", "disbursed_amount", "total_repaid", "overdue_amount"]:
             if getattr(self, field, None):
                 setattr(self, field, round(flt(getattr(self, field)), 2))
                 
     def validate_accounts(self):
-        """Validate accounts for loan disbursement"""
-        if not self.company:
-            self.company = frappe.defaults.get_user_default("Company")
-        if not self.company:
-            frappe.throw("Company is required to disburse this loan.")
-                
-    @frappe.whitelist()
-    def disburse_loan(self):
-        """
-        Create Payment Entry automatically when a loan is disbursed.
-        """
-        # Prevent duplicate disbursements
-        existing_payment = frappe.db.exists("Payment Entry", {"reference_name": self.name, "reference_doctype": "SHG Loan"})
-        if existing_payment:
-            frappe.msgprint(f"Loan {self.name} already disbursed via Payment Entry {existing_payment}")
-            return
-
-        # Create Payment Entry
-        pe = frappe.new_doc("Payment Entry")
-        pe.payment_type = "Pay"
-        pe.posting_date = nowdate()
-        pe.company = frappe.defaults.get_user_default("Company") or frappe.get_all("Company", limit=1)[0].name
-        pe.party_type = "Customer"
-        pe.party = self.get_member_customer()
-        pe.reference_doctype = "SHG Loan"
-        pe.reference_name = self.name
+        """Validate account mappings"""
+        if not self.account_mapping:
+            frappe.throw(_("Please set up account mappings for this loan type"))
+            
+        # Check for duplicate accounts
+        accounts = [row.account for row in self.account_mapping]
+        if len(accounts) != len(set(accounts)):
+            frappe.throw(_("Duplicate accounts found in account mapping"))
+            
+    def update_loan_summary(self):
+        """Update loan summary fields"""
+        # Calculate total repaid
+        total_repaid = frappe.db.sql("""
+            SELECT SUM(total_paid)
+            FROM `tabSHG Loan Repayment`
+            WHERE loan = %s AND docstatus = 1
+        """, self.name)[0][0] or 0
         
-        # Get accounts
-        settings = frappe.get_single("SHG Settings")
-        bank_account = settings.default_bank_account or settings.default_cash_account
-        if not bank_account:
-            # Try to find a default bank account
-            bank_accounts = frappe.get_all("Account", filters={
-                "company": pe.company,
-                "account_type": ["in", ["Bank", "Cash"]],
-                "is_group": 0
-            }, limit=1)
-            if bank_accounts:
-                bank_account = bank_accounts[0].name
-            else:
-                frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
+        self.total_repaid = total_repaid
+        self.balance_amount = max(0, self.loan_amount - self.total_repaid)
         
-        pe.paid_from = bank_account
-        pe.paid_to = self.get_member_account()
-        pe.paid_amount = self.loan_amount
-        pe.received_amount = self.loan_amount
-        pe.reference_no = self.name
-        pe.reference_date = nowdate()
-        pe.remarks = f"Loan Disbursement for {self.member} (Loan {self.name})"
-
-        # Save and submit
-        pe.insert(ignore_permissions=True)
-        pe.submit()
-
-        frappe.msgprint(f"Loan {self.name} successfully disbursed. Payment Entry: {pe.name}")
-
-        # Optionally update status
-        self.status = "Disbursed"
-        self.disbursement_payment_entry = pe.name
-        self.disbursed_amount = self.loan_amount
-        self.balance_amount = self.loan_amount
-        self.db_set({
-            "status": "Disbursed",
-            "disbursement_payment_entry": pe.name,
-            "disbursed_amount": self.loan_amount,
-            "balance_amount": self.loan_amount
-        })
-
-        # Commit to DB
-        frappe.db.commit()
-        
-    def before_cancel(self):
-        """
-        Allow cancelling a loan only if not yet disbursed.
-        Clean up related repayment schedules, journal entries, and payments.
-        Reset member eligibility and overdue status.
-        """
-        if self.status == "Disbursed":
-            frappe.throw("You cannot cancel a loan that has already been disbursed.")
-
-        frappe.msgprint(f"🧹 Cancelling Loan {self.name} — cleaning up related records...")
-
-        # Delete related repayment schedules
-        try:
-            schedules = frappe.get_all("SHG Loan Repayment Schedule", {"parent": self.name})
-            for s in schedules:
-                try:
-                    frappe.delete_doc("SHG Loan Repayment Schedule", s.name, force=True, ignore_permissions=True)
-                except Exception as e:
-                    frappe.log_error(f"Error deleting SHG Loan Repayment Schedule {s.name}: {e}")
-        except Exception as e:
-            frappe.log_error(f"Error fetching SHG Loan Repayment Schedules for {self.name}: {e}")
-
-        # Cancel and delete related Journal Entries
-        try:
-            jes = frappe.get_all("Journal Entry Account", {"reference_name": self.name, "reference_type": "Loan"}, pluck="parent")
-            for je in jes:
-                try:
-                    doc = frappe.get_doc("Journal Entry", je)
-                    if doc.docstatus == 1:
-                        doc.cancel()
-                    frappe.delete_doc("Journal Entry", je, force=True, ignore_permissions=True)
-                except Exception as e:
-                    frappe.log_error(f"Error deleting Journal Entry {je}: {e}")
-        except Exception as e:
-            frappe.log_error(f"Error fetching Journal Entries for {self.name}: {e}")
-
-        # Cancel and delete related Payment Entries
-        try:
-            pes = frappe.get_all("Payment Entry Reference", {"reference_name": self.name, "reference_doctype": "Loan"}, pluck="parent")
-            for pe in pes:
-                try:
-                    doc = frappe.get_doc("Payment Entry", pe)
-                    if doc.docstatus == 1:
-                        doc.cancel()
-                    frappe.delete_doc("Payment Entry", pe, force=True, ignore_permissions=True)
-                except Exception as e:
-                    frappe.log_error(f"Error deleting Payment Entry {pe}: {e}")
-        except Exception as e:
-            frappe.log_error(f"Error fetching Payment Entries for {self.name}: {e}")
-
-        # If a linked ERPNext Loan exists, cancel and delete it as well
-        if frappe.db.exists("Loan", self.name):
-            try:
-                erpnext_loan = frappe.get_doc("Loan", self.name)
-                if erpnext_loan.docstatus == 1:
-                    erpnext_loan.cancel()
-                frappe.delete_doc("Loan", self.name, force=True, ignore_permissions=True)
-                frappe.msgprint(f"✅ Cancelled and deleted linked ERPNext Loan {self.name}")
-            except Exception as e:
-                frappe.log_error(f"Error cancelling/deleting ERPNext Loan {self.name}: {e}")
-                frappe.msgprint(f"⚠️ Warning: Could not cancel/delete linked ERPNext Loan {self.name}")
-
-        # Reset loan eligibility and overdue flag for member
+        # Calculate overdue amount
+        if self.next_due_date and getdate(self.next_due_date) < getdate() and self.balance_amount > 0:
+            self.overdue_amount = self.balance_amount
+        else:
+            self.overdue_amount = 0
+            
+        # Update member summary
         if self.member:
-            # Safe lookup to ensure member exists
-            if frappe.db.exists("SHG Member", self.member):
-                frappe.msgprint(f"🔄 Resetting eligibility for member {self.member}")
-                
-                # Reset flags directly in SHG Member
-                try:
-                    frappe.db.set_value("SHG Member", self.member, {
-                        "loan_eligibility_flag": 1,
-                        "has_overdue_loans": 0
-                    })
-                except Exception as e:
-                    frappe.log_error(f"Error updating eligibility flags for member {self.member}: {e}")
-
-                # Optional: Update Financial Summary if it exists
-                try:
-                    if frappe.db.exists("DocType", "SHG Financial Summary"):
-                        try:
-                            summary = frappe.get_all("SHG Financial Summary", {"member": self.member}, pluck="name")
-                            if summary:
-                                summary_doc = frappe.get_doc("SHG Financial Summary", summary[0])
-                                summary_doc.total_outstanding_loans = 0
-                                summary_doc.total_overdue_amount = 0
-                                summary_doc.save(ignore_permissions=True)
-                            else:
-                                frappe.msgprint("⚠️ Financial Summary record not found, skipped.")
-                        except Exception as e:
-                            frappe.log_error(f"Error updating Financial Summary for member {self.member}: {e}", "SHG Loan Cancel Cleanup Warning")
-                            frappe.msgprint("⚠️ Financial Summary record not found, skipped.")
-                    else:
-                        frappe.msgprint("⚠️ Financial Summary record not found, skipped.")
-                except Exception as e:
-                    frappe.log_error(f"Error checking Financial Summary doctype: {e}", "SHG Loan Cancel Cleanup Warning")
-                    frappe.msgprint("⚠️ Financial Summary record not found, skipped.")
-
-                frappe.msgprint(f"✅ Member eligibility reset for {self.member}")
-            else:
-                frappe.msgprint(f"⚠️ Member {self.member} not found, skipping eligibility reset.")
-
-    def before_trash(self):
-        """
-        Allow deletion only if loan is not disbursed.
-        """
-        if self.status == "Disbursed":
-            frappe.throw("You cannot delete a disbursed loan record.")
-                
-    def on_update_after_submit(self):
-        """
-        Allow limited status transitions after submit.
-        """
-        old_status = self.get_db_value("status")
-
-        # Auto-disburse when moving from Approved to Disbursed
-        if old_status == "Approved" and self.status == "Disbursed":
-            self.disburse_loan()
-        else:
-            frappe.msgprint(f"Status updated from {old_status} → {self.status}")
-                
-    def on_submit(self):
-        if self.status == "Approved":
-            self.generate_repayment_schedule()
-            self.update_member_summary()
-            self.send_approval_notification()
-        elif self.status == "Disbursed":
-            self.generate_repayment_schedule()
-            self.update_member_summary()
-            # Disburse the loan
-            self.disburse_loan()
-            # ensure idempotent: if already posted -> skip
-            if not self.get("posted_to_gl"):
-                self.post_to_ledger()
-            self.validate_gl_entries()
-            
-    def on_update(self):
-        """Update balance when status changes"""
-        if self.status == "Disbursed" and not self.disbursed_amount:
-            # Disburse the loan if not already done
-            if not self.disbursement_journal_entry and not self.disbursement_payment_entry:
-                self.disburse_loan()
-            else:
-                self.disbursed_amount = self.loan_amount
-                self.balance_amount = self.loan_amount
-                # Set next due date based on repayment frequency
-                if self.repayment_frequency == "Daily":
-                    self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 1)
-                elif self.repayment_frequency == "Weekly":
-                    self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 7)
-                elif self.repayment_frequency == "Bi-Weekly":
-                    self.next_due_date = add_days(getdate(self.disbursement_date or nowdate()), 14)
-                elif self.repayment_frequency == "Monthly":
-                    self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 1)
-                elif self.repayment_frequency == "Bi-Monthly":
-                    self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 2)
-                elif self.repayment_frequency == "Quarterly":
-                    self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 3)
-                elif self.repayment_frequency == "Yearly":
-                    self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 12)
-                else:
-                    # Default to monthly
-                    self.next_due_date = add_months(getdate(self.disbursement_date or nowdate()), 1)
-                self.save()
-            
-    def validate_gl_entries(self):
-        """Validate that GL entries were created properly"""
-        if not self.disbursement_journal_entry and not self.disbursement_payment_entry:
-            frappe.throw(_("Failed to create Journal Entry or Payment Entry for this loan disbursement. Please check the system logs."))
-            
-        # Use validation utilities
-        from shg.shg.utils.validation_utils import validate_reference_types_and_names, validate_custom_field_linking, validate_accounting_integrity
-        validate_reference_types_and_names(self)
-        validate_custom_field_linking(self)
-        validate_accounting_integrity(self)
-            
-    def post_to_ledger(self):
-        """
-        Create a Payment Entry for this loan disbursement.
-        """
-        from shg.shg.utils.gl_utils import create_loan_disbursement_payment_entry, update_document_with_payment_entry
-        payment_entry = create_loan_disbursement_payment_entry(self)
-        update_document_with_payment_entry(self, payment_entry, "disbursement_payment_entry")
-        
-    def get_member_account(self):
-        """Get member's ledger account, create if not exists"""
-        member = frappe.get_doc("SHG Member", self.member)
-        company = frappe.defaults.get_user_default("Company")
-        if not company:
-            companies = frappe.get_all("Company", limit=1)
-            if companies:
-                company = companies[0].name
-            else:
-                frappe.throw(_("Please create a company first"))
-                
-        from shg.shg.utils.account_utils import get_or_create_member_account
-        return get_or_create_member_account(member, company)
-        
-    def get_loan_account(self, company):
-        """Get loan account, create if not exists"""
-        from shg.shg.utils.account_utils import get_or_create_shg_loans_account
-        return get_or_create_shg_loans_account(company)
-        
-    def get_bank_account(self, company):
-        """Get bank account from settings or defaults"""
-        settings = frappe.get_single("SHG Settings")
-        if settings.default_bank_account:
-            return settings.default_bank_account
-        else:
-            # Try to find a default bank account
-            bank_accounts = frappe.get_all("Account", filters={
-                "company": company,
-                "account_type": "Bank",
-                "is_group": 0
-            }, limit=1)
-            if bank_accounts:
-                return bank_accounts[0].name
-            else:
-                frappe.throw(_("Please configure default bank account in SHG Settings"))
-        
-    def get_member_customer(self):
-        """Get member's customer link"""
-        member = frappe.get_doc("SHG Member", self.member)
-        return member.customer
-                
-    def generate_daily_schedule(self):
-        """Generate daily repayment schedule"""
-        outstanding_balance = self.loan_amount
-        daily_rate = (self.interest_rate / 100) / 365
-        due_date = self.repayment_start_date or self.disbursement_date
-        
-        # Calculate number of days for the loan period
-        total_days = int(self.loan_period_months * 30)  # Approximate
-        
-        if total_days <= 0:
-            return
-            
-        for i in range(total_days):
-            due_date = add_days(due_date, 1)
-            
-            if self.interest_type == "Flat Rate":
-                # Flat rate calculation
-                principal = self.loan_amount / total_days
-                interest = (self.loan_amount * self.interest_rate / 100) / 365
-            else:
-                # Reducing balance calculation
-                interest = outstanding_balance * daily_rate
-                # For daily payments, principal is calculated to ensure loan is paid off
-                if i == total_days - 1:
-                    # Last payment - pay off remaining balance
-                    principal = outstanding_balance
-                else:
-                    principal = self.monthly_installment / 30 if self.monthly_installment > 0 else 0
-                
-            self.append("repayment_schedule", {
-                "payment_date": due_date,
-                "principal_amount": principal,
-                "interest_amount": interest,
-                "total_payment": principal + interest,
-                "balance_amount": max(0, outstanding_balance - principal)
-            })
-            
-            outstanding_balance = max(0, outstanding_balance - principal)
-            if outstanding_balance <= 0:
-                break
-            
-    def generate_weekly_schedule(self):
-        """Generate weekly repayment schedule"""
-        outstanding_balance = self.loan_amount
-        weekly_rate = (self.interest_rate / 100) / 52
-        due_date = self.repayment_start_date or self.disbursement_date
-        
-        # Calculate number of weeks for the loan period
-        total_weeks = int(self.loan_period_months * 4)  # Approximate
-        
-        if total_weeks <= 0:
-            return
-            
-        weekly_installment = self.monthly_installment * 12 / 52 if self.monthly_installment > 0 else 0
-        
-        for i in range(total_weeks):
-            due_date = add_days(due_date, 7)
-            
-            if self.interest_type == "Flat Rate":
-                # Flat rate calculation
-                principal = self.loan_amount / total_weeks
-                interest = (self.loan_amount * self.interest_rate / 100) / 52
-            else:
-                # Reducing balance calculation
-                interest = outstanding_balance * weekly_rate
-                # For weekly payments
-                if i == total_weeks - 1:
-                    # Last payment - pay off remaining balance
-                    principal = outstanding_balance
-                else:
-                    principal = weekly_installment - interest if weekly_installment > interest else 0
-                
-            self.append("repayment_schedule", {
-                "payment_date": due_date,
-                "principal_amount": principal,
-                "interest_amount": interest,
-                "total_payment": principal + interest,
-                "balance_amount": max(0, outstanding_balance - principal)
-            })
-            
-            outstanding_balance = max(0, outstanding_balance - principal)
-            if outstanding_balance <= 0:
-                break
-            
-    def generate_biweekly_schedule(self):
-        """Generate bi-weekly repayment schedule"""
-        outstanding_balance = self.loan_amount
-        biweekly_rate = (self.interest_rate / 100) / 26
-        due_date = self.repayment_start_date or self.disbursement_date
-        
-        # Calculate number of bi-weekly periods for the loan period
-        total_biweekly = int(self.loan_period_months * 2)  # Approximate
-        
-        if total_biweekly <= 0:
-            return
-            
-        biweekly_installment = self.monthly_installment * 12 / 26 if self.monthly_installment > 0 else 0
-        
-        for i in range(total_biweekly):
-            due_date = add_days(due_date, 14)
-            
-            if self.interest_type == "Flat Rate":
-                # Flat rate calculation
-                principal = self.loan_amount / total_biweekly
-                interest = (self.loan_amount * self.interest_rate / 100) / 26
-            else:
-                # Reducing balance calculation
-                interest = outstanding_balance * biweekly_rate
-                # For bi-weekly payments
-                if i == total_biweekly - 1:
-                    # Last payment - pay off remaining balance
-                    principal = outstanding_balance
-                else:
-                    principal = biweekly_installment - interest if biweekly_installment > interest else 0
-                
-            self.append("repayment_schedule", {
-                "payment_date": due_date,
-                "principal_amount": principal,
-                "interest_amount": interest,
-                "total_payment": principal + interest,
-                "balance_amount": max(0, outstanding_balance - principal)
-            })
-            
-            outstanding_balance = max(0, outstanding_balance - principal)
-            if outstanding_balance <= 0:
-                break
-            
-    def generate_monthly_schedule(self):
-        """Generate monthly repayment schedule with improved accuracy"""
-        outstanding_balance = self.loan_amount
-        monthly_rate = (self.interest_rate / 100) / 12
-        due_date = self.repayment_start_date or self.disbursement_date
-        
-        total_months = int(self.loan_period_months)
-        
-        if total_months <= 0:
-            return
-            
-        for i in range(total_months):
-            due_date = add_months(due_date, 1)
-            
-            if self.interest_type == "Flat Rate":
-                # Flat rate calculation
-                principal = self.loan_amount / total_months
-                interest = (self.loan_amount * self.interest_rate / 100) / 12
-            else:
-                # Reducing balance calculation using the proper amortization formula
-                interest = outstanding_balance * monthly_rate
-                # For monthly payments
-                if i == total_months - 1:
-                    # Last payment - pay off remaining balance
-                    principal = outstanding_balance
-                else:
-                    principal = self.monthly_installment - interest if self.monthly_installment > interest else 0
-                
-            self.append("repayment_schedule", {
-                "payment_date": due_date,
-                "principal_amount": principal,
-                "interest_amount": interest,
-                "total_payment": principal + interest,
-                "balance_amount": max(0, outstanding_balance - principal)
-            })
-            
-            outstanding_balance = max(0, outstanding_balance - principal)
-            if outstanding_balance <= 0:
-                break
-            
-    def generate_bimonthly_schedule(self):
-        """Generate bi-monthly repayment schedule"""
-        outstanding_balance = self.loan_amount
-        bimonthly_rate = (self.interest_rate / 100) / 6  # 6 periods per year
-        due_date = self.repayment_start_date or self.disbursement_date
-        
-        # Calculate number of bi-monthly periods for the loan period
-        total_bimonthly = int(self.loan_period_months / 2)
-        
-        if total_bimonthly <= 0:
-            return
-            
-        bimonthly_installment = self.monthly_installment * 2 if self.monthly_installment > 0 else 0
-        
-        for i in range(total_bimonthly):
-            due_date = add_months(due_date, 2)
-            
-            if self.interest_type == "Flat Rate":
-                # Flat rate calculation
-                principal = self.loan_amount / total_bimonthly
-                interest = (self.loan_amount * self.interest_rate / 100) / 6
-            else:
-                # Reducing balance calculation
-                interest = outstanding_balance * bimonthly_rate
-                # For bi-monthly payments
-                if i == total_bimonthly - 1:
-                    # Last payment - pay off remaining balance
-                    principal = outstanding_balance
-                else:
-                    principal = bimonthly_installment - interest if bimonthly_installment > interest else 0
-                
-            self.append("repayment_schedule", {
-                "payment_date": due_date,
-                "principal_amount": principal,
-                "interest_amount": interest,
-                "total_payment": principal + interest,
-                "balance_amount": max(0, outstanding_balance - principal)
-            })
-            
-            outstanding_balance = max(0, outstanding_balance - principal)
-            if outstanding_balance <= 0:
-                break
-            
-    def generate_quarterly_schedule(self):
-        """Generate quarterly repayment schedule"""
-        outstanding_balance = self.loan_amount
-        quarterly_rate = (self.interest_rate / 100) / 4
-        due_date = self.repayment_start_date or self.disbursement_date
-        
-        # Calculate number of quarterly periods for the loan period
-        total_quarterly = int(self.loan_period_months / 3)
-        
-        if total_quarterly <= 0:
-            return
-            
-        quarterly_installment = self.monthly_installment * 3 if self.monthly_installment > 0 else 0
-        
-        for i in range(total_quarterly):
-            due_date = add_months(due_date, 3)
-            
-            if self.interest_type == "Flat Rate":
-                # Flat rate calculation
-                principal = self.loan_amount / total_quarterly
-                interest = (self.loan_amount * self.interest_rate / 100) / 4
-            else:
-                # Reducing balance calculation
-                interest = outstanding_balance * quarterly_rate
-                # For quarterly payments
-                if i == total_quarterly - 1:
-                    # Last payment - pay off remaining balance
-                    principal = outstanding_balance
-                else:
-                    principal = quarterly_installment - interest if quarterly_installment > interest else 0
-                
-            self.append("repayment_schedule", {
-                "payment_date": due_date,
-                "principal_amount": principal,
-                "interest_amount": interest,
-                "total_payment": principal + interest,
-                "balance_amount": max(0, outstanding_balance - principal)
-            })
-            
-            outstanding_balance = max(0, outstanding_balance - principal)
-            if outstanding_balance <= 0:
-                break
-            
-    def generate_yearly_schedule(self):
-        """Generate yearly repayment schedule"""
-        outstanding_balance = self.loan_amount
-        yearly_rate = (self.interest_rate / 100)
-        due_date = self.repayment_start_date or self.disbursement_date
-        
-        # Calculate number of yearly periods for the loan period
-        total_yearly = int(self.loan_period_months / 12)
-        
-        if total_yearly <= 0:
-            return
-            
-        yearly_installment = self.monthly_installment * 12 if self.monthly_installment > 0 else 0
-        
-        for i in range(total_yearly):
-            due_date = add_months(due_date, 12)
-            
-            if self.interest_type == "Flat Rate":
-                # Flat rate calculation
-                principal = self.loan_amount / total_yearly
-                interest = (self.loan_amount * self.interest_rate / 100)
-            else:
-                # Reducing balance calculation
-                interest = outstanding_balance * yearly_rate
-                # For yearly payments
-                if i == total_yearly - 1:
-                    # Last payment - pay off remaining balance
-                    principal = outstanding_balance
-                else:
-                    principal = yearly_installment - interest if yearly_installment > interest else 0
-                
-            self.append("repayment_schedule", {
-                "payment_date": due_date,
-                "principal_amount": principal,
-                "interest_amount": interest,
-                "total_payment": principal + interest,
-                "balance_amount": max(0, outstanding_balance - principal)
-            })
-            
-            outstanding_balance = max(0, outstanding_balance - principal)
-            if outstanding_balance <= 0:
-                break
-            
-    def update_member_summary(self):
-        """Update member's financial summary"""
-        member = frappe.get_doc("SHG Member", self.member)
-        member.update_financial_summary()
-        
-    def send_approval_notification(self):
-        """Send loan approval notification"""
-        member = frappe.get_doc("SHG Member", self.member)
-        
-        message = f"Dear {member.member_name}, your loan application of KES {self.loan_amount:,.2f} has been approved."
-        
-        notification = frappe.get_doc({
-            "doctype": "SHG Notification Log",
-            "member": self.member,
-            "notification_type": "Loan Approval",
-            "message": message,
-            "channel": "SMS",
-            "reference_document": "SHG Loan",
-            "reference_name": self.name
-        })
-        notification.insert()
-        
-        # Send SMS (would be implemented in actual system)
-        # send_sms(member.phone_number, message)
+            member = frappe.get_doc("SHG Member", self.member)
+            member.update_financial_summary()
 
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
@@ -821,101 +240,7 @@ def validate_loan(doc, method):
     """Hook function called from hooks.py"""
     doc.validate()
 
-
 def post_to_general_ledger(doc, method):
     """Hook function called from hooks.py"""
-    if doc.docstatus == 1 and doc.status == "Disbursed" and not doc.get("posted_to_gl"):
+    if doc.docstatus == 1 and not doc.get("posted_to_gl"):
         doc.post_to_ledger()
-
-
-def generate_repayment_schedule(doc, method):
-    """Hook function called from hooks.py"""
-    if doc.status == "Disbursed":
-        doc.generate_repayment_schedule()
-
-
-@frappe.whitelist()
-def disburse_loan(docname):
-    """Public API to disburse a loan manually from button or client script"""
-    loan = frappe.get_doc("SHG Loan", docname)
-    loan.disburse_loan()
-    return "Loan disbursed successfully."
-
-
-@frappe.whitelist()
-def cancel_loan_and_cleanup(docname):
-    """
-    Cancel a submitted SHG Loan, delete related Payment Entries and Repayment Schedules,
-    and reset member eligibility safely (only if SHG Financial Summary exists).
-    """
-    try:
-        loan = frappe.get_doc("SHG Loan", docname)
-
-        if loan.docstatus != 1:
-            frappe.throw(f"Loan {docname} must be submitted before cancellation.")
-
-        frappe.msgprint(f"🧹 Cancelling Loan {docname} — removing related records and resetting member eligibility...")
-
-        # Cancel related Payment Entries
-        pes = frappe.get_all("Payment Entry Reference", {"reference_name": docname, "reference_doctype": "Loan"}, pluck="parent")
-        for pe in pes:
-            try:
-                doc = frappe.get_doc("Payment Entry", pe)
-                if doc.docstatus == 1:
-                    doc.cancel()
-                frappe.delete_doc("Payment Entry", pe, force=True, ignore_permissions=True)
-            except Exception as e:
-                frappe.log_error(f"Error cancelling/deleting Payment Entry {pe}: {e}")
-
-        # Cancel related Journal Entries
-        jes = frappe.get_all("Journal Entry Account", {"reference_name": docname, "reference_type": "Loan"}, pluck="parent")
-        for je in jes:
-            try:
-                doc = frappe.get_doc("Journal Entry", je)
-                if doc.docstatus == 1:
-                    doc.cancel()
-                frappe.delete_doc("Journal Entry", je, force=True, ignore_permissions=True)
-            except Exception as e:
-                frappe.log_error(f"Error cancelling/deleting Journal Entry {je}: {e}")
-
-        # Remove repayment schedules
-        frappe.db.delete("SHG Loan Repayment Schedule", {"parent": docname})
-
-        # Reset eligibility safely in SHG Member
-        if loan.member:
-            frappe.msgprint(f"🔄 Resetting eligibility for member {loan.member}")
-            
-            # Reset flags directly in SHG Member
-            frappe.db.set_value("SHG Member", loan.member, {
-                "loan_eligibility_flag": 1,
-                "has_overdue_loans": 0
-            })
-
-            # Optional: Update Financial Summary if it exists
-            try:
-                if frappe.db.exists("DocType", "SHG Financial Summary"):
-                    summary = frappe.get_all("SHG Financial Summary", {"member": loan.member}, pluck="name")
-                    if summary:
-                        summary_doc = frappe.get_doc("SHG Financial Summary", summary[0])
-                        summary_doc.total_outstanding_loans = 0
-                        summary_doc.total_overdue_amount = 0
-                        summary_doc.save(ignore_permissions=True)
-                        frappe.msgprint(f"✅ Member {loan.member} eligibility restored and financial summary cleared.")
-                    else:
-                        frappe.msgprint(f"⚠️ No Financial Summary found for {loan.member} — skipping reset.")
-                else:
-                    frappe.msgprint(f"⚠️ SHG Financial Summary doctype not found — skipping reset.")
-            except Exception as e:
-                frappe.log_error(f"Error updating Financial Summary for member {loan.member}: {e}", "SHG Loan Cancel Cleanup Warning")
-                frappe.msgprint(f"⚠️ Error updating Financial Summary for {loan.member} — skipping reset.")
-
-        # Finally cancel the loan
-        loan.cancel()
-
-        frappe.db.commit()
-        frappe.msgprint(f"✅ Loan {docname} and related records successfully cancelled and cleaned up.")
-        return "Loan cancelled and cleaned up successfully."
-
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "SHG Loan Cancel Error")
-        frappe.throw(f"Error while cancelling loan {docname}: {str(e)}")

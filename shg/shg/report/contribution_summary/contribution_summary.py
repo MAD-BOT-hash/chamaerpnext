@@ -39,9 +39,27 @@ def get_columns():
             "width": 150
         },
         {
-            "label": _("Amount"),
-            "fieldname": "amount",
+            "label": _("Expected Amount"),
+            "fieldname": "expected_amount",
             "fieldtype": "Currency",
+            "width": 120
+        },
+        {
+            "label": _("Amount Paid"),
+            "fieldname": "amount_paid",
+            "fieldtype": "Currency",
+            "width": 120
+        },
+        {
+            "label": _("Unpaid Amount"),
+            "fieldname": "unpaid_amount",
+            "fieldtype": "Currency",
+            "width": 120
+        },
+        {
+            "label": _("Status"),
+            "fieldname": "status",
+            "fieldtype": "Data",
             "width": 120
         },
         {
@@ -80,7 +98,10 @@ def get_data(filters):
                 c.member,
                 c.member_name,
                 c.contribution_type_link as contribution_type,
-                c.amount,
+                c.expected_amount,
+                c.amount_paid,
+                c.unpaid_amount,
+                c.status,
                 c.payment_method,
                 c.reference_number
             FROM `tabSHG Contribution` c
@@ -94,7 +115,10 @@ def get_data(filters):
                 c.member,
                 c.member_name,
                 c.contribution_type_link as contribution_type,
-                c.amount,
+                c.expected_amount,
+                c.amount_paid,
+                c.unpaid_amount,
+                c.status,
                 c.payment_method,
                 c.reference_number
             FROM `tabSHG Contribution` c

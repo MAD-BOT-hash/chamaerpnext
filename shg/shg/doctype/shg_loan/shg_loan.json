@@ -43,6 +43,8 @@
         "balance_amount",
         "last_repayment_date",
         "next_due_date",
+        "total_repaid",
+        "overdue_amount",
         "account_mapping_section",
         "account_mapping",
         "repayment_schedule_section",
@@ -291,6 +293,20 @@
             "fieldname": "next_due_date",
             "fieldtype": "Date",
             "label": "Next Due Date",
+            "read_only": 1
+        },
+        {
+            "fieldname": "total_repaid",
+            "fieldtype": "Currency",
+            "label": "Total Repaid",
+            "precision": 2,
+            "read_only": 1
+        },
+        {
+            "fieldname": "overdue_amount",
+            "fieldtype": "Currency",
+            "label": "Overdue Amount",
+            "precision": 2,
             "read_only": 1
         },
         {

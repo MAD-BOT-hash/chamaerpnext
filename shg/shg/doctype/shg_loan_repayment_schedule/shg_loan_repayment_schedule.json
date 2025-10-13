@@ -8,10 +8,15 @@
  "field_order": [
   "installment_no",
   "payment_date",
+  "due_date",
   "principal_amount",
   "interest_amount",
   "total_payment",
-  "balance_amount"
+  "total_due",
+  "amount_paid",
+  "unpaid_balance",
+  "balance_amount",
+  "status"
  ],
  "fields": [
   {
@@ -26,6 +31,13 @@
    "fieldtype": "Date",
    "in_list_view": 1,
    "label": "Payment Date"
+  },
+  {
+   "columns": 2,
+   "fieldname": "due_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Due Date"
   },
   {
    "columns": 2,
@@ -53,11 +65,44 @@
   },
   {
    "columns": 2,
+   "fieldname": "total_due",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Total Due",
+   "precision": 2
+  },
+  {
+   "columns": 2,
+   "fieldname": "amount_paid",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount Paid",
+   "precision": 2
+  },
+  {
+   "columns": 2,
+   "fieldname": "unpaid_balance",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Unpaid Balance",
+   "precision": 2
+  },
+  {
+   "columns": 2,
    "fieldname": "balance_amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Balance Amount",
    "precision": 2
+  },
+  {
+   "columns": 2,
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending\nPaid\nPartially Paid\nOverdue",
+   "default": "Pending"
   }
  ],
  "istable": 1,
