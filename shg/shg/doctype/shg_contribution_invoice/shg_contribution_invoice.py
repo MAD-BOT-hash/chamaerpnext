@@ -79,11 +79,10 @@ class SHGContributionInvoice(Document):
             contribution.status = "Unpaid"
             contribution.invoice_reference = self.name
             
-            # Save contribution
+            # Save contribution in draft mode
             contribution.insert(ignore_permissions=True)
-            contribution.submit()
             
-            frappe.msgprint(_("SHG Contribution {0} created successfully").format(contribution.name))
+            frappe.msgprint(_("SHG Contribution {0} created in draft mode").format(contribution.name))
             
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - SHG Contribution Creation Failed")

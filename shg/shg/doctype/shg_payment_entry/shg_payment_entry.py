@@ -11,6 +11,14 @@ class SHGPaymentEntry(Document):
     def validate(self):
         self.validate_payment_entries()
         self.calculate_total_amount()
+        self.fetch_member_account_number()
+        
+    def fetch_member_account_number(self):
+        """Fetch account number from member document"""
+        if self.member and not self.account_number:
+            member = frappe.get_doc("SHG Member", self.member)
+            if member.account_number:
+                self.account_number = member.account_number
         
     def validate_payment_entries(self):
         """Validate payment entries"""

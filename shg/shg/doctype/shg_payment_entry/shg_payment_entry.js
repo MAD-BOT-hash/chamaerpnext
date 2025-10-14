@@ -66,6 +66,20 @@ frappe.ui.form.on('SHG Payment Entry', {
     
     member: function(frm) {
         if (frm.doc.member) {
+            // Fetch member account number
+            frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'SHG Member',
+                    name: frm.doc.member
+                },
+                callback: function(r) {
+                    if (r.message && r.message.account_number) {
+                        frm.set_value('account_number', r.message.account_number);
+                    }
+                }
+            });
+            
             // Set default accounts from SHG Settings
             frappe.call({
                 method: 'frappe.client.get',
