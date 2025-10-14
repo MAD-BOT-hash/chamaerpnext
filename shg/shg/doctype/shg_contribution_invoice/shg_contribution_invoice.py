@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import nowdate, getdate, get_first_day, get_last_day, formatdate
+from frappe.utils import nowdate, getdate, get_first_day, get_last_day, formatdate, add_days
 
 class SHGContributionInvoice(Document):
     def validate(self):
@@ -114,6 +114,91 @@ SHG Management"""
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - Email Sending Failed")
             frappe.throw(_("Failed to send invoice email: {0}").format(str(e)))
+
+@frappe.whitelist()
+def generate_multiple_contribution_invoices(invoice_date=None, amount=None, contribution_type=None, remarks=None):
+    """
+    Generate contribution invoices for all active members
+    
+    Args:
+        invoice_date (str): Date for the invoice
+        amount (float): Amount to invoice
+        contribution_type (str): Contribution type
+        remarks (str): Description for the invoices
+    
+    Returns:
+        dict: Summary of created invoices
+    """
+    if not invoice_date:
+        invoice_date = nowdate()
+        
+    # Get all active members
+    active_members = frappe.get_all("SHG Member", 
+                                   filters={"membership_status": "Active"}, 
+                                   fields=["name", "member_name", "email"])
+    
+    created_count = 0
+    skipped_count = 0
+    error_count = 0
+    errors = []
+    
+    for member in active_members:
+        try:
+            # Check if an invoice already exists for this member and period
+            existing_invoice = frappe.db.exists("SHG Contribution Invoice", {
+                "member": member.name,
+                "invoice_date": invoice_date,
+                "docstatus": ["!=", 2]  # Not cancelled
+            })
+            
+            if existing_invoice:
+                skipped_count += 1
+                continue
+            
+            # Calculate due date (30 days from invoice date)
+            due_date = add_days(getdate(invoice_date), 30)
+            
+            # Create contribution invoice
+            invoice = frappe.get_doc({
+                "doctype": "SHG Contribution Invoice",
+                "member": member.name,
+                "member_name": member.member_name,
+                "invoice_date": invoice_date,
+                "due_date": due_date,
+                "amount": amount,
+                "contribution_type": contribution_type,
+                "status": "Unpaid",
+                "description": remarks or f"Contribution invoice for {formatdate(invoice_date, 'MMMM yyyy')}"
+            })
+            
+            invoice.insert()
+            invoice.submit()
+            created_count += 1
+            
+        except Exception as e:
+            error_count += 1
+            errors.append(f"Failed to create invoice for {member.member_name}: {str(e)}")
+            frappe.log_error(frappe.get_traceback(), f"SHG Contribution Invoice Creation Failed for {member.name}")
+    
+    # Prepare summary
+    summary = {
+        "created": created_count,
+        "skipped": skipped_count,
+        "errors": error_count,
+        "total_processed": len(active_members),
+        "error_details": errors
+    }
+    
+    # Create a log message
+    message = f"Generated {created_count} contribution invoices. "
+    if skipped_count > 0:
+        message += f"Skipped {skipped_count} members (invoices already exist). "
+    if error_count > 0:
+        message += f"Encountered {error_count} errors."
+    
+    frappe.msgprint(_(message))
+    
+    return summary
 
 # --- Hook functions ---
 def validate_contribution_invoice(doc, method):
