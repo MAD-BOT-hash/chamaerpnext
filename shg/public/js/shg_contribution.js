@@ -47,6 +47,13 @@ frappe.ui.form.on('SHG Contribution', {
                             reqd: 1
                         },
                         {
+                            label: __('Due Date'),
+                            fieldname: 'due_date',
+                            fieldtype: 'Date',
+                            default: frappe.datetime.add_days(frappe.datetime.get_today(), 30),
+                            reqd: 1
+                        },
+                        {
                             label: __('Amount'),
                             fieldname: 'amount',
                             fieldtype: 'Currency',
@@ -73,6 +80,7 @@ frappe.ui.form.on('SHG Contribution', {
                             method: 'shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.generate_multiple_contribution_invoices',
                             args: {
                                 invoice_date: values.invoice_date,
+                                due_date: values.due_date,
                                 amount: values.amount,
                                 contribution_type: values.contribution_type,
                                 remarks: values.description

@@ -128,12 +128,13 @@ SHG Management"""
             frappe.throw(_("Failed to send invoice email: {0}").format(str(e)))
 
 @frappe.whitelist()
-def generate_multiple_contribution_invoices(invoice_date=None, amount=None, contribution_type=None, remarks=None):
+def generate_multiple_contribution_invoices(invoice_date=None, due_date=None, amount=None, contribution_type=None, remarks=None):
     """
     Generate contribution invoices for all active members
     
     Args:
         invoice_date (str): Date for the invoice
+        due_date (str): Due date for the invoice
         amount (float): Amount to invoice
         contribution_type (str): Contribution type
         remarks (str): Description for the invoices
@@ -143,6 +144,10 @@ def generate_multiple_contribution_invoices(invoice_date=None, amount=None, cont
     """
     if not invoice_date:
         invoice_date = nowdate()
+        
+    # If due_date is not provided, calculate it as 30 days from invoice_date
+    if not due_date:
+        due_date = add_days(getdate(invoice_date), 30)
         
     # Get all active members
     active_members = frappe.get_all("SHG Member", 
@@ -166,9 +171,6 @@ def generate_multiple_contribution_invoices(invoice_date=None, amount=None, cont
             if existing_invoice:
                 skipped_count += 1
                 continue
-            
-            # Calculate due date (30 days from invoice date)
-            due_date = add_days(getdate(invoice_date), 30)
             
             # Create contribution invoice
             invoice = frappe.get_doc({
