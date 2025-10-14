@@ -145,7 +145,7 @@ SHG Management"""
             frappe.throw(_("Failed to send invoice email: {0}").format(str(e)))
 
 @frappe.whitelist()
-def generate_multiple_contribution_invoices(invoice_date=None, due_date=None, amount=None, contribution_type=None, remarks=None):
+def generate_multiple_contribution_invoices(invoice_date=None, due_date=None, amount=None, contribution_type=None, remarks=None, auto_receive_payment=False):
     """
     Generate contribution invoices for all active members
     
@@ -155,6 +155,7 @@ def generate_multiple_contribution_invoices(invoice_date=None, due_date=None, am
         amount (float): Amount to invoice
         contribution_type (str): Contribution type
         remarks (str): Description for the invoices
+        auto_receive_payment (bool): Whether to automatically create payment entries
     
     Returns:
         dict: Summary of created invoices
@@ -174,6 +175,7 @@ def generate_multiple_contribution_invoices(invoice_date=None, due_date=None, am
     created_count = 0
     skipped_count = 0
     error_count = 0
+    payment_count = 0
     errors = []
     
     for member in active_members:
@@ -206,6 +208,16 @@ def generate_multiple_contribution_invoices(invoice_date=None, due_date=None, am
             invoice.submit()
             created_count += 1
             
+            # Auto-receive payment if requested
+            if auto_receive_payment and invoice.sales_invoice:
+                try:
+                    from shg.api import create_payment_entry_from_invoice
+                    create_payment_entry_from_invoice(invoice.sales_invoice)
+                    payment_count += 1
+                except Exception as e:
+                    errors.append(f"Failed to create payment entry for invoice {invoice.name}: {str(e)}")
+                    frappe.log_error(frappe.get_traceback(), f"SHG Contribution Invoice Payment Creation Failed for {invoice.name}")
+            
         except Exception as e:
             error_count += 1
             errors.append(f"Failed to create invoice for {member.member_name}: {str(e)}")
@@ -215,6 +227,7 @@ def generate_multiple_contribution_invoices(invoice_date=None, due_date=None, am
     summary = {
         "created": created_count,
         "skipped": skipped_count,
+        "payments": payment_count,
         "errors": error_count,
         "total_processed": len(active_members),
         "error_details": errors
@@ -224,6 +237,8 @@ def generate_multiple_contribution_invoices(invoice_date=None, due_date=None, am
     message = f"Generated {created_count} contribution invoices. "
     if skipped_count > 0:
         message += f"Skipped {skipped_count} members (invoices already exist). "
+    if auto_receive_payment:
+        message += f"Created {payment_count} payment entries. "
     if error_count > 0:
         message += f"Encountered {error_count} errors."
     

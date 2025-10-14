@@ -70,7 +70,8 @@ doctype_js = {
     "SHG Loan": "public/js/shg_loan.js",
     "SHG Meeting": "public/js/shg_meeting.js",
     "SHG Member Attendance": "public/js/shg_member_attendance.js",
-    "SHG Settings": "public/js/shg_settings.js"
+    "SHG Settings": "public/js/shg_settings.js",
+    "SHG Contribution Invoice": "public/js/shg_contribution_invoice.js"
 }
 
 # Fix for workspace path issue

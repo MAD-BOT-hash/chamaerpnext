@@ -69,6 +69,12 @@ frappe.ui.form.on('SHG Contribution', {
                             label: __('Description'),
                             fieldname: 'description',
                             fieldtype: 'Small Text'
+                        },
+                        {
+                            label: __('Auto Receive Payment'),
+                            fieldname: 'auto_receive_payment',
+                            fieldtype: 'Check',
+                            description: __('Automatically create payment entries for received amounts')
                         }
                     ],
                     primary_action_label: __('Generate'),
@@ -83,7 +89,8 @@ frappe.ui.form.on('SHG Contribution', {
                                 due_date: values.due_date,
                                 amount: values.amount,
                                 contribution_type: values.contribution_type,
-                                remarks: values.description
+                                remarks: values.description,
+                                auto_receive_payment: values.auto_receive_payment
                             },
                             freeze: true,
                             freeze_message: __('Generating contribution invoices...'),
@@ -92,6 +99,9 @@ frappe.ui.form.on('SHG Contribution', {
                                     let msg = __('Generated {0} contribution invoices.', [r.message.created]);
                                     if (r.message.skipped > 0) {
                                         msg += __(' Skipped {0} members (invoices already exist).', [r.message.skipped]);
+                                    }
+                                    if (r.message.payments > 0) {
+                                        msg += __(' Created {0} payment entries.', [r.message.payments]);
                                     }
                                     if (r.message.errors > 0) {
                                         msg += __(' Encountered {0} errors.', [r.message.errors]);
