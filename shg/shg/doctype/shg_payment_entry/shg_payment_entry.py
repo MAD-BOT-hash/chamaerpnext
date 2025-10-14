@@ -37,7 +37,7 @@ class SHGPaymentEntry(Document):
         self.process_payment()
         
     def process_payment(self):
-        """Process the payment and update related records"""
+        """Process the payment and update related records with proper ERPNext v15 logic"""
         try:
             created_payment_entries = []
             
@@ -78,11 +78,12 @@ class SHGPaymentEntry(Document):
             frappe.throw(_("Failed to process payment: {0}").format(str(e)))
             
     def update_member_summary(self):
-        """Update member financial summary"""
+        """Update member financial summary with proper ERPNext v15 logic"""
         member = frappe.get_doc("SHG Member", self.member)
         
         # Update total contributions
-        member.db_set("total_contributions", member.total_contributions + self.total_amount)
+        current_contributions = member.total_contributions or 0
+        member.db_set("total_contributions", current_contributions + self.total_amount)
         
         # Update total payments received
         current_payments = member.total_payments_received or 0
@@ -90,3 +91,6 @@ class SHGPaymentEntry(Document):
         
         # Update last contribution date
         member.db_set("last_contribution_date", self.payment_date)
+        
+        # Recalculate member's financial summary to ensure consistency
+        member.update_financial_summary()

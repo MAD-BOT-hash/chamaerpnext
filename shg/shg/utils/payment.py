@@ -43,7 +43,7 @@ def get_unpaid_invoices_for_member(member):
 
 def update_invoice_status(invoice_name, paid_amount):
     """
-    Update contribution invoice status after payment
+    Update contribution invoice status after payment with proper ERPNext v15 logic
     
     Args:
         invoice_name (str): SHG Contribution Invoice name
@@ -80,6 +80,9 @@ def update_invoice_status(invoice_name, paid_amount):
         member = frappe.get_doc("SHG Member", invoice.member)
         total_unpaid = (member.total_unpaid_contributions or 0) - paid_amount
         member.db_set("total_unpaid_contributions", max(0, total_unpaid))
+        
+        # Recalculate member's financial summary to ensure consistency
+        member.update_financial_summary()
         
         # Reload the invoice to reflect changes
         invoice.reload()

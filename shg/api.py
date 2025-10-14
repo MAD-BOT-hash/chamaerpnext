@@ -96,7 +96,7 @@ def create_payment_entry_from_invoice(invoice_name, paid_amount=None):
 
 def update_shg_contribution_invoice_status(sales_invoice_name):
     """
-    Update the SHG Contribution Invoice status based on the Sales Invoice status
+    Update the SHG Contribution Invoice status based on the Sales Invoice status with proper ERPNext v15 logic
     
     Args:
         sales_invoice_name (str): Name of the Sales Invoice
@@ -133,6 +133,9 @@ def update_shg_contribution_invoice_status(sales_invoice_name):
             current_unpaid = member.total_unpaid_contributions or 0
             new_unpaid = current_unpaid - paid_amount
             member.db_set("total_unpaid_contributions", max(0, new_unpaid))
+                
+            # Recalculate member's financial summary to ensure consistency
+            member.update_financial_summary()
                 
             # Reload documents to reflect changes
             shg_invoice.reload()
