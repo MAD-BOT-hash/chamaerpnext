@@ -50,6 +50,9 @@ class SHGContributionInvoice(Document):
         # Create Sales Invoice
         if not self.sales_invoice:
             self.create_sales_invoice()
+        # Set status to Unpaid when submitted
+        elif not self.status or self.status == "Draft":
+            self.db_set("status", "Unpaid")
             
     def create_sales_invoice(self):
         """Create a Sales Invoice for this contribution invoice"""
@@ -101,6 +104,8 @@ class SHGContributionInvoice(Document):
             
             # Link the Sales Invoice to this Contribution Invoice
             self.db_set("sales_invoice", sales_invoice.name)
+            # Set status to Unpaid when Sales Invoice is created
+            self.db_set("status", "Unpaid")
             
             frappe.msgprint(_("Sales Invoice {0} created successfully").format(sales_invoice.name))
             
