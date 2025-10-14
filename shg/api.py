@@ -25,6 +25,10 @@ def create_payment_entry_from_invoice(invoice_name, paid_amount=None):
         if amount_to_pay > invoice.outstanding_amount:
             frappe.throw(_("Payment amount cannot exceed outstanding amount"))
         
+        # Check if there's any outstanding amount
+        if invoice.outstanding_amount <= 0:
+            frappe.throw(_("This invoice has already been fully paid"))
+        
         # Get company defaults
         company = invoice.company
         default_receivable_account = frappe.db.get_value("Company", company, "default_receivable_account")
