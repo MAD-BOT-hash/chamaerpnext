@@ -12,6 +12,7 @@
   "member_name",
   "payment_date",
   "payment_method",
+  "account_number",
   "total_amount",
   "column_break_4",
   "reference_number",
@@ -19,6 +20,7 @@
   "accounting_section",
   "debit_account",
   "credit_account",
+  "created_payment_entries",
   "payment_entries_section",
   "payment_entries"
  ],
@@ -64,6 +66,11 @@
    "reqd": 1
   },
   {
+   "fieldname": "account_number",
+   "fieldtype": "Data",
+   "label": "Account Number"
+  },
+  {
    "fieldname": "total_amount",
    "fieldtype": "Currency",
    "label": "Total Amount",
@@ -102,6 +109,12 @@
    "label": "Credit Account",
    "options": "Account",
    "reqd": 1
+  },
+  {
+   "fieldname": "created_payment_entries",
+   "fieldtype": "Text",
+   "label": "Created Payment Entries",
+   "read_only": 1
   },
   {
    "fieldname": "payment_entries_section",

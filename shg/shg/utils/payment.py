@@ -57,22 +57,115 @@ def update_invoice_status(invoice_name, paid_amount):
             # Update linked Sales Invoice
             sales_invoice = frappe.get_doc("Sales Invoice", invoice.sales_invoice)
             new_outstanding = sales_invoice.outstanding_amount - paid_amount
-            sales_invoice.db_set("outstanding_amount", max(0, new_outstanding))
             
-            # Update invoice status
+            # Ensure we don't go below zero
+            new_outstanding = max(0, new_outstanding)
+            sales_invoice.db_set("outstanding_amount", new_outstanding)
+            
+            # Update invoice status based on outstanding amount
             if new_outstanding <= 0:
                 invoice.db_set("status", "Paid")
-            else:
+                # Also update the Sales Invoice status
+                sales_invoice.db_set("status", "Paid")
+            elif new_outstanding < sales_invoice.grand_total:
                 invoice.db_set("status", "Partially Paid")
+                # Also update the Sales Invoice status
+                sales_invoice.db_set("status", "Partially Paid")
+            else:
+                invoice.db_set("status", "Unpaid")
+                # Also update the Sales Invoice status
+                sales_invoice.db_set("status", "Unpaid")
                 
         # Update member financial summary
         member = frappe.get_doc("SHG Member", invoice.member)
-        total_unpaid = member.total_unpaid_contributions - paid_amount
+        total_unpaid = (member.total_unpaid_contributions or 0) - paid_amount
         member.db_set("total_unpaid_contributions", max(0, total_unpaid))
+        
+        # Reload the invoice to reflect changes
+        invoice.reload()
         
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Update Invoice Status Failed")
         frappe.throw(_("Failed to update invoice status: {0}").format(str(e)))
+
+def create_payment_entry_for_invoice(invoice_name, paid_amount, payment_date, member):
+    """
+    Create a Payment Entry for a Sales Invoice with correct GL entries
+    
+    Args:
+        invoice_name (str): Name of the Sales Invoice
+        paid_amount (float): Amount to pay
+        payment_date (str): Payment date
+        member (str): Member ID
+        
+    Returns:
+        str: Name of the created Payment Entry
+    """
+    try:
+        # Get the Sales Invoice
+        sales_invoice = frappe.get_doc("Sales Invoice", invoice_name)
+        
+        # Get company defaults
+        company = sales_invoice.company
+        default_receivable_account = frappe.db.get_value("Company", company, "default_receivable_account")
+        default_cash_account = frappe.db.get_value("Company", company, "default_cash_account")
+        
+        if not default_receivable_account:
+            frappe.throw(_("Please set default receivable account in Company {0}").format(company))
+            
+        if not default_cash_account:
+            frappe.throw(_("Please set default cash account in Company {0}").format(company))
+        
+        # For SHG Contributions, payment direction must be:
+        # paid_from = member's account (receivable), paid_to = cash/bank account
+        # This reflects members bringing cash to the group
+        paid_from = default_receivable_account  # Member's account (receivable)
+        paid_to = default_cash_account  # Group's cash account
+        
+        # Create Payment Entry
+        payment_entry = frappe.new_doc("Payment Entry")
+        payment_entry.payment_type = "Receive"
+        payment_entry.party_type = "Customer"
+        payment_entry.party = sales_invoice.customer
+        payment_entry.company = company
+        payment_entry.posting_date = payment_date
+        payment_entry.paid_from = paid_from
+        payment_entry.paid_to = paid_to
+        payment_entry.received_amount = paid_amount
+        payment_entry.paid_amount = paid_amount
+        payment_entry.allocate_payment_amount = 1
+        
+        # Add reference to the invoice
+        payment_entry.append("references", {
+            "reference_doctype": "Sales Invoice",
+            "reference_name": sales_invoice.name,
+            "total_amount": sales_invoice.grand_total,
+            "outstanding_amount": sales_invoice.outstanding_amount,
+            "allocated_amount": paid_amount,
+        })
+        
+        # Set reference fields for traceability
+        payment_entry.reference_no = sales_invoice.name
+        payment_entry.reference_date = payment_date
+        
+        # Set remarks
+        shg_invoice_name = frappe.db.get_value("SHG Contribution Invoice", {"sales_invoice": invoice_name})
+        if shg_invoice_name:
+            payment_entry.remarks = f"Payment for Contribution Invoice {shg_invoice_name}"
+        else:
+            payment_entry.remarks = f"Payment for Sales Invoice {invoice_name}"
+        
+        payment_entry.insert(ignore_permissions=True)
+        payment_entry.submit()
+        
+        # Update the Sales Invoice outstanding amount
+        sales_invoice.reload()
+        
+        return payment_entry.name
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Payment Entry Creation Failed")
+        frappe.throw(_("Failed to create payment entry: {0}").format(str(e)))
 
 def send_payment_receipt(payment_entry):
     """

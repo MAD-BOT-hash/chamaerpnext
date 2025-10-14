@@ -5,7 +5,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import today
-from shg.shg.utils.payment import update_invoice_status, send_payment_receipt
+from shg.shg.utils.payment import update_invoice_status, send_payment_receipt, create_payment_entry_for_invoice
 
 class SHGPaymentEntry(Document):
     def validate(self):
@@ -39,11 +39,31 @@ class SHGPaymentEntry(Document):
     def process_payment(self):
         """Process the payment and update related records"""
         try:
-            # Update each invoice
+            created_payment_entries = []
+            
+            # Create Payment Entry for each invoice
             for entry in self.payment_entries:
                 if entry.invoice_type == "SHG Contribution Invoice":
-                    update_invoice_status(entry.invoice, entry.amount)
+                    # Get the SHG Contribution Invoice
+                    shg_invoice = frappe.get_doc("SHG Contribution Invoice", entry.invoice)
                     
+                    if shg_invoice.sales_invoice:
+                        # Create Payment Entry for the Sales Invoice
+                        payment_entry_name = create_payment_entry_for_invoice(
+                            shg_invoice.sales_invoice,
+                            entry.amount,
+                            self.payment_date,
+                            self.member
+                        )
+                        created_payment_entries.append(payment_entry_name)
+                        
+                        # Update invoice status
+                        update_invoice_status(entry.invoice, entry.amount)
+                
+            # Link created Payment Entries to this SHG Payment Entry
+            if created_payment_entries:
+                self.db_set("created_payment_entries", ", ".join(created_payment_entries))
+            
             # Update member financial summary
             self.update_member_summary()
             
@@ -64,47 +84,9 @@ class SHGPaymentEntry(Document):
         # Update total contributions
         member.db_set("total_contributions", member.total_contributions + self.total_amount)
         
+        # Update total payments received
+        current_payments = member.total_payments_received or 0
+        member.db_set("total_payments_received", current_payments + self.total_amount)
+        
         # Update last contribution date
         member.db_set("last_contribution_date", self.payment_date)
-        
-    def send_payment_receipt(self):
-        """Send payment receipt via email"""
-        try:
-            member = frappe.get_doc("SHG Member", self.member)
-            
-            if not member.email:
-                return
-                
-            # Prepare email content
-            subject = f"Payment Receipt - {self.name}"
-            
-            message = f"""Dear {self.member_name},
-
-Thank you for your payment. Here are the details:
-
-Payment Reference: {self.name}
-Payment Date: {self.payment_date}
-Total Amount: KES {self.total_amount:,.2f}
-Payment Method: {self.payment_method}
-
-Payment Details:
-"""
-            
-            for entry in self.payment_entries:
-                message += f"- Invoice {entry.invoice}: KES {entry.amount:,.2f}\n"
-                
-            message += """
-
-Thank you for your continued support.
-
-SHG Management"""
-            
-            # Send email
-            frappe.sendmail(
-                recipients=[member.email],
-                subject=subject,
-                message=message
-            )
-            
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "SHG Payment Receipt Email Failed")

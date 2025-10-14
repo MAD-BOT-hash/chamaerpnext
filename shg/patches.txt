@@ -3,3 +3,5 @@ shg.patches.patch_remove_old_gl_logic
 shg.shg.patches.patch_add_missing_member_fields
 shg.patches.add_sales_invoice_custom_fields
 shg.shg.patches.patch_install_payment_entry_doctypes
+shg.shg.patches.patch_link_payment_entries_to_shg_payment_entry
+shg.shg.patches.patch_add_total_payments_received_field

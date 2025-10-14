@@ -1,97 +1,74 @@
+# Copyright (c) 2025, Your Company and contributors
+# For license information, please see license.txt
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import today, getdate
+import json
 
 class SHGMember(Document):
     def validate(self):
+        """Validate member data"""
         self.validate_id_number()
         self.validate_phone_number()
-        self.set_member_id()
         self.set_account_number()
-        # Set default party_type to Customer for GL entries
-        if not self.party_type:
-            self.party_type = "Customer"
-        # Set default values for loan eligibility fields
-        if self.is_new():
-            if not self.loan_eligibility_flag:
-                self.loan_eligibility_flag = 1
-            if not self.has_overdue_loans:
-                self.has_overdue_loans = 0
-        
-    def after_insert(self):
-        """Create customer link after member is inserted to avoid recursion"""
-        self.create_customer_link()
         
     def validate_id_number(self):
-        """Validate Kenyan ID number format"""
+        """Validate ID number format"""
         if self.id_number:
-            # Remove any spaces or dashes
-            id_number = ''.join(filter(str.isdigit, self.id_number))
-            
-            # Check if it's exactly 8 digits
-            if len(id_number) != 8:
-                frappe.throw(_("Kenyan ID Number must be exactly 8 digits"))
-            
-            # Update the field with cleaned ID number
-            self.id_number = id_number
-            
-    def validate_phone_number(self):
-        """Validate and format phone number"""
-        if self.phone_number:
-            # Remove any spaces or dashes
-            phone = ''.join(filter(str.isdigit, self.phone_number))
-            
-            # Format for Kenya
-            if phone.startswith('0'):
-                self.phone_number = '+254' + phone[1:]
-            elif phone.startswith('254'):
-                self.phone_number = '+' + phone
-            else:
-                frappe.throw(_("Please enter a valid Kenyan phone number"))
+            # Check if another member has the same ID number
+            existing = frappe.db.exists("SHG Member", {
+                "id_number": self.id_number,
+                "name": ["!=", self.name]
+            })
+            if existing:
+                frappe.throw(_("Another member already exists with ID number {0}").format(self.id_number))
                 
-    def set_member_id(self):
-        """Set member ID if not already set"""
-        if not self.member_id:
-            self.member_id = self.name
-            
+    def validate_phone_number(self):
+        """Validate phone number format"""
+        if self.phone_number:
+            # Basic validation - should be 10 digits starting with 07
+            if not (self.phone_number.startswith("07") and len(self.phone_number) == 10 and self.phone_number.isdigit()):
+                frappe.throw(_("Phone number must be 10 digits starting with 07"))
+                
     def set_account_number(self):
-        """Generate unique account number in format MN001, MN002, etc."""
+        """Set account number if not already set"""
         if not self.account_number:
-            # Get the last member's account number
+            # Get the last account number
             last_member = frappe.db.sql("""
                 SELECT account_number 
                 FROM `tabSHG Member` 
                 WHERE account_number IS NOT NULL 
-                ORDER BY creation DESC 
+                ORDER BY account_number DESC 
                 LIMIT 1
             """, as_dict=True)
             
             if last_member:
                 # Extract the number part and increment
-                last_number = int(last_member[0].account_number[2:])  # Remove "MN" prefix
+                last_number = int(last_member[0].account_number.replace("MN", ""))
                 new_number = last_number + 1
             else:
-                # First member
                 new_number = 1
                 
-            # Format as MN001, MN002, etc.
             self.account_number = f"MN{new_number:03d}"
             
-    def create_customer_link(self):
-        """Create a Customer record linked to this SHG Member"""
-        # Check if customer already exists for this member
+    def after_insert(self):
+        """Create linked customer and ledger account after insert"""
+        self.create_linked_customer()
+        self.create_member_ledger_account()
+        
+    def create_linked_customer(self):
+        """Create linked customer for the member"""
         if not self.customer:
-            # Create customer record
+            # Create customer
             customer = frappe.new_doc("Customer")
             customer.customer_name = self.member_name
             customer.customer_type = "Individual"
-            customer.customer_group = "SHG Members"  # You may need to adjust this based on your setup
-            customer.territory = "Kenya"  # You may need to adjust this based on your setup
-            customer.is_shg_member = 1
-            customer.shg_member_id = self.name
+            customer.customer_group = "SHG Members"
+            customer.territory = "Kenya"
             
-            # Set contact details
+            # Set phone number if available
             if self.phone_number:
                 customer.mobile_no = self.phone_number
             
@@ -174,6 +151,13 @@ class SHGMember(Document):
             WHERE member = %s AND status = 'Disbursed'
         """, self.name)[0][0]
         
+        # Update total payments received
+        total_payments = frappe.db.sql("""
+            SELECT SUM(total_amount) 
+            FROM `tabSHG Payment Entry` 
+            WHERE member = %s AND docstatus = 1
+        """, self.name)[0][0] or 0
+        
         # Calculate credit score (simplified) only if it hasn't been manually set
         if not hasattr(self, '_credit_score_manually_updated') or not self._credit_score_manually_updated:
             credit_score = 50  # Base score
@@ -213,7 +197,8 @@ class SHGMember(Document):
             "total_unpaid_loans": total_unpaid_loans,
             "last_contribution_date": last_contribution,
             "last_loan_date": last_loan,
-            "credit_score": self.credit_score
+            "credit_score": self.credit_score,
+            "total_payments_received": total_payments
         }, update_modified=False)
         
     @frappe.whitelist()
@@ -318,32 +303,4 @@ def handle_member_update_after_submit(doc, method=None):
     Updates all linked doctypes (Loans, Contributions, etc.)
     with the new member info.
     """
-    try:
-        # Update linked Loans
-        frappe.db.sql("""
-            UPDATE `tabSHG Loan`
-            SET member_name = %s, phone_number = %s
-            WHERE member = %s
-        """, (doc.member_name, doc.phone_number, doc.name))
-
-        # Update linked Contributions
-        frappe.db.sql("""
-            UPDATE `tabSHG Contribution`
-            SET member_name = %s, phone_number = %s
-            WHERE member = %s
-        """, (doc.member_name, doc.phone_number, doc.name))
-
-        # Update linked Fines or any other related doctypes
-        frappe.db.sql("""
-            UPDATE `tabSHG Fine`
-            SET member_name = %s
-            WHERE member = %s
-        """, (doc.member_name, doc.name))
-
-        frappe.db.commit()
-
-        frappe.msgprint(f"Linked records updated for Member {doc.member_name}")
-
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "handle_member_update_after_submit failed")
-        frappe.throw(f"Failed to update related records: {str(e)}")
+    doc.handle_member_update_after_submit()
