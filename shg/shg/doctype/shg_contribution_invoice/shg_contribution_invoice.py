@@ -14,8 +14,20 @@ class SHGContributionInvoice(Document):
         
     def validate_amount(self):
         """Validate contribution invoice amount"""
-        if self.amount <= 0:
+        # Initialize amount to 0 if None or empty
+        amount = 0
+        if self.amount:
+            try:
+                amount = float(self.amount)
+            except (ValueError, TypeError):
+                frappe.throw(_("Invalid amount. Please enter a numeric value."))
+        else:
+            frappe.throw(_("Contribution invoice amount is required"))
+        
+        if amount <= 0:
             frappe.throw(_("Contribution invoice amount must be greater than zero"))
+        
+        self.amount = amount
             
     def set_description(self):
         """Set default description if not provided"""
