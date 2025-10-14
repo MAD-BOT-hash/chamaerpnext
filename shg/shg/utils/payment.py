@@ -164,6 +164,9 @@ def create_payment_entry_for_invoice(invoice_name, paid_amount, payment_date, me
         # Update the Sales Invoice outstanding amount
         sales_invoice.reload()
         
+        # Update SHG Contribution Invoice and SHG Contribution with payment reference
+        update_contribution_with_payment(sales_invoice.name, payment_entry.name, paid_amount)
+        
         return payment_entry.name
         
     except Exception as e:
@@ -216,3 +219,62 @@ SHG Management"""
         
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Send Payment Receipt Failed")
+        
+def update_contribution_with_payment(sales_invoice_name, payment_entry_name, paid_amount):
+    """
+    Update SHG Contribution Invoice and SHG Contribution with payment information
+    
+    Args:
+        sales_invoice_name (str): Name of the Sales Invoice
+        payment_entry_name (str): Name of the Payment Entry
+        paid_amount (float): Amount paid
+    """
+    try:
+        # Get the SHG Contribution Invoice linked to this Sales Invoice
+        shg_invoice_name = frappe.db.get_value("SHG Contribution Invoice", 
+                                              {"sales_invoice": sales_invoice_name})
+        
+        if shg_invoice_name:
+            shg_invoice = frappe.get_doc("SHG Contribution Invoice", shg_invoice_name)
+            
+            # Update payment reference
+            shg_invoice.db_set("payment_reference", payment_entry_name)
+            
+            # Get the linked SHG Contribution
+            contribution_name = frappe.db.get_value("SHG Contribution", 
+                                                  {"invoice_reference": shg_invoice_name})
+            
+            if contribution_name:
+                contribution = frappe.get_doc("SHG Contribution", contribution_name)
+                
+                # Update payment reference
+                contribution.db_set("payment_entry", payment_entry_name)
+                
+                # Update paid amounts
+                current_paid = contribution.amount_paid or 0
+                new_paid = current_paid + paid_amount
+                contribution.db_set("amount_paid", new_paid)
+                
+                # Recalculate unpaid amount and status
+                expected = contribution.expected_amount or contribution.amount
+                unpaid = max(0, expected - new_paid)
+                contribution.db_set("unpaid_amount", unpaid)
+                
+                # Update status
+                if unpaid <= 0:
+                    contribution.db_set("status", "Paid")
+                    shg_invoice.db_set("status", "Paid")
+                elif new_paid > 0:
+                    contribution.db_set("status", "Partially Paid")
+                    shg_invoice.db_set("status", "Partially Paid")
+                else:
+                    contribution.db_set("status", "Unpaid")
+                    shg_invoice.db_set("status", "Unpaid")
+                
+                # Update member financial summary
+                member = frappe.get_doc("SHG Member", contribution.member)
+                member.update_financial_summary()
+                
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Update Contribution with Payment Failed")
+        frappe.throw(_("Failed to update contribution with payment: {0}").format(str(e)))

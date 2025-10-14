@@ -53,6 +53,41 @@ class SHGContributionInvoice(Document):
         # Set status to Unpaid when submitted
         elif not self.status or self.status == "Draft":
             self.db_set("status", "Unpaid")
+        
+        # Create SHG Contribution record
+        self.create_shg_contribution()
+        
+    def create_shg_contribution(self):
+        """Create a SHG Contribution record linked to this invoice"""
+        try:
+            # Check if a contribution already exists for this invoice
+            existing_contribution = frappe.db.exists("SHG Contribution", {"invoice_reference": self.name})
+            if existing_contribution:
+                return
+            
+            # Create SHG Contribution
+            contribution = frappe.new_doc("SHG Contribution")
+            contribution.member = self.member
+            contribution.member_name = self.member_name
+            contribution.contribution_date = self.invoice_date
+            contribution.contribution_type = self.contribution_type
+            contribution.contribution_type_link = self.contribution_type
+            contribution.amount = self.amount
+            contribution.expected_amount = self.amount
+            contribution.amount_paid = 0
+            contribution.unpaid_amount = self.amount
+            contribution.status = "Unpaid"
+            contribution.invoice_reference = self.name
+            
+            # Save contribution
+            contribution.insert(ignore_permissions=True)
+            contribution.submit()
+            
+            frappe.msgprint(_("SHG Contribution {0} created successfully").format(contribution.name))
+            
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - SHG Contribution Creation Failed")
+            frappe.throw(_("Failed to create SHG Contribution: {0}").format(str(e)))
             
     def create_sales_invoice(self):
         """Create a Sales Invoice for this contribution invoice"""
@@ -165,3 +200,11 @@ SHG Management"""
                 self.db_set("status", "Partially Paid")
             else:
                 self.db_set("status", "Unpaid")
+            
+            # Also update the linked SHG Contribution
+            contribution_name = frappe.db.get_value("SHG Contribution", 
+                                                  {"invoice_reference": self.name})
+            if contribution_name:
+                contribution = frappe.get_doc("SHG Contribution", contribution_name)
+                # Update contribution status to match invoice status
+                contribution.db_set("status", self.status)

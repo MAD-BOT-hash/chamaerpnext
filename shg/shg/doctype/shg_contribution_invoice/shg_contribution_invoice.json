@@ -19,6 +19,7 @@
   "description",
   "accounting_section",
   "sales_invoice",
+  "payment_reference",
   "posted_to_gl",
   "posted_on"
  ],
@@ -103,6 +104,13 @@
    "fieldtype": "Link",
    "label": "Sales Invoice",
    "options": "Sales Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_reference",
+   "fieldtype": "Link",
+   "label": "Payment Reference",
+   "options": "Payment Entry",
    "read_only": 1
   },
   {

@@ -78,6 +78,35 @@ class SHGContribution(Document):
         else:
             self.status = "Unpaid"
             
+    def update_payment_status(self, paid_amount):
+        """Update payment status when a payment is received"""
+        try:
+            # Update paid amounts
+            current_paid = self.amount_paid or 0
+            new_paid = current_paid + paid_amount
+            self.db_set("amount_paid", new_paid)
+            
+            # Recalculate unpaid amount and status
+            expected = self.expected_amount or self.amount
+            unpaid = max(0, expected - new_paid)
+            self.db_set("unpaid_amount", unpaid)
+            
+            # Update status
+            if unpaid <= 0:
+                self.db_set("status", "Paid")
+            elif new_paid > 0:
+                self.db_set("status", "Partially Paid")
+            else:
+                self.db_set("status", "Unpaid")
+                
+            # Update member financial summary
+            member = frappe.get_doc("SHG Member", self.member)
+            member.update_financial_summary()
+            
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "Update Payment Status Failed")
+            frappe.throw(_("Failed to update payment status: {0}").format(str(e)))
+            
     def on_submit(self):
         # ensure idempotent: if already posted -> skip
         if not self.get("posted_to_gl"):

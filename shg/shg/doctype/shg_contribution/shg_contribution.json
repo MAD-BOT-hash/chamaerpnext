@@ -21,6 +21,7 @@
         "unpaid_amount",
         "status",
         "payment_method",
+        "invoice_reference",
         "reference_section",
         "reference_number",
         "notes",
@@ -134,6 +135,13 @@
             "fieldtype": "Select",
             "label": "Payment Method",
             "options": "Cash\nMobile Money\nMpesa\nBank Transfer\nCheque"
+        },
+        {
+            "fieldname": "invoice_reference",
+            "fieldtype": "Link",
+            "label": "Invoice Reference",
+            "options": "SHG Contribution Invoice",
+            "read_only": 1
         },
         {
             "fieldname": "reference_section",
