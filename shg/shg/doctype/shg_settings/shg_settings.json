@@ -68,6 +68,10 @@
         "auto_email_receipt",
         "column_break_25",
         "payment_terms_template",
+        "member_account_settings_section",
+        "default_account_prefix",
+        "default_parent_ledger",
+        "auto_create_missing_member_accounts",
         "system_settings_section",
         "currency",
         "fiscal_year_start_month",
@@ -406,6 +410,29 @@
         {
             "fieldname": "column_break_25",
             "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "member_account_settings_section",
+            "fieldtype": "Section Break",
+            "label": "Member Account Settings"
+        },
+        {
+            "default": "PFG",
+            "fieldname": "default_account_prefix",
+            "fieldtype": "Data",
+            "label": "Default Account Prefix"
+        },
+        {
+            "fieldname": "default_parent_ledger",
+            "fieldtype": "Link",
+            "label": "Default Parent Ledger",
+            "options": "Account"
+        },
+        {
+            "default": "0",
+            "fieldname": "auto_create_missing_member_accounts",
+            "fieldtype": "Check",
+            "label": "Auto Create Missing Member Accounts"
         },
         {
             "fieldname": "payment_terms_template",

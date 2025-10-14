@@ -37,7 +37,10 @@ doc_events = {
         "on_submit": "shg.shg.doctype.shg_meeting_fine.shg_meeting_fine.post_to_general_ledger"
     },
     "Payment Entry": {
-        "validate": "shg.shg.hooks.payment_entry.payment_entry_validate",
+        "validate": [
+            "shg.shg.hooks.payment_entry.payment_entry_validate",
+            "shg.shg.utils.member_account_mapping.set_member_credit_account"
+        ],
         "on_submit": "shg.shg.hooks.payment_entry.payment_entry_on_submit"
     }
 }

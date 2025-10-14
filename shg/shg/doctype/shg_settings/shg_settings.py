@@ -48,3 +48,7 @@ class SHGSettings(Document):
             frappe.throw("Default Debit Account does not exist")
         if self.default_credit_account and not frappe.db.exists("Account", self.default_credit_account):
             frappe.throw("Default Credit Account does not exist")
+        
+        # Validate member account settings
+        if self.default_parent_ledger and not frappe.db.exists("Account", self.default_parent_ledger):
+            frappe.throw("Default Parent Ledger does not exist")

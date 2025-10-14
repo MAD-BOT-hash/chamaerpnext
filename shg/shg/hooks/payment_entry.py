@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from shg.shg.utils.member_account_mapping import set_member_credit_account as map_member_account
 
 def set_reference_fields(pe, source_doc):
     """
@@ -32,7 +33,7 @@ def set_reference_fields(pe, source_doc):
 def payment_entry_validate(doc, method):
     """
     Hook function called during Payment Entry validation.
-    Automatically sets reference fields for SHG-related Payment Entries.
+    Automatically sets reference fields for SHG-related Payment Entries and maps member accounts.
     """
     # Check if this Payment Entry is related to any SHG module
     shg_contribution = doc.get("custom_shg_contribution")
@@ -55,6 +56,9 @@ def payment_entry_validate(doc, method):
     # If we found a source document, set the reference fields
     if source_doc:
         set_reference_fields(doc, source_doc)
+    
+    # Map member credit account
+    map_member_account(doc, method)
 
 def payment_entry_on_submit(doc, method):
     """
