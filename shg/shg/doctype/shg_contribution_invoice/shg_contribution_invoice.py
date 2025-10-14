@@ -55,7 +55,7 @@ class SHGContributionInvoice(Document):
             self.db_set("status", "Unpaid")
         
         # Create SHG Contribution record
-        self.create_shg_contribution()
+        create_contribution_from_invoice(self, None)
         
     def create_shg_contribution(self):
         """Create a SHG Contribution record linked to this invoice"""
@@ -105,9 +105,40 @@ class SHGContributionInvoice(Document):
             
 def create_contribution_from_invoice(doc, method):
     """Hook function to create SHG Contribution from submitted invoice"""
-    # Call the existing method
-    doc.create_shg_contribution()
-            
+    # Prevent duplicates
+    existing = frappe.db.exists("SHG Contribution", {"invoice_reference": doc.name})
+    if existing:
+        frappe.logger().info(f"Contribution already exists for Invoice {doc.name}")
+        return
+
+    # Try to get linked Payment Entry (if exists)
+    payment_entry = frappe.db.get_value(
+        "Payment Entry Reference",
+        {"reference_name": doc.name},
+        "parent"
+    )
+
+    payment_method = None
+    if payment_entry:
+        payment_method = frappe.db.get_value("Payment Entry", payment_entry, "mode_of_payment")
+
+    # Create new SHG Contribution
+    contribution = frappe.get_doc({
+        "doctype": "SHG Contribution",
+        "member": doc.member,
+        "member_name": doc.member_name,
+        "amount": doc.amount,
+        "posting_date": doc.invoice_date,
+        "contribution_date": doc.invoice_date,
+        "payment_method": payment_method or "Not Specified",
+        "contribution_type": doc.contribution_type,
+        "invoice_reference": doc.name,
+        "status": "Unpaid"
+    })
+
+    contribution.insert(ignore_permissions=True)
+    frappe.logger().info(f"Auto-created SHG Contribution {contribution.name} from Invoice {doc.name}")
+
     def create_sales_invoice(self):
         """Create a Sales Invoice for this contribution invoice"""
         try:
