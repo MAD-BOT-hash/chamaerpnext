@@ -2,4 +2,4 @@ shg.shg.patches.detect_and_fix_legacy_gl_entries
 shg.patches.patch_remove_old_gl_logic
 shg.shg.patches.patch_add_missing_member_fields
 shg.patches.add_sales_invoice_custom_fields
-shg.shg.patches.patch_install_payment_entry_doctypes.execute
+shg.shg.patches.patch_install_payment_entry_doctypes

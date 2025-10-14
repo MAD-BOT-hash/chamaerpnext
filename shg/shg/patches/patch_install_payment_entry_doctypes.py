@@ -199,7 +199,3 @@ def execute():
                 }
             ]
         }).insert()
-        
-    # Add to patches.txt
-    with open(frappe.get_app_path("shg", "patches.txt"), "a") as f:
-        f.write("\nshg.shg.patches.patch_install_payment_entry_doctypes.execute")
