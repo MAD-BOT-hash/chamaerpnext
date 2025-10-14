@@ -1,0 +1,35 @@
+{
+ "cards": [
+  {
+   "hidden": 0,
+   "label": "SHG Payment Entry",
+   "links": [
+    {
+     "label": "SHG Payment Entry",
+     "name": "SHG Payment Entry",
+     "onboard": 0,
+     "type": "DocType"
+    }
+   ],
+   "name": "SHG Payment Entry",
+   "type": "Card"
+  }
+ ],
+ "creation": "2025-10-14 10:00:00",
+ "docstatus": 0,
+ "doctype": "Workspace Card",
+ "for_user": "",
+ "idx": 0,
+ "label": "SHG Payment Entry",
+ "links": [],
+ "modified": "2025-10-14 10:00:00",
+ "module": "SHG",
+ "name": "SHG Payment Entry",
+ "owner": "Administrator",
+ "parent": "SHG",
+ "parentfield": "cards",
+ "parenttype": "Workspace",
+ "restrict_to_domain": "",
+ "roles": [],
+ "type": "Card"
+}

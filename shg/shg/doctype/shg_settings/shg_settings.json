@@ -61,6 +61,13 @@
         "loan_disbursement_posting_method",
         "loan_repayment_posting_method",
         "meeting_fine_posting_method",
+        "receive_payment_settings_section",
+        "default_payment_method",
+        "default_debit_account",
+        "default_credit_account",
+        "auto_email_receipt",
+        "column_break_25",
+        "payment_terms_template",
         "system_settings_section",
         "currency",
         "fiscal_year_start_month",
@@ -366,6 +373,45 @@
             "label": "Meeting Fine Posting Method",
             "options": "Journal Entry\nPayment Entry",
             "default": "Payment Entry"
+        },
+        {
+            "fieldname": "receive_payment_settings_section",
+            "fieldtype": "Section Break",
+            "label": "Receive Payment Settings"
+        },
+        {
+            "fieldname": "default_payment_method",
+            "fieldtype": "Select",
+            "label": "Default Payment Method",
+            "options": "Cash\nBank Transfer\nMobile Money\nCheque"
+        },
+        {
+            "fieldname": "default_debit_account",
+            "fieldtype": "Link",
+            "label": "Default Debit Account",
+            "options": "Account"
+        },
+        {
+            "fieldname": "default_credit_account",
+            "fieldtype": "Link",
+            "label": "Default Credit Account",
+            "options": "Account"
+        },
+        {
+            "default": "0",
+            "fieldname": "auto_email_receipt",
+            "fieldtype": "Check",
+            "label": "Auto Email Receipt"
+        },
+        {
+            "fieldname": "column_break_25",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "payment_terms_template",
+            "fieldtype": "Link",
+            "label": "Payment Terms Template",
+            "options": "Payment Terms Template"
         },
         {
             "fieldname": "system_settings_section",

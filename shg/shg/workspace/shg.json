@@ -7,6 +7,10 @@
   {
    "chart_name": "Financial Summary",
    "label": "Financial Summary"
+  },
+  {
+   "chart_name": "Monthly Payments",
+   "label": "Monthly Payments"
   }
  ],
  "content": [
@@ -75,6 +79,11 @@
         "label": "SHG Contribution",
         "link_type": "DocType",
         "link_to": "SHG Contribution"
+      },
+      {
+        "label": "SHG Payment Entry",
+        "link_type": "DocType",
+        "link_to": "SHG Payment Entry"
       }
     ],
     "col": 12
@@ -93,6 +102,14 @@
    "type": "number_card",
    "data": {
     "number_card_name": "Monthly Contributions",
+    "col": 6
+   }
+  },
+  {
+   "id": "payment_stats",
+   "type": "number_card",
+   "data": {
+    "number_card_name": "Total Payments",
     "col": 6
    }
   },

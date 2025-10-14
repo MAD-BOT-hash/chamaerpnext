@@ -32,6 +32,12 @@
      "is_query_report": 0
     },
     {
+     "label": "Payment Entries",
+     "type": "DocType",
+     "name": "SHG Payment Entry",
+     "is_query_report": 0
+    },
+    {
      "label": "Loan Types",
      "type": "DocType",
      "name": "SHG Loan Type",

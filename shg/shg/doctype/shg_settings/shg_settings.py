@@ -42,3 +42,9 @@ class SHGSettings(Document):
             frappe.throw("Default Loan Account does not exist")
         if self.default_interest_income_account and not frappe.db.exists("Account", self.default_interest_income_account):
             frappe.throw("Default Interest Income Account does not exist")
+            
+        # Validate receive payment settings
+        if self.default_debit_account and not frappe.db.exists("Account", self.default_debit_account):
+            frappe.throw("Default Debit Account does not exist")
+        if self.default_credit_account and not frappe.db.exists("Account", self.default_credit_account):
+            frappe.throw("Default Credit Account does not exist")

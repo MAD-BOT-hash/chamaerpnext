@@ -111,3 +111,43 @@ def update_shg_contribution_invoice_status(sales_invoice_name):
                 
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice Status Update Failed")
+
+@frappe.whitelist()
+def get_unpaid_contribution_invoices(member):
+    """
+    Get all unpaid contribution invoices for a member
+    
+    Args:
+        member (str): Member ID
+        
+    Returns:
+        list: List of unpaid contribution invoices
+    """
+    try:
+        invoices = frappe.get_all(
+            "SHG Contribution Invoice",
+            filters={
+                "member": member,
+                "docstatus": 1,
+                "status": ["!=", "Paid"]
+            },
+            fields=["name", "invoice_date", "amount", "description"]
+        )
+        
+        # Add outstanding amount from linked Sales Invoice
+        for invoice in invoices:
+            shg_invoice = frappe.get_doc("SHG Contribution Invoice", invoice.name)
+            if shg_invoice.sales_invoice:
+                sales_invoice = frappe.get_doc("Sales Invoice", shg_invoice.sales_invoice)
+                invoice.outstanding_amount = sales_invoice.outstanding_amount
+            else:
+                invoice.outstanding_amount = invoice.amount
+                
+        # Filter out fully paid invoices
+        unpaid_invoices = [inv for inv in invoices if inv.outstanding_amount > 0]
+        
+        return unpaid_invoices
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Get Unpaid Contribution Invoices Failed")
+        frappe.throw(_("Failed to get unpaid contribution invoices: {0}").format(str(e)))
