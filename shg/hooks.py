@@ -22,7 +22,8 @@ doc_events = {
         "on_submit": "shg.shg.doctype.shg_contribution.shg_contribution.post_to_general_ledger"
     },
     "SHG Contribution Invoice": {
-        "validate": "shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.validate_contribution_invoice"
+        "validate": "shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.validate_contribution_invoice",
+        "on_submit": "shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.create_contribution_from_invoice"
     },
     "SHG Loan": {
         "validate": "shg.shg.doctype.shg_loan.shg_loan.validate_loan",

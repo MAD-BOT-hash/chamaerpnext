@@ -65,10 +65,24 @@ class SHGContributionInvoice(Document):
             if existing_contribution:
                 return
             
+            # Try to get linked Payment Entry (if exists)
+            payment_method = None
+            if self.sales_invoice:
+                # Try to find payment entry linked to the sales invoice
+                payment_entry = frappe.db.get_value(
+                    "Payment Entry Reference",
+                    {"reference_name": self.sales_invoice, "reference_doctype": "Sales Invoice"},
+                    "parent"
+                )
+                
+                if payment_entry:
+                    payment_method = frappe.db.get_value("Payment Entry", payment_entry, "mode_of_payment")
+            
             # Create SHG Contribution
             contribution = frappe.new_doc("SHG Contribution")
             contribution.member = self.member
             contribution.member_name = self.member_name
+            contribution.posting_date = self.invoice_date
             contribution.contribution_date = self.invoice_date
             contribution.contribution_type = self.contribution_type
             contribution.contribution_type_link = self.contribution_type
@@ -78,6 +92,7 @@ class SHGContributionInvoice(Document):
             contribution.unpaid_amount = self.amount
             contribution.status = "Unpaid"
             contribution.invoice_reference = self.name
+            contribution.payment_method = payment_method or "Not Specified"
             
             # Save contribution in draft mode
             contribution.insert(ignore_permissions=True)
@@ -87,6 +102,11 @@ class SHGContributionInvoice(Document):
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - SHG Contribution Creation Failed")
             frappe.throw(_("Failed to create SHG Contribution: {0}").format(str(e)))
+            
+def create_contribution_from_invoice(doc, method):
+    """Hook function to create SHG Contribution from submitted invoice"""
+    # Call the existing method
+    doc.create_shg_contribution()
             
     def create_sales_invoice(self):
         """Create a Sales Invoice for this contribution invoice"""
