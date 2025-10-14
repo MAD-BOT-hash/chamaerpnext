@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import nowdate, getdate, get_first_day, get_last_day, formatdate, add_days
+from frappe.utils import nowdate, getdate, get_first_day, get_last_day, formatdate, add_days, today
 
 class SHGContributionInvoice(Document):
     def validate(self):
@@ -11,6 +11,14 @@ class SHGContributionInvoice(Document):
         # Ensure amount is rounded to 2 decimal places
         if self.amount:
             self.amount = round(float(self.amount), 2)
+        
+        # Ensure due_date is not before invoice_date
+        if self.due_date and self.invoice_date:
+            invoice_date = getdate(self.invoice_date)
+            due_date = getdate(self.due_date)
+            
+            if due_date < invoice_date:
+                frappe.throw(_("Due Date cannot be before Invoice Date"))
         
     def validate_amount(self):
         """Validate contribution invoice amount"""
@@ -59,12 +67,21 @@ class SHGContributionInvoice(Document):
                     item_code = contrib_type.item_code
                     item_name = contrib_type.contribution_type_name
             
+            # Use invoice_date as the reference date for validation
+            invoice_date = getdate(self.invoice_date or today())
+            due_date = getdate(self.due_date or invoice_date)
+            
+            # Ensure due_date is not earlier than invoice_date
+            if due_date < invoice_date:
+                due_date = invoice_date
+            
             # Create Sales Invoice
             sales_invoice = frappe.get_doc({
                 "doctype": "Sales Invoice",
                 "customer": member.customer,
-                "posting_date": self.invoice_date,
-                "due_date": self.due_date,
+                "posting_date": invoice_date,
+                "due_date": due_date,
+                "supplier_invoice_date": invoice_date,  # Set supplier invoice date to match
                 "shg_contribution_invoice": self.name,
                 "items": [{
                     "item_code": item_code,
