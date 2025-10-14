@@ -1,0 +1,14 @@
+{
+  "custom_fields": {
+    "Payment Entry": [
+      {
+        "fieldname": "custom_shg_payment_entry",
+        "fieldtype": "Link",
+        "options": "SHG Payment Entry",
+        "label": "SHG Payment Entry",
+        "insert_after": "payment_type",
+        "allow_on_submit": 1
+      }
+    ]
+  }
+}

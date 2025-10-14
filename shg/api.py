@@ -68,6 +68,15 @@ def create_payment_entry_from_invoice(invoice_name, paid_amount=None):
             "allocated_amount": amount_to_pay,
         })
         
+        # Set reference fields for traceability
+        payment_entry.reference_no = invoice.name
+        payment_entry.reference_date = invoice.posting_date
+        
+        # Set remarks
+        shg_invoice_name = frappe.db.get_value("SHG Contribution Invoice", {"sales_invoice": invoice.name})
+        if shg_invoice_name:
+            payment_entry.remarks = f"Payment for Contribution Invoice {shg_invoice_name}"
+        
         payment_entry.insert(ignore_permissions=True)
         payment_entry.submit()
         
@@ -104,10 +113,31 @@ def update_shg_contribution_invoice_status(sales_invoice_name):
             # Update status based on outstanding amount
             if sales_invoice.outstanding_amount <= 0:
                 shg_invoice.db_set("status", "Paid")
+                # Also update the Sales Invoice status
+                sales_invoice.db_set("status", "Paid")
             elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
                 shg_invoice.db_set("status", "Partially Paid")
+                # Also update the Sales Invoice status
+                sales_invoice.db_set("status", "Partially Paid")
             else:
                 shg_invoice.db_set("status", "Unpaid")
+                # Also update the Sales Invoice status
+                sales_invoice.db_set("status", "Unpaid")
+                
+            # Also update the member's unpaid contributions
+            member = frappe.get_doc("SHG Member", shg_invoice.member)
+            total_invoice_amount = sales_invoice.grand_total
+            paid_amount = total_invoice_amount - sales_invoice.outstanding_amount
+            
+            # Update member's total unpaid contributions
+            current_unpaid = member.total_unpaid_contributions or 0
+            new_unpaid = current_unpaid - paid_amount
+            member.db_set("total_unpaid_contributions", max(0, new_unpaid))
+                
+            # Reload documents to reflect changes
+            shg_invoice.reload()
+            sales_invoice.reload()
+            member.reload()
                 
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice Status Update Failed")

@@ -34,6 +34,7 @@
         "current_loan_balance",
         "total_unpaid_contributions",
         "total_unpaid_loans",
+        "total_payments_received",
         "column_break_19",
         "last_contribution_date",
         "last_loan_date",
@@ -215,6 +216,13 @@
             "fieldname": "total_unpaid_loans",
             "fieldtype": "Currency",
             "label": "Total Unpaid Loans",
+            "read_only": 1,
+            "precision": 2
+        },
+        {
+            "fieldname": "total_payments_received",
+            "fieldtype": "Currency",
+            "label": "Total Payments Received",
             "read_only": 1,
             "precision": 2
         },

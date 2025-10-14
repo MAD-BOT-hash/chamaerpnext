@@ -37,6 +37,12 @@ def get_columns():
             "width": 150
         },
         {
+            "label": _("Total Payments Received"),
+            "fieldname": "total_payments_received",
+            "fieldtype": "Currency",
+            "width": 150
+        },
+        {
             "label": _("Total Loans Taken"),
             "fieldname": "total_loans_taken",
             "fieldtype": "Currency",
@@ -82,6 +88,7 @@ def get_data(filters):
             m.member_name,
             m.membership_status,
             m.total_contributions,
+            m.total_payments_received,
             m.total_loans_taken,
             m.current_loan_balance,
             m.credit_score,
