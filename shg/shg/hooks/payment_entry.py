@@ -55,3 +55,41 @@ def payment_entry_validate(doc, method):
     # If we found a source document, set the reference fields
     if source_doc:
         set_reference_fields(doc, source_doc)
+
+def payment_entry_on_submit(doc, method):
+    """
+    Hook function called when Payment Entry is submitted.
+    Updates the status of related SHG Contribution Invoices.
+    """
+    # Check if this Payment Entry is allocated to any Sales Invoices
+    for reference in doc.references:
+        if reference.reference_doctype == "Sales Invoice" and reference.reference_name:
+            # Update the SHG Contribution Invoice status
+            update_shg_contribution_invoice_status(reference.reference_name)
+
+def update_shg_contribution_invoice_status(sales_invoice_name):
+    """
+    Update the SHG Contribution Invoice status based on the Sales Invoice status
+    
+    Args:
+        sales_invoice_name (str): Name of the Sales Invoice
+    """
+    try:
+        # Get the SHG Contribution Invoice linked to this Sales Invoice
+        shg_invoice_name = frappe.db.get_value("SHG Contribution Invoice", 
+                                              {"sales_invoice": sales_invoice_name})
+        
+        if shg_invoice_name:
+            shg_invoice = frappe.get_doc("SHG Contribution Invoice", shg_invoice_name)
+            sales_invoice = frappe.get_doc("Sales Invoice", sales_invoice_name)
+            
+            # Update status based on outstanding amount
+            if sales_invoice.outstanding_amount <= 0:
+                shg_invoice.db_set("status", "Paid")
+            elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
+                shg_invoice.db_set("status", "Partially Paid")
+            else:
+                shg_invoice.db_set("status", "Unpaid")
+                
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice Status Update Failed")
