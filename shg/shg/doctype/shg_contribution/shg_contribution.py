@@ -84,12 +84,12 @@ class SHGContribution(Document):
         try:
             # Update paid amounts
             current_paid = self.amount_paid or 0
-            new_paid = current_paid + flt(paid_amount)
+            new_paid = current_paid + paid_amount
             self.db_set("amount_paid", new_paid)
             
             # Recalculate unpaid amount and status
             expected = self.expected_amount or self.amount
-            unpaid = max(0, flt(expected) - flt(new_paid))
+            unpaid = max(0, expected - new_paid)
             self.db_set("unpaid_amount", unpaid)
             
             # Update status
@@ -100,13 +100,6 @@ class SHGContribution(Document):
             else:
                 self.db_set("status", "Unpaid")
                 
-            # Update the linked SHG Contribution Invoice if exists
-            if self.invoice_reference:
-                invoice = frappe.get_doc("SHG Contribution Invoice", self.invoice_reference)
-                if invoice:
-                    # Update invoice status based on contribution status
-                    invoice.db_set("status", self.status)
-                    
             # Update member financial summary
             member = frappe.get_doc("SHG Member", self.member)
             member.update_financial_summary()
@@ -380,34 +373,85 @@ def send_contribution_reminder(contribution):
         frappe.log_error(f"Failed to send reminder for contribution {contribution.name}: {str(e)}")
 
 @frappe.whitelist()
-def sync_contribution_invoice_status(contribution_name):
+def create_contribution_from_invoice(doc, method=None):
     """
-    Synchronize the status between SHG Contribution and SHG Contribution Invoice
-    
-    Args:
-        contribution_name (str): Name of the SHG Contribution
+    Automatically create SHG Contribution when a Contribution Invoice is submitted
     """
     try:
-        # Get the SHG Contribution
-        contribution = frappe.get_doc("SHG Contribution", contribution_name)
+        # Prevent duplicates
+        existing = frappe.db.exists("SHG Contribution", {"invoice_reference": doc.name})
+        if existing:
+            frappe.logger().info(f"SHG Contribution already exists for Invoice {doc.name}")
+            return frappe.get_doc("SHG Contribution", existing)
+
+        # Attempt to find related Payment Entry (if exists)
+        payment_entry = frappe.db.get_value(
+            "Payment Entry Reference",
+            {"reference_name": doc.name},
+            "parent"
+        )
+        payment_method = None
+        if payment_entry:
+            payment_method = frappe.db.get_value("Payment Entry", payment_entry, "mode_of_payment")
+
+        # Get default payment method from settings or default to Mpesa
+        default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
+
+        # Create new SHG Contribution
+        contribution = frappe.get_doc({
+            "doctype": "SHG Contribution",
+            "member": doc.member,                 # Link field
+            "member_name": doc.member_name,
+            "contribution_type": doc.contribution_type,
+            "contribution_date": doc.invoice_date or nowdate(),
+            "posting_date": doc.invoice_date or nowdate(),
+            "amount": flt(doc.amount or 0),
+            "expected_amount": flt(doc.amount or 0),
+            "payment_method": payment_method or default_payment_method,
+            "invoice_reference": doc.name,
+            "status": "Unpaid"
+        })
         
-        # If there's a linked invoice, update its status
-        if contribution.invoice_reference:
-            invoice = frappe.get_doc("SHG Contribution Invoice", contribution.invoice_reference)
-            if invoice:
-                # Update invoice status to match contribution status
-                invoice.db_set("status", contribution.status)
-                
-                # Also update the linked Sales Invoice if exists
-                if invoice.sales_invoice:
-                    sales_invoice = frappe.get_doc("Sales Invoice", invoice.sales_invoice)
-                    # Update status based on outstanding amount
-                    if sales_invoice.outstanding_amount <= 0:
-                        invoice.db_set("status", "Paid")
-                    elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
-                        invoice.db_set("status", "Partially Paid")
-                    else:
-                        invoice.db_set("status", "Unpaid")
-                        
+        # Use flags before insert instead of passing parameters
+        contribution.flags.ignore_permissions = True
+        contribution.insert()
+        frappe.db.commit()
+
+        frappe.logger().info(f"[SHG] Created SHG Contribution {contribution.name} from Invoice {doc.name}")
+        return contribution
+
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice Status Sync Failed")
+        frappe.log_error(message=frappe.get_traceback(), title=f"Auto SHG Contribution Creation Failed for {doc.name}")
+        return None
+
+def create_linked_contribution(invoice_doc):
+    """
+    Create a draft SHG Contribution linked to the invoice
+    """
+    try:
+        # Get default payment method from settings or default to Mpesa
+        default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
+        
+        # Create new SHG Contribution in draft status
+        contribution = frappe.get_doc({
+            "doctype": "SHG Contribution",
+            "member": invoice_doc.member,
+            "member_name": invoice_doc.member_name,
+            "contribution_type": invoice_doc.contribution_type,
+            "contribution_date": invoice_doc.invoice_date or nowdate(),
+            "posting_date": invoice_doc.invoice_date or nowdate(),
+            "amount": flt(invoice_doc.amount or 0),
+            "expected_amount": flt(invoice_doc.amount or 0),
+            "payment_method": default_payment_method,
+            "invoice_reference": invoice_doc.name,
+            "status": "Unpaid",
+            "docstatus": 0  # Draft status
+        })
+        
+        # Use flags before insert instead of passing parameters
+        contribution.flags.ignore_permissions = True
+        contribution.insert()
+        frappe.logger().info(f"[SHG] Created draft SHG Contribution {contribution.name} for Invoice {invoice_doc.name}")
+        
+    except Exception as e:
+        frappe.log_error(message=frappe.get_traceback(), title=f"Draft SHG Contribution Creation Failed for Invoice {invoice_doc.name}")

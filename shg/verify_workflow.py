@@ -4,7 +4,6 @@ Verification script for SHG Contribution & Invoice Workflow
 This script verifies that all the implemented changes work correctly.
 """
 
-import frappe
 import os
 import sys
 
@@ -16,6 +15,11 @@ def verify_shg_settings():
     print("🔍 Verifying SHG Settings...")
     
     try:
+        import frappe
+        
+        # Initialize frappe
+        frappe.init(site="test_site", sites_path=".")
+        
         settings = frappe.get_single("SHG Settings")
         
         # Check for new fields
@@ -50,6 +54,11 @@ def verify_shg_contribution_invoice_fields():
     print("🔍 Verifying SHG Contribution Invoice fields...")
     
     try:
+        import frappe
+        
+        # Initialize frappe
+        frappe.init(site="test_site", sites_path=".")
+        
         # Get the DocType definition
         doctype = frappe.get_meta("SHG Contribution Invoice")
         
@@ -81,6 +90,11 @@ def verify_hooks():
     print("🔍 Verifying hooks configuration...")
     
     try:
+        import frappe
+        
+        # Initialize frappe
+        frappe.init(site="test_site", sites_path=".")
+        
         # Check if our functions are in hooks
         hooks = frappe.get_hooks()
         
@@ -104,6 +118,11 @@ def verify_workflow_automation_flags():
     print("🔍 Verifying workflow automation flags...")
     
     try:
+        import frappe
+        
+        # Initialize frappe
+        frappe.init(site="test_site", sites_path=".")
+        
         settings = frappe.get_single("SHG Settings")
         
         # Check if automation flags exist and have default values
@@ -135,9 +154,6 @@ def verify_workflow_automation_flags():
 def main():
     """Main verification function"""
     print("🚀 Starting SHG Workflow Verification...\n")
-    
-    # Initialize frappe
-    frappe.init(site="test_site", sites_path=".")
     
     all_checks = [
         verify_shg_settings,

@@ -146,6 +146,7 @@ def update_shg_contribution_status(sales_invoice_name):
                     shg_contribution.db_set("status", "Unpaid")
                     
                 # Save the contribution to trigger any necessary updates
+                shg_contribution.flags.ignore_permissions = True
                 shg_contribution.save()
                 
     except Exception as e:
