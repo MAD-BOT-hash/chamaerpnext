@@ -291,13 +291,23 @@ SHG Management"""
                 contribution.db_set("status", self.status)
 
 @frappe.whitelist()
-def validate_contribution_invoice(invoice_name):
+def validate_contribution_invoice(doc, method=None):
     """
     Validate SHG Contribution Invoice before submission.
     Ensures member is active, amount > 0, and required fields are set.
+    Can be called as:
+    1. A hook function (doc, method) - when used in hooks.py
+    2. Directly via API (invoice_name) - when called with invoice_name parameter
     """
     try:
-        invoice = frappe.get_doc("SHG Contribution Invoice", invoice_name)
+        # Handle both calling conventions
+        if isinstance(doc, str):
+            # Called directly via API with invoice_name
+            invoice_name = doc
+            invoice = frappe.get_doc("SHG Contribution Invoice", invoice_name)
+        else:
+            # Called as hook with document object
+            invoice = doc
 
         # Validate required fields
         required_fields = ["member", "amount", "contribution_type", "invoice_date"]
