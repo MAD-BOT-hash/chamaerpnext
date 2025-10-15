@@ -452,28 +452,35 @@ def get_due_date(contrib_type):
     if contrib_type.billing_frequency == "Monthly":
         # Due date is the specified day of the current month
         try:
-            return today_date.replace(day=contrib_type.due_day)
+            due_date = today_date.replace(day=contrib_type.due_day)
         except ValueError:
             # Handle case where due_day doesn't exist in current month (e.g., 31st in February)
-            return get_last_day(today_date)
+            due_date = get_last_day(today_date)
     
     elif contrib_type.billing_frequency == "Weekly":
         # Due date is today (weekly billing)
-        return today_date
+        due_date = today_date
     
     elif contrib_type.billing_frequency == "Quarterly":
         # Due date is the specified day of the current quarter start month
-        return today_date.replace(day=contrib_type.due_day)
+        due_date = today_date.replace(day=contrib_type.due_day)
     
     elif contrib_type.billing_frequency == "Annually":
         # Due date is the specified day of January
-        return today_date.replace(month=1, day=contrib_type.due_day)
+        due_date = today_date.replace(month=1, day=contrib_type.due_day)
     
     elif contrib_type.billing_frequency == "Bi monthly":
         # Due date is the specified day of the current even month
-        return today_date.replace(day=contrib_type.due_day)
+        due_date = today_date.replace(day=contrib_type.due_day)
     
-    return today_date
+    else:
+        due_date = today_date
+    
+    # Ensure due date is not before posting date (today)
+    if due_date < today_date:
+        due_date = today_date
+    
+    return due_date
 
 def get_contribution_period(contrib_type):
     """Get the contribution period description"""

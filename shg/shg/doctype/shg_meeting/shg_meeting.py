@@ -1,6 +1,6 @@
 import frappe
 from frappe.model.document import Document
-from frappe.utils import today, getdate, flt
+from frappe.utils import today, getdate, flt, add_days
 
 # Import the utility functions
 from shg.shg.utils.meeting_utils import get_fine_reason_from_attendance, sanitize_fine_reason
@@ -131,7 +131,7 @@ class SHGMeeting(Document):
                 "doctype": "Sales Invoice",
                 "customer": member_doc.customer,
                 "posting_date": self.meeting_date,
-                "due_date": self.meeting_date,
+                "due_date": add_days(getdate(self.meeting_date), 1),
                 "items": [{
                     "item_code": settings.invoice_item,
                     "item_name": frappe.get_value("Item", settings.invoice_item, "item_name"),

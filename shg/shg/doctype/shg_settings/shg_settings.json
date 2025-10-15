@@ -9,6 +9,7 @@
         "contribution_frequency",
         "minimum_contribution",
         "default_contribution_payment_method",
+        "default_credit_period_days",
         "column_break_4",
         "allow_voluntary_contributions",
         "voluntary_contribution_limit",
@@ -105,6 +106,14 @@
             "fieldtype": "Select",
             "label": "Default Contribution Payment Method",
             "options": "Cash\nMobile Money\nMpesa\nBank Transfer\nCheque"
+        },
+        {
+            "default": "30",
+            "description": "Number of days after invoice date when payment is due",
+            "fieldname": "default_credit_period_days",
+            "fieldtype": "Int",
+            "label": "Default Credit Period (days)",
+            "non_negative": 1
         },
         {
             "fieldname": "column_break_4",

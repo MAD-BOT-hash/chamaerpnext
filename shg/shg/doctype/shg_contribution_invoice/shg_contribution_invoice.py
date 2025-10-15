@@ -192,6 +192,13 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
             # Get default payment method from settings or default to Mpesa
             default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
             
+            # Get invoice date
+            inv_date = getdate(invoice_date or nowdate())
+            
+            # Get default credit period from settings or default to 30 days
+            default_credit_period = frappe.db.get_single_value("SHG Settings", "default_credit_period_days") or 30
+            due_date = add_days(inv_date, int(default_credit_period))
+            
             # Create SHG Contribution Invoice
             invoice = frappe.get_doc({
                 "doctype": "SHG Contribution Invoice",
@@ -200,7 +207,8 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
                 "contribution_type": contribution_type,
                 "amount": amount,
                 "payment_method": default_payment_method,
-                "invoice_date": invoice_date or nowdate(),
+                "invoice_date": inv_date,
+                "due_date": due_date,
                 "status": "Draft"
             })
             invoice.insert(ignore_permissions=True)
