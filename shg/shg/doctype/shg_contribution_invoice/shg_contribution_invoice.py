@@ -57,6 +57,72 @@ class SHGContributionInvoice(Document):
         # Create SHG Contribution record
         create_contribution_from_invoice(self, None)
 
+    def create_sales_invoice(self):
+        """Create a Sales Invoice for this contribution invoice"""
+        try:
+            # Check if member exists and is active
+            member_status = frappe.db.get_value("SHG Member", self.member, "membership_status")
+            if not member_status:
+                frappe.throw(_(f"Member {self.member} does not exist"))
+            if member_status != "Active":
+                frappe.throw(_(f"Member {self.member} is not active. Current status: {member_status}"))
+                
+            member = frappe.get_doc("SHG Member", self.member)
+            
+            if not member.customer:
+                frappe.throw(_("Member {0} does not have a linked Customer record").format(self.member_name))
+                
+            # Get contribution type details for item
+            item_code = "SHG Contribution"
+            item_name = self.contribution_type or "SHG Contribution"
+            description = self.description or f"Contribution invoice for {formatdate(self.invoice_date, 'MMMM yyyy')}"
+            
+            if self.contribution_type:
+                contrib_type = frappe.get_doc("SHG Contribution Type", self.contribution_type)
+                if contrib_type.item_code:
+                    item_code = contrib_type.item_code
+                    item_name = contrib_type.contribution_type_name
+            
+            # Use invoice_date as the reference date for validation
+            invoice_date = getdate(self.invoice_date or today())
+            due_date = getdate(self.due_date or invoice_date)
+            
+            # Ensure due_date is not earlier than invoice_date
+            if due_date < invoice_date:
+                due_date = invoice_date
+            
+            # Create Sales Invoice
+            sales_invoice = frappe.get_doc({
+                "doctype": "Sales Invoice",
+                "customer": member.customer,
+                "posting_date": invoice_date,
+                "due_date": due_date,
+                "shg_contribution_invoice": self.name,
+                "remarks": f"Auto-generated for SHG Contribution Invoice {self.name}",
+                "items": [{
+                    "item_code": item_code,
+                    "item_name": item_name,
+                    "description": description,
+                    "qty": 1,
+                    "rate": self.amount,
+                    "amount": self.amount
+                }]
+            })
+            
+            sales_invoice.insert()
+            sales_invoice.submit()
+            
+            # Link the Sales Invoice to this Contribution Invoice
+            self.db_set("sales_invoice", sales_invoice.name)
+            # Set status to Unpaid when Sales Invoice is created
+            self.db_set("status", "Unpaid")
+            
+            frappe.db.commit()
+            
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - Sales Invoice Creation Failed")
+            frappe.throw(_("Failed to create Sales Invoice: {0}").format(str(e)))
+
 @frappe.whitelist()
 def create_contribution_from_invoice(doc, method=None):
     """
@@ -169,65 +235,6 @@ def create_linked_contribution(invoice_doc):
         
     except Exception as e:
         frappe.log_error(message=frappe.get_traceback(), title=f"Draft SHG Contribution Creation Failed for Invoice {invoice_doc.name}")
-
-    def create_sales_invoice(self):
-        """Create a Sales Invoice for this contribution invoice"""
-        try:
-            member = frappe.get_doc("SHG Member", self.member)
-            
-            if not member.customer:
-                frappe.throw(_("Member {0} does not have a linked Customer record").format(self.member_name))
-                
-            # Get contribution type details for item
-            item_code = "SHG Contribution"
-            item_name = "SHG Contribution"
-            description = self.description or f"Contribution invoice for {formatdate(self.invoice_date, 'MMMM yyyy')}"
-            
-            if self.contribution_type:
-                contrib_type = frappe.get_doc("SHG Contribution Type", self.contribution_type)
-                if contrib_type.item_code:
-                    item_code = contrib_type.item_code
-                    item_name = contrib_type.contribution_type_name
-            
-            # Use invoice_date as the reference date for validation
-            invoice_date = getdate(self.invoice_date or today())
-            due_date = getdate(self.due_date or invoice_date)
-            
-            # Ensure due_date is not earlier than invoice_date
-            if due_date < invoice_date:
-                due_date = invoice_date
-            
-            # Create Sales Invoice
-            sales_invoice = frappe.get_doc({
-                "doctype": "Sales Invoice",
-                "customer": member.customer,
-                "posting_date": invoice_date,
-                "due_date": due_date,
-                "supplier_invoice_date": invoice_date,  # Set supplier invoice date to match
-                "shg_contribution_invoice": self.name,
-                "items": [{
-                    "item_code": item_code,
-                    "item_name": item_name,
-                    "description": description,
-                    "qty": 1,
-                    "rate": self.amount,
-                    "amount": self.amount
-                }]
-            })
-            
-            sales_invoice.insert()
-            sales_invoice.submit()
-            
-            # Link the Sales Invoice to this Contribution Invoice
-            self.db_set("sales_invoice", sales_invoice.name)
-            # Set status to Unpaid when Sales Invoice is created
-            self.db_set("status", "Unpaid")
-            
-            frappe.msgprint(_("Sales Invoice {0} created successfully").format(sales_invoice.name))
-            
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - Sales Invoice Creation Failed")
-            frappe.throw(_("Failed to create Sales Invoice: {0}").format(str(e)))
             
     @frappe.whitelist()
     def send_invoice_email(self):
@@ -328,4 +335,45 @@ def validate_contribution_invoice(doc, method=None):
 
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "validate_contribution_invoice_error")
+        frappe.throw(str(e))
+
+@frappe.whitelist()
+def auto_submit_contribution_invoices():
+    """
+    Auto-submit all draft SHG Contribution Invoices
+    """
+    try:
+        # Find all draft invoices
+        draft_invoices = frappe.get_all("SHG Contribution Invoice", 
+                                      filters={"docstatus": 0, "status": "Draft"},
+                                      fields=["name"])
+        
+        submitted_count = 0
+        error_count = 0
+        
+        for invoice_data in draft_invoices:
+            try:
+                # Validate the invoice first
+                validate_contribution_invoice(invoice_data.name)
+                # If validation passes, submit the invoice
+                invoice = frappe.get_doc("SHG Contribution Invoice", invoice_data.name)
+                invoice.submit()
+                submitted_count += 1
+                
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), 
+                               f"Auto-submit failed for invoice {invoice_data.name}")
+                error_count += 1
+        
+        frappe.db.commit()
+        
+        return {
+            "status": "success",
+            "submitted": submitted_count,
+            "errors": error_count,
+            "message": f"Processed {len(draft_invoices)} draft invoices. Submitted: {submitted_count}, Errors: {error_count}"
+        }
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "auto_submit_contribution_invoices_error")
         frappe.throw(str(e))
