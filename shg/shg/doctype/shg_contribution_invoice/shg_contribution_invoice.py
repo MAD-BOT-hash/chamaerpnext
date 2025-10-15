@@ -4,7 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import getdate, formatdate, today, nowdate
+from frappe.utils import getdate, formatdate, today, nowdate, add_days
 
 class SHGContributionInvoice(Document):
     def validate(self):
@@ -85,11 +85,8 @@ class SHGContributionInvoice(Document):
             
             # Use invoice_date as the reference date for validation
             invoice_date = getdate(self.invoice_date or today())
-            due_date = getdate(self.due_date or invoice_date)
-            
-            # Ensure due_date is not earlier than invoice_date
-            if due_date < invoice_date:
-                due_date = invoice_date
+            # Set due date to invoice date plus 1 day
+            due_date = add_days(invoice_date, 1)
             
             # Create Sales Invoice
             sales_invoice = frappe.get_doc({
