@@ -102,20 +102,21 @@ def create_contribution_from_invoice(doc, method=None):
         frappe.log_error(message=frappe.get_traceback(), title=f"Auto SHG Contribution Creation Failed for {doc.name}")
 
 @frappe.whitelist()
-def generate_multiple_contribution_invoices(member_list=None, contribution_type=None, amount=None, invoice_date=None):
+def generate_multiple_contribution_invoices(contribution_type=None, amount=None, invoice_date=None):
     """
-    Create multiple SHG Contribution Invoices for selected members
+    Create multiple SHG Contribution Invoices for all active members
     """
     try:
-        if not member_list:
-            frappe.throw("Member list is required.")
-
-        member_list = frappe.parse_json(member_list)
+        # Fetch all active members
+        active_members = frappe.get_all("SHG Member", filters={"membership_status": "Active"}, fields=["name", "member_name"])
+        
+        if not active_members:
+            frappe.throw("No active members found.")
+            
         created_invoices = []
-
-        for member_id in member_list:
-            member = frappe.get_doc("SHG Member", member_id)
-
+        
+        for member in active_members:
+            # Create SHG Contribution Invoice
             invoice = frappe.get_doc({
                 "doctype": "SHG Contribution Invoice",
                 "member": member.name,
@@ -126,7 +127,13 @@ def generate_multiple_contribution_invoices(member_list=None, contribution_type=
                 "status": "Draft"
             })
             invoice.insert(ignore_permissions=True)
-            created_invoices.append(invoice.name)
+            created_invoices.append({
+                "invoice_name": invoice.name,
+                "member_name": member.member_name
+            })
+            
+            # Create linked draft SHG Contribution
+            create_linked_contribution(invoice)
 
         frappe.db.commit()
         return {"created_invoices": created_invoices}
@@ -134,6 +141,34 @@ def generate_multiple_contribution_invoices(member_list=None, contribution_type=
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Generate Multiple Contribution Invoices Failed")
         frappe.throw(str(e))
+
+
+def create_linked_contribution(invoice_doc):
+    """
+    Create a draft SHG Contribution linked to the invoice
+    """
+    try:
+        # Create new SHG Contribution in draft status
+        contribution = frappe.get_doc({
+            "doctype": "SHG Contribution",
+            "member": invoice_doc.member,
+            "member_name": invoice_doc.member_name,
+            "contribution_type": invoice_doc.contribution_type,
+            "contribution_date": invoice_doc.invoice_date or nowdate(),
+            "posting_date": invoice_doc.invoice_date or nowdate(),
+            "amount": float(invoice_doc.amount or 0),
+            "expected_amount": float(invoice_doc.amount or 0),
+            "payment_method": "Not Specified",
+            "invoice_reference": invoice_doc.name,
+            "status": "Unpaid",
+            "docstatus": 0  # Draft status
+        })
+        
+        contribution.insert(ignore_permissions=True)
+        frappe.logger().info(f"[SHG] Created draft SHG Contribution {contribution.name} for Invoice {invoice_doc.name}")
+        
+    except Exception as e:
+        frappe.log_error(message=frappe.get_traceback(), title=f"Draft SHG Contribution Creation Failed for Invoice {invoice_doc.name}")
 
     def create_sales_invoice(self):
         """Create a Sales Invoice for this contribution invoice"""
@@ -254,37 +289,3 @@ SHG Management"""
                 contribution = frappe.get_doc("SHG Contribution", contribution_name)
                 # Update contribution status to match invoice status
                 contribution.db_set("status", self.status)
-
-@frappe.whitelist()
-def generate_multiple_contribution_invoices(member_list=None, contribution_type=None, amount=None, invoice_date=None):
-    """
-    Create multiple SHG Contribution Invoices for selected members
-    """
-    try:
-        if not member_list:
-            frappe.throw("Member list is required.")
-
-        member_list = frappe.parse_json(member_list)
-        created_invoices = []
-
-        for member_id in member_list:
-            member = frappe.get_doc("SHG Member", member_id)
-
-            invoice = frappe.get_doc({
-                "doctype": "SHG Contribution Invoice",
-                "member": member.name,
-                "member_name": member.member_name,
-                "contribution_type": contribution_type,
-                "amount": amount,
-                "invoice_date": invoice_date or nowdate(),
-                "status": "Draft"
-            })
-            invoice.insert(ignore_permissions=True)
-            created_invoices.append(invoice.name)
-
-        frappe.db.commit()
-        return {"created_invoices": created_invoices}
-
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Generate Multiple Contribution Invoices Failed")
-        frappe.throw(str(e))
