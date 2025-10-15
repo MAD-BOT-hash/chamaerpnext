@@ -129,8 +129,10 @@ class SHGContributionInvoice(Document):
                 }]
             })
             
-            # Insert and submit the Sales Invoice
-            sales_invoice.insert(ignore_mandatory=True, ignore_validate=True)
+            # Use flags before insert instead of passing parameters
+            sales_invoice.flags.ignore_mandatory = True
+            sales_invoice.flags.ignore_validate = True
+            sales_invoice.insert()
             sales_invoice.submit()
             
             # Link the Sales Invoice to this Contribution Invoice

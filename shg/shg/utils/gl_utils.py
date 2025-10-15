@@ -78,8 +78,9 @@ def create_loan_disbursement_payment_entry(loan_doc):
             "allocated_amount": flt(loan_doc.loan_amount)
         })
         
-        # Insert and submit
-        pe.insert(ignore_permissions=True)
+        # Use flags before insert instead of passing parameters
+        pe.flags.ignore_permissions = True
+        pe.insert()
         pe.submit()
         
         frappe.msgprint(f"✅ Disbursement linked successfully to ERPNext Loan {loan_doc.erpnext_loan_ref or loan_doc.name}")
@@ -105,25 +106,14 @@ def create_contribution_payment_entry(contribution_doc):
     if not company:
         company = contribution_doc.company
     
-    # Get accounts from SHG Settings for ERPNext 15 compliance
+    # Get accounts
+    from shg.shg.utils.account_utils import (
+        get_or_create_shg_contributions_account,
+        get_or_create_member_account
+    )
+    
+    # Get bank/cash account from settings
     settings = frappe.get_single("SHG Settings")
-    
-    # Get receivable account (Debit)
-    receivable_account = settings.default_receivable_account
-    if not receivable_account:
-        # Fallback to member account
-        from shg.shg.utils.account_utils import get_or_create_member_account
-        receivable_account = get_or_create_member_account(
-            frappe.get_doc("SHG Member", contribution_doc.member), company)
-    
-    # Get income account (Credit)
-    income_account = settings.default_income_account
-    if not income_account:
-        # Fallback to contributions account
-        from shg.shg.utils.account_utils import get_or_create_shg_contributions_account
-        income_account = get_or_create_shg_contributions_account(company)
-    
-    # Get bank/cash account (Debit on payment)
     bank_account = settings.default_bank_account or settings.default_cash_account
     
     if not bank_account:
@@ -138,6 +128,16 @@ def create_contribution_payment_entry(contribution_doc):
         else:
             frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
     
+    # Get member account
+    member_account = get_or_create_member_account(
+        frappe.get_doc("SHG Member", contribution_doc.member), company)
+    
+    # Get contributions income account
+    contributions_account = get_or_create_shg_contributions_account(company)
+    
+    # Get default contribution voucher type from settings
+    default_voucher_type = settings.default_contribution_voucher_type or "Contribution Entry"
+    
     # Create Payment Entry
     pe = frappe.new_doc("Payment Entry")
     pe.payment_type = "Receive"
@@ -145,7 +145,7 @@ def create_contribution_payment_entry(contribution_doc):
     pe.company = company
     pe.party_type = "Customer"
     pe.party = contribution_doc.get_member_customer()
-    pe.paid_from = receivable_account
+    pe.paid_from = member_account
     pe.paid_to = bank_account
     pe.received_amount = flt(contribution_doc.amount)
     pe.paid_amount = flt(contribution_doc.amount)
@@ -164,15 +164,15 @@ def create_contribution_payment_entry(contribution_doc):
     elif account_type == "Cash":
         pe.mode_of_payment = "Cash"
     
-    # Set voucher type from settings or default
-    default_voucher_type = settings.default_contribution_voucher_type or "Contribution Entry"
+    # Set voucher type
     pe.voucher_type = default_voucher_type
     
     # Set custom field for traceability
     pe.set("custom_shg_contribution", contribution_doc.name)
     
-    # Insert and submit
-    pe.insert(ignore_permissions=True)
+    # Use flags before insert instead of passing parameters
+    pe.flags.ignore_permissions = True
+    pe.insert()
     pe.submit()
     
     return pe
@@ -193,26 +193,34 @@ def create_contribution_journal_entry(contribution_doc):
     if not company:
         company = contribution_doc.company
     
-    # Get accounts from SHG Settings for ERPNext 15 compliance
+    # Get accounts
+    from shg.shg.utils.account_utils import (
+        get_or_create_shg_contributions_account,
+        get_or_create_member_account
+    )
+    
+    # Get bank/cash account from settings
     settings = frappe.get_single("SHG Settings")
-    
-    # Get receivable account (Debit)
-    receivable_account = settings.default_receivable_account
-    if not receivable_account:
-        # Fallback to member account
-        from shg.shg.utils.account_utils import get_or_create_member_account
-        receivable_account = get_or_create_member_account(
-            frappe.get_doc("SHG Member", contribution_doc.member), company)
-    
-    # Get income account (Credit)
-    income_account = settings.default_income_account
-    if not income_account:
-        # Fallback to contributions account
-        from shg.shg.utils.account_utils import get_or_create_shg_contributions_account
-        income_account = get_or_create_shg_contributions_account(company)
-    
-    # Get bank/cash account (Debit on payment)
     bank_account = settings.default_bank_account or settings.default_cash_account
+    
+    if not bank_account:
+        # Try to find a default bank/cash account
+        bank_accounts = frappe.get_all("Account", filters={
+            "company": company,
+            "account_type": ["in", ["Bank", "Cash"]],
+            "is_group": 0
+        }, limit=1)
+        if bank_accounts:
+            bank_account = bank_accounts[0].name
+        else:
+            frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
+    
+    # Get member account
+    member_account = get_or_create_member_account(
+        frappe.get_doc("SHG Member", contribution_doc.member), company)
+    
+    # Get contributions income account
+    contributions_account = get_or_create_shg_contributions_account(company)
     
     # Get default contribution voucher type from settings
     default_voucher_type = settings.default_contribution_voucher_type or "Contribution Entry"
@@ -226,7 +234,7 @@ def create_contribution_journal_entry(contribution_doc):
     
     # Debit: Member Receivable Account
     je.append("accounts", {
-        "account": receivable_account,
+        "account": member_account,
         "debit_in_account_currency": flt(contribution_doc.amount),
         "party_type": "Customer",
         "party": contribution_doc.get_member_customer()
@@ -234,15 +242,16 @@ def create_contribution_journal_entry(contribution_doc):
     
     # Credit: Income Account
     je.append("accounts", {
-        "account": income_account,
+        "account": contributions_account,
         "credit_in_account_currency": flt(contribution_doc.amount)
     })
     
     # Set custom field for traceability
     je.set("custom_shg_contribution", contribution_doc.name)
     
-    # Insert and submit
-    je.insert(ignore_permissions=True)
+    # Use flags before insert instead of passing parameters
+    je.flags.ignore_permissions = True
+    je.insert()
     je.submit()
     
     return je
@@ -325,8 +334,9 @@ def create_loan_repayment_payment_entry(repayment_doc):
             "allocated_amount": flt(repayment_doc.principal_amount)
         })
     
-    # Insert and submit
-    pe.insert(ignore_permissions=True)
+    # Use flags before insert instead of passing parameters
+    pe.flags.ignore_permissions = True
+    pe.insert()
     pe.submit()
     
     return pe
@@ -414,8 +424,9 @@ def create_meeting_fine_payment_entry(fine_doc):
     #     "amount": flt(fine_doc.fine_amount)
     # })
     
-    # Insert and submit
-    pe.insert(ignore_permissions=True)
+    # Use flags before insert instead of passing parameters
+    pe.flags.ignore_permissions = True
+    pe.insert()
     pe.submit()
     
     return pe
