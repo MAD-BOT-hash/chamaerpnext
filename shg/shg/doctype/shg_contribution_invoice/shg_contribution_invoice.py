@@ -289,3 +289,33 @@ SHG Management"""
                 contribution = frappe.get_doc("SHG Contribution", contribution_name)
                 # Update contribution status to match invoice status
                 contribution.db_set("status", self.status)
+
+@frappe.whitelist()
+def validate_contribution_invoice(invoice_name):
+    """
+    Validate SHG Contribution Invoice before submission.
+    Ensures member is active, amount > 0, and required fields are set.
+    """
+    try:
+        invoice = frappe.get_doc("SHG Contribution Invoice", invoice_name)
+
+        # Validate required fields
+        required_fields = ["member", "amount", "contribution_type", "invoice_date"]
+        for field in required_fields:
+            if not invoice.get(field):
+                frappe.throw(f"Missing required field: {field}")
+
+        # Validate amount
+        if float(invoice.amount) <= 0:
+            frappe.throw("Amount must be greater than zero.")
+
+        # Validate member
+        member_status = frappe.db.get_value("SHG Member", invoice.member, "membership_status")
+        if member_status != "Active":
+            frappe.throw(f"Member {invoice.member} is not active. Current status: {member_status}")
+
+        return {"status": "success", "message": "Validation successful"}
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "validate_contribution_invoice_error")
+        frappe.throw(str(e))
