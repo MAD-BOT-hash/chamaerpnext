@@ -15,6 +15,7 @@
   "column_break_4",
   "contribution_type",
   "amount",
+  "payment_method",
   "status",
   "description",
   "accounting_section",
@@ -80,6 +81,13 @@
    "label": "Amount (KES)",
    "reqd": 1,
    "precision": 2
+  },
+  {
+   "fieldname": "payment_method",
+   "fieldtype": "Select",
+   "label": "Payment Method",
+   "options": "Cash\nMobile Money\nMpesa\nBank Transfer\nCheque",
+   "default": "Mpesa"
   },
   {
    "fieldname": "status",
