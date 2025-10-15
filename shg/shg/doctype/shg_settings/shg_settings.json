@@ -13,6 +13,7 @@
         "column_break_4",
         "allow_voluntary_contributions",
         "voluntary_contribution_limit",
+        "allow_historical_backdated_invoices",
         "loan_settings_section",
         "default_interest_rate",
         "interest_calculation_method",
@@ -124,6 +125,13 @@
             "fieldname": "allow_voluntary_contributions",
             "fieldtype": "Check",
             "label": "Allow Voluntary Contributions"
+        },
+        {
+            "default": "0",
+            "fieldname": "allow_historical_backdated_invoices",
+            "fieldtype": "Check",
+            "label": "Allow Historical Backdated Invoices",
+            "description": "If enabled, skip date validation and always use the supplier invoice date for backdated invoices"
         },
         {
             "fieldname": "loan_settings_section",

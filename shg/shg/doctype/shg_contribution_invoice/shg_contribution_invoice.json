@@ -11,6 +11,7 @@
   "member",
   "member_name",
   "invoice_date",
+  "supplier_invoice_date",
   "due_date",
   "column_break_4",
   "contribution_type",
@@ -57,6 +58,12 @@
    "label": "Invoice Date",
    "reqd": 1,
    "default": "Today"
+  },
+  {
+   "fieldname": "supplier_invoice_date",
+   "fieldtype": "Date",
+   "label": "Supplier Invoice Date",
+   "description": "Used for posting and due dates in Sales Invoice creation"
   },
   {
    "fieldname": "due_date",

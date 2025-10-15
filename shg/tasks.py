@@ -412,12 +412,22 @@ def invoice_exists_for_period(member, contrib_type):
 def create_sales_invoice_for_member(member, contrib_type):
     """Create a sales invoice for a member"""
     try:
+        # Check if historical backdated invoices are allowed
+        allow_historical = frappe.db.get_single_value("SHG Settings", "allow_historical_backdated_invoices") or 0
+        
+        # Use today's date for posting
+        posting_date = getdate(today())
+        
+        # If historical backdated invoices are allowed, we can use a different date
+        # For automated invoices, we'll use today's date as the supplier invoice date
+        supplier_invoice_date = posting_date
+        
         # Create a new Sales Invoice
         invoice = frappe.get_doc({
             "doctype": "Sales Invoice",
             "customer": member.customer,
-            "posting_date": today(),
-            "due_date": get_due_date(contrib_type),
+            "posting_date": supplier_invoice_date,
+            "due_date": supplier_invoice_date,  # Same as posting date to prevent ERPNext validation errors
             "shg_contribution_type": contrib_type.name,
             "items": [{
                 "item_code": contrib_type.item_code or "SHG Contribution",

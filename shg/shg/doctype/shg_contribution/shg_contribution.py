@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import nowdate, getdate, formatdate, add_days
+from frappe.utils import nowdate, getdate, formatdate, add_days, today
 
 class SHGContribution(Document):
     def validate(self):
@@ -239,24 +239,35 @@ class SHGContribution(Document):
             return {"success": False, "error": str(e)}
 
 @frappe.whitelist()
-def generate_contribution_invoices(invoice_date, amount, contribution_type=None, remarks=None, send_email=0):
+def generate_contribution_invoices(invoice_date, amount, contribution_type=None, remarks=None, send_email=0, supplier_invoice_date=None):
     active_members = frappe.get_all("SHG Member", filters={"membership_status": "Active"}, fields=["name", "member_name", "email"])
     created = 0
 
     for m in active_members:
-        # Calculate due date (30 days from invoice date)
-        due_date = frappe.utils.add_days(invoice_date, 30)
+        # Use supplier_invoice_date logic for due date
+        # Use supplier_invoice_date as both posting_date and due_date to prevent ERPNext validation errors
+        # Fallback to invoice_date, then to today's date if missing
+        supplier_inv_date = None
+        if supplier_invoice_date:
+            supplier_inv_date = getdate(supplier_invoice_date)
+        elif invoice_date:
+            supplier_inv_date = getdate(invoice_date)
+        else:
+            supplier_inv_date = getdate(today())
+        
+        due_date = supplier_inv_date
         
         inv = frappe.get_doc({
             "doctype": "SHG Contribution Invoice",
             "member": m.name,
             "member_name": m.member_name,
-            "invoice_date": invoice_date,
+            "invoice_date": supplier_inv_date,
             "due_date": due_date,
+            "supplier_invoice_date": supplier_invoice_date or supplier_inv_date,  # Store the supplier invoice date
             "amount": amount,
             "contribution_type": contribution_type,
             "status": "Unpaid",
-            "description": remarks or f"Contribution invoice for {formatdate(invoice_date, 'MMMM yyyy')}"
+            "description": remarks or f"Contribution invoice for {formatdate(supplier_inv_date, 'MMMM yyyy')}"
         })
         inv.insert(ignore_permissions=True)
         inv.submit()

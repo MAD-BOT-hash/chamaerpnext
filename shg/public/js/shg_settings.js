@@ -15,11 +15,10 @@ frappe.ui.form.on('SHG Settings', {
                         reqd: 1
                     },
                     {
-                        label: __('Due Date'),
-                        fieldname: 'due_date',
+                        label: __('Supplier Invoice Date'),
+                        fieldname: 'supplier_invoice_date',
                         fieldtype: 'Date',
-                        default: frappe.datetime.add_days(frappe.datetime.get_today(), 30),
-                        reqd: 1
+                        description: __('Used for posting and due dates in Sales Invoice creation. If blank, Invoice Date will be used.')
                     },
                     {
                         label: __('Amount'),
@@ -54,7 +53,7 @@ frappe.ui.form.on('SHG Settings', {
                         method: 'shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.generate_multiple_contribution_invoices',
                         args: {
                             invoice_date: values.invoice_date,
-                            due_date: values.due_date,
+                            supplier_invoice_date: values.supplier_invoice_date,
                             amount: values.amount,
                             contribution_type: values.contribution_type,
                             remarks: values.description,

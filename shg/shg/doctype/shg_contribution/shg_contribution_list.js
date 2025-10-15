@@ -12,6 +12,12 @@ frappe.listview_settings['SHG Contribution'] = {
                         reqd: 1 
                     },
                     { 
+                        fieldtype: 'Date', 
+                        fieldname: 'supplier_invoice_date', 
+                        label: 'Supplier Invoice Date', 
+                        description: 'Used for posting and due dates in Sales Invoice creation. If blank, Invoice Date will be used.'
+                    },
+                    { 
                         fieldtype: 'Currency', 
                         fieldname: 'amount', 
                         label: 'Amount (KES)', 
@@ -39,7 +45,14 @@ frappe.listview_settings['SHG Contribution'] = {
                 primary_action(values) {
                     frappe.call({
                         method: 'shg.shg.doctype.shg_contribution.shg_contribution.generate_contribution_invoices',
-                        args: values,
+                        args: {
+                            invoice_date: values.invoice_date,
+                            supplier_invoice_date: values.supplier_invoice_date,
+                            amount: values.amount,
+                            contribution_type: values.contribution_type,
+                            remarks: values.remarks,
+                            send_email: values.send_email
+                        },
                         callback: function(r) {
                             if (!r.exc) {
                                 frappe.msgprint(__('Invoices generated successfully!'));

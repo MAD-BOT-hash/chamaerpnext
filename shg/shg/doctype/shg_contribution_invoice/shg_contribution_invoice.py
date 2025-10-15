@@ -43,8 +43,10 @@ class SHGContributionInvoice(Document):
             
     def set_description(self):
         """Set default description if not provided"""
-        if not self.description and self.invoice_date:
-            month_year = formatdate(self.invoice_date, "MMMM yyyy")
+        # Use supplier_invoice_date if available, otherwise fall back to invoice_date
+        date_to_use = self.supplier_invoice_date or self.invoice_date
+        if not self.description and date_to_use:
+            month_year = formatdate(date_to_use, "MMMM yyyy")
             self.description = f"Contribution invoice for {month_year}"
             
     def validate_payment_method(self):
@@ -90,16 +92,24 @@ class SHGContributionInvoice(Document):
                     item_code = contrib_type.item_code
                     item_name = contrib_type.contribution_type_name
             
-            # Use invoice_date as the reference date for validation
-            invoice_date = getdate(self.invoice_date or today())
-            # Set due date to invoice date plus 1 day
-            due_date = add_days(invoice_date, 1)
+            # Use supplier_invoice_date as both posting_date and due_date to prevent ERPNext validation errors
+            # Fallback to invoice_date, then to today's date if missing
+            supplier_inv_date = None
+            if self.supplier_invoice_date:
+                supplier_inv_date = getdate(self.supplier_invoice_date)
+            elif self.invoice_date:
+                supplier_inv_date = getdate(self.invoice_date)
+            else:
+                supplier_inv_date = getdate(today())
+            
+            posting_date = supplier_inv_date
+            due_date = supplier_inv_date
             
             # Create Sales Invoice
             sales_invoice = frappe.get_doc({
                 "doctype": "Sales Invoice",
                 "customer": member.customer,
-                "posting_date": invoice_date,
+                "posting_date": posting_date,
                 "due_date": due_date,
                 "shg_contribution_invoice": self.name,
                 "remarks": f"Auto-generated for SHG Contribution Invoice {self.name}",
@@ -175,7 +185,7 @@ def create_contribution_from_invoice(doc, method=None):
         frappe.log_error(message=frappe.get_traceback(), title=f"Auto SHG Contribution Creation Failed for {doc.name}")
 
 @frappe.whitelist()
-def generate_multiple_contribution_invoices(contribution_type=None, amount=None, invoice_date=None):
+def generate_multiple_contribution_invoices(contribution_type=None, amount=None, invoice_date=None, supplier_invoice_date=None):
     """
     Create multiple SHG Contribution Invoices for all active members
     """
@@ -192,12 +202,33 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
             # Get default payment method from settings or default to Mpesa
             default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
             
-            # Get invoice date
-            inv_date = getdate(invoice_date or nowdate())
+            # Check if historical backdated invoices are allowed
+            allow_historical = frappe.db.get_single_value("SHG Settings", "allow_historical_backdated_invoices") or 0
+            
+            # Get invoice date - use supplier_invoice_date logic
+            # Use supplier_invoice_date as both posting_date and due_date to prevent ERPNext validation errors
+            # Fallback to invoice_date, then to today's date if missing
+            supplier_inv_date = None
+            if supplier_invoice_date:
+                supplier_inv_date = getdate(supplier_invoice_date)
+            elif invoice_date:
+                supplier_inv_date = getdate(invoice_date)
+            else:
+                supplier_inv_date = getdate(today())
+            
+            # If historical backdated invoices are not allowed, ensure date is not in the past
+            if not allow_historical and supplier_inv_date < getdate(today()):
+                supplier_inv_date = getdate(today())
+            
+            inv_date = supplier_inv_date
             
             # Get default credit period from settings or default to 30 days
             default_credit_period = frappe.db.get_single_value("SHG Settings", "default_credit_period_days") or 30
             due_date = add_days(inv_date, int(default_credit_period))
+            
+            # For backdated invoices, set due_date same as invoice_date to prevent ERPNext validation errors
+            if supplier_invoice_date or (invoice_date and getdate(invoice_date) != getdate(today())):
+                due_date = inv_date
             
             # Create SHG Contribution Invoice
             invoice = frappe.get_doc({
@@ -209,6 +240,7 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
                 "payment_method": default_payment_method,
                 "invoice_date": inv_date,
                 "due_date": due_date,
+                "supplier_invoice_date": supplier_invoice_date or inv_date,  # Store the supplier invoice date
                 "status": "Draft"
             })
             invoice.insert(ignore_permissions=True)
