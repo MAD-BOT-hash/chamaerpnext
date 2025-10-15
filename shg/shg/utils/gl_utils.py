@@ -90,6 +90,91 @@ def create_loan_disbursement_payment_entry(loan_doc):
         frappe.throw(f"Failed to create Payment Entry for loan disbursement: {str(e)}")
 
 
+def create_contribution_payment_entry(contribution_doc):
+    """
+    Create a Payment Entry for contribution.
+    
+    Args:
+        contribution_doc: SHG Contribution document
+        
+    Returns:
+        Payment Entry document
+    """
+    # Get company
+    company = frappe.get_value("Global Defaults", None, "default_company")
+    if not company:
+        company = contribution_doc.company
+    
+    # Get accounts
+    from shg.shg.utils.account_utils import (
+        get_or_create_shg_contributions_account,
+        get_or_create_member_account
+    )
+    
+    # Get bank/cash account from settings
+    settings = frappe.get_single("SHG Settings")
+    bank_account = settings.default_bank_account or settings.default_cash_account
+    
+    if not bank_account:
+        # Try to find a default bank/cash account
+        bank_accounts = frappe.get_all("Account", filters={
+            "company": company,
+            "account_type": ["in", ["Bank", "Cash"]],
+            "is_group": 0
+        }, limit=1)
+        if bank_accounts:
+            bank_account = bank_accounts[0].name
+        else:
+            frappe.throw(_("Please configure default bank or cash account in SHG Settings"))
+    
+    # Get member account
+    member_account = get_or_create_member_account(
+        frappe.get_doc("SHG Member", contribution_doc.member), company)
+    
+    # Get contributions income account
+    contributions_account = get_or_create_shg_contributions_account(company)
+    
+    # Get default contribution voucher type from settings
+    default_voucher_type = settings.default_contribution_voucher_type or "Contribution Entry"
+    
+    # Create Payment Entry
+    pe = frappe.new_doc("Payment Entry")
+    pe.payment_type = "Receive"
+    pe.posting_date = contribution_doc.contribution_date or today()
+    pe.company = company
+    pe.party_type = "Customer"
+    pe.party = contribution_doc.get_member_customer()
+    pe.paid_from = member_account
+    pe.paid_to = bank_account
+    pe.received_amount = flt(contribution_doc.amount)
+    pe.paid_amount = flt(contribution_doc.amount)
+    
+    # Set reference fields (required for Bank Entry)
+    pe.reference_no = contribution_doc.name
+    pe.reference_date = contribution_doc.contribution_date or today()
+    
+    # Set remarks
+    pe.remarks = f"Contribution by {contribution_doc.member_name}"
+    
+    # Set mode of payment based on account type
+    account_type = frappe.db.get_value("Account", bank_account, "account_type")
+    if account_type == "Bank":
+        pe.mode_of_payment = "Bank"
+    elif account_type == "Cash":
+        pe.mode_of_payment = "Cash"
+    
+    # Set voucher type
+    pe.voucher_type = default_voucher_type
+    
+    # Set custom field for traceability
+    pe.set("custom_shg_contribution", contribution_doc.name)
+    
+    # Insert and submit
+    pe.insert(ignore_permissions=True)
+    pe.submit()
+    
+    return pe
+
 
 def create_contribution_journal_entry(contribution_doc):
     """
@@ -135,9 +220,12 @@ def create_contribution_journal_entry(contribution_doc):
     # Get contributions income account
     contributions_account = get_or_create_shg_contributions_account(company)
     
+    # Get default contribution voucher type from settings
+    default_voucher_type = settings.default_contribution_voucher_type or "Contribution Entry"
+    
     # Create Journal Entry
     je = frappe.new_doc("Journal Entry")
-    je.voucher_type = "Bank Entry"
+    je.voucher_type = default_voucher_type
     je.posting_date = contribution_doc.contribution_date or today()
     je.company = company
     je.user_remark = f"Contribution by {contribution_doc.member}"

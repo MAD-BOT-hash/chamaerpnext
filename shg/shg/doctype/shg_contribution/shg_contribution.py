@@ -130,11 +130,22 @@ class SHGContribution(Document):
         
     def post_to_ledger(self):
         """
-        Create a Journal Entry for this contribution.
+        Create a Journal Entry or Payment Entry for this contribution based on settings.
         """
-        from shg.shg.utils.gl_utils import create_contribution_journal_entry, update_document_with_journal_entry
-        journal_entry = create_contribution_journal_entry(self)
-        update_document_with_journal_entry(self, journal_entry)
+        # Get the contribution posting method from settings
+        settings = frappe.get_single("SHG Settings")
+        posting_method = settings.contribution_posting_method or "Journal Entry"
+        
+        if posting_method == "Payment Entry":
+            # Create a Payment Entry for this contribution
+            from shg.shg.utils.gl_utils import create_contribution_payment_entry, update_document_with_payment_entry
+            payment_entry = create_contribution_payment_entry(self)
+            update_document_with_payment_entry(self, payment_entry)
+        else:
+            # Create a Journal Entry for this contribution (default)
+            from shg.shg.utils.gl_utils import create_contribution_journal_entry, update_document_with_journal_entry
+            journal_entry = create_contribution_journal_entry(self)
+            update_document_with_journal_entry(self, journal_entry)
         
     def cancel_journal_entry(self):
         """Cancel the associated journal entry or payment entry"""

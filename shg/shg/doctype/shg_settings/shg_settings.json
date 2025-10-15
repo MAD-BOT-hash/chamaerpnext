@@ -64,6 +64,7 @@
         "loan_disbursement_posting_method",
         "loan_repayment_posting_method",
         "meeting_fine_posting_method",
+        "default_contribution_voucher_type",
         "receive_payment_settings_section",
         "default_payment_method",
         "default_debit_account",
@@ -402,6 +403,14 @@
             "label": "Meeting Fine Posting Method",
             "options": "Journal Entry\nPayment Entry",
             "default": "Payment Entry"
+        },
+        {
+            "fieldname": "default_contribution_voucher_type",
+            "fieldtype": "Select",
+            "label": "Default Contribution Voucher Type",
+            "options": "Contribution Entry\nBank Entry\nCash Entry\nCredit Card Entry\nWrite Off Entry\nOpening Entry\nContra Entry\nExcise Entry\nAdjustment Entry\nPurchase Entry\nSales Entry\nStock Entry\nDebit Note\nCredit Note\nInter Company Journal Entry\nInter Company Payment\nBill of Entry",
+            "default": "Contribution Entry",
+            "description": "Default voucher type to be used when posting contribution entries"
         },
         {
             "fieldname": "receive_payment_settings_section",
