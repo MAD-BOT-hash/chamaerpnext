@@ -4,7 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import getdate, formatdate, today, nowdate, add_days
+from frappe.utils import getdate, formatdate, today, nowdate, add_days, flt
 
 class SHGContributionInvoice(Document):
     def validate(self):
@@ -14,7 +14,7 @@ class SHGContributionInvoice(Document):
         
         # Ensure amount is rounded to 2 decimal places
         if self.amount:
-            self.amount = round(float(self.amount), 2)
+            self.amount = round(flt(self.amount), 2)
         
         # Ensure due_date is not before invoice_date
         if self.due_date and self.invoice_date:
@@ -30,7 +30,7 @@ class SHGContributionInvoice(Document):
         amount = 0
         if self.amount:
             try:
-                amount = float(self.amount)
+                amount = flt(self.amount)
             except (ValueError, TypeError):
                 frappe.throw(_("Invalid amount. Please enter a numeric value."))
         else:
@@ -56,15 +56,26 @@ class SHGContributionInvoice(Document):
             self.payment_method = default_method
             
     def on_submit(self):
-        # Create Sales Invoice
-        if not self.sales_invoice:
+        """Handle submission of SHG Contribution Invoice"""
+        # Check if auto-generation of Sales Invoice is enabled
+        auto_generate_sales_invoice = frappe.db.get_single_value("SHG Settings", "auto_generate_sales_invoice")
+        
+        # Create Sales Invoice if enabled and not already created
+        if auto_generate_sales_invoice and not self.sales_invoice:
             self.create_sales_invoice()
         # Set status to Unpaid when submitted
         elif not self.status or self.status == "Draft":
             self.db_set("status", "Unpaid")
         
-        # Create SHG Contribution record
-        create_contribution_from_invoice(self, None)
+        # Check if auto-creation of SHG Contribution is enabled
+        auto_create_contribution = frappe.db.get_single_value("SHG Settings", "auto_create_contribution_on_invoice_submit")
+        
+        # Create SHG Contribution record if enabled
+        if auto_create_contribution:
+            contribution = create_contribution_from_invoice(self, None)
+            # Link the created contribution to this invoice
+            if contribution:
+                self.db_set("linked_shg_contribution", contribution.name)
 
     def create_sales_invoice(self):
         """Create a Sales Invoice for this contribution invoice"""
@@ -79,7 +90,7 @@ class SHGContributionInvoice(Document):
             member = frappe.get_doc("SHG Member", self.member)
             
             if not member.customer:
-                frappe.throw(_("Member {0} does not have a linked Customer record").format(self.member_name))
+                frappe.throw(_("Member {0} does not have a linked Customer record").format(member.member_name))
                 
             # Get contribution type details for item
             item_code = "SHG Contribution"
@@ -92,18 +103,12 @@ class SHGContributionInvoice(Document):
                     item_code = contrib_type.item_code
                     item_name = contrib_type.contribution_type_name
             
-            # Use supplier_invoice_date as both posting_date and due_date to prevent ERPNext validation errors
-            # Fallback to invoice_date, then to today's date if missing
-            supplier_inv_date = None
-            if self.supplier_invoice_date:
-                supplier_inv_date = getdate(self.supplier_invoice_date)
-            elif self.invoice_date:
-                supplier_inv_date = getdate(self.invoice_date)
-            else:
-                supplier_inv_date = getdate(today())
+            # Use invoice_date for both posting_date and due_date to support historical data entry
+            posting_date = getdate(self.invoice_date)
+            due_date = getdate(self.invoice_date)
             
-            posting_date = supplier_inv_date
-            due_date = supplier_inv_date
+            # Check if historical backdated invoices are allowed
+            allow_historical = frappe.db.get_single_value("SHG Settings", "allow_historical_backdated_invoices") or 0
             
             # Create Sales Invoice with forced dates and bypass validation
             sales_invoice = frappe.get_doc({
@@ -111,7 +116,7 @@ class SHGContributionInvoice(Document):
                 "customer": member.customer,
                 "posting_date": posting_date,
                 "due_date": due_date,
-                "set_posting_time": 1,  # Enable posting time override
+                "set_posting_time": 1 if allow_historical else 0,  # Enable posting time override for historical entries
                 "shg_contribution_invoice": self.name,
                 "remarks": f"Auto-generated for SHG Contribution Invoice {self.name}",
                 "items": [{
@@ -119,17 +124,18 @@ class SHGContributionInvoice(Document):
                     "item_name": item_name,
                     "description": description,
                     "qty": 1,
-                    "rate": self.amount,
-                    "amount": self.amount
+                    "rate": flt(self.amount),
+                    "amount": flt(self.amount)
                 }]
             })
             
-            # Force insert/submit with validation bypass
+            # Insert and submit the Sales Invoice
             sales_invoice.insert(ignore_mandatory=True, ignore_validate=True)
             sales_invoice.submit()
             
             # Link the Sales Invoice to this Contribution Invoice
             self.db_set("sales_invoice", sales_invoice.name)
+            self.db_set("linked_sales_invoice", sales_invoice.name)
             # Set status to Unpaid when Sales Invoice is created
             self.db_set("status", "Unpaid")
             
@@ -138,6 +144,34 @@ class SHGContributionInvoice(Document):
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - Sales Invoice Creation Failed")
             frappe.throw(_("Failed to create Sales Invoice: {0}").format(str(e)))
+            
+    def calculate_late_fee(self):
+        """Calculate late payment fee based on SHG Settings"""
+        # Check if late fee policy is enabled
+        apply_late_fee = frappe.db.get_single_value("SHG Settings", "apply_late_fee_policy")
+        if not apply_late_fee:
+            return 0
+            
+        # Check if the invoice is overdue
+        if self.status != "Overdue":
+            return 0
+            
+        # Get late fee rate from settings
+        late_fee_rate = frappe.db.get_single_value("SHG Settings", "late_fee_rate") or 0
+        
+        # Calculate days overdue
+        today_date = getdate(today())
+        due_date = getdate(self.due_date)
+        
+        if today_date <= due_date:
+            return 0
+            
+        days_overdue = (today_date - due_date).days
+        
+        # Calculate late fee amount
+        late_fee_amount = flt(self.amount) * (flt(late_fee_rate) / 100) * days_overdue
+        
+        return late_fee_amount
 
 @frappe.whitelist()
 def create_contribution_from_invoice(doc, method=None):
@@ -149,7 +183,7 @@ def create_contribution_from_invoice(doc, method=None):
         existing = frappe.db.exists("SHG Contribution", {"invoice_reference": doc.name})
         if existing:
             frappe.logger().info(f"SHG Contribution already exists for Invoice {doc.name}")
-            return
+            return frappe.get_doc("SHG Contribution", existing)
 
         # Attempt to find related Payment Entry (if exists)
         payment_entry = frappe.db.get_value(
@@ -172,7 +206,8 @@ def create_contribution_from_invoice(doc, method=None):
             "contribution_type": doc.contribution_type,
             "contribution_date": doc.invoice_date or nowdate(),
             "posting_date": doc.invoice_date or nowdate(),
-            "amount": float(doc.amount or 0),
+            "amount": flt(doc.amount or 0),
+            "expected_amount": flt(doc.amount or 0),
             "payment_method": payment_method or default_payment_method,
             "invoice_reference": doc.name,
             "status": "Unpaid"
@@ -182,9 +217,11 @@ def create_contribution_from_invoice(doc, method=None):
         frappe.db.commit()
 
         frappe.logger().info(f"[SHG] Created SHG Contribution {contribution.name} from Invoice {doc.name}")
+        return contribution
 
     except Exception as e:
         frappe.log_error(message=frappe.get_traceback(), title=f"Auto SHG Contribution Creation Failed for {doc.name}")
+        return None
 
 @frappe.whitelist()
 def generate_multiple_contribution_invoices(contribution_type=None, amount=None, invoice_date=None, supplier_invoice_date=None):
@@ -278,8 +315,8 @@ def create_linked_contribution(invoice_doc):
             "contribution_type": invoice_doc.contribution_type,
             "contribution_date": invoice_doc.invoice_date or nowdate(),
             "posting_date": invoice_doc.invoice_date or nowdate(),
-            "amount": float(invoice_doc.amount or 0),
-            "expected_amount": float(invoice_doc.amount or 0),
+            "amount": flt(invoice_doc.amount or 0),
+            "expected_amount": flt(invoice_doc.amount or 0),
             "payment_method": default_payment_method,
             "invoice_reference": invoice_doc.name,
             "status": "Unpaid",
@@ -292,23 +329,23 @@ def create_linked_contribution(invoice_doc):
     except Exception as e:
         frappe.log_error(message=frappe.get_traceback(), title=f"Draft SHG Contribution Creation Failed for Invoice {invoice_doc.name}")
             
-    @frappe.whitelist()
-    def send_invoice_email(self):
-        """Send invoice email to member"""
-        try:
-            if not self.sales_invoice:
-                frappe.throw(_("No Sales Invoice linked to this Contribution Invoice"))
-                
-            member = frappe.get_doc("SHG Member", self.member)
+@frappe.whitelist()
+def send_invoice_email(self):
+    """Send invoice email to member"""
+    try:
+        if not self.sales_invoice:
+            frappe.throw(_("No Sales Invoice linked to this Contribution Invoice"))
             
-            if not member.email:
-                frappe.throw(_("Member {0} does not have an email address").format(self.member_name))
-                
-            # Prepare email content
-            month_year = formatdate(self.invoice_date, "MMMM yyyy")
-            subject = f"Your {month_year} SHG Contribution Invoice"
+        member = frappe.get_doc("SHG Member", self.member)
+        
+        if not member.email:
+            frappe.throw(_("Member {0} does not have an email address").format(self.member_name))
             
-            message = f"""Dear {self.member_name},
+        # Prepare email content
+        month_year = formatdate(self.invoice_date, "MMMM yyyy")
+        subject = f"Your {month_year} SHG Contribution Invoice"
+        
+        message = f"""Dear {self.member_name},
 
 Your contribution invoice for {month_year} amounting to KES {self.amount:,.2f} has been generated.
 Please make payment by {formatdate(self.due_date)}.
@@ -316,42 +353,42 @@ Please make payment by {formatdate(self.due_date)}.
 Thank you for your continued support.
 
 SHG Management"""
-            
-            # Send email with invoice attachment
-            frappe.sendmail(
-                recipients=[member.email],
-                subject=subject,
-                message=message,
-                attachments=[frappe.attach_print("Sales Invoice", self.sales_invoice, file_name=self.sales_invoice)]
-            )
-            
-            frappe.msgprint(_("Invoice email sent to {0}").format(member.email))
-            
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - Email Sending Failed")
-            frappe.throw(_("Failed to send invoice email: {0}").format(str(e)))
-            
-    @frappe.whitelist()
-    def update_status_based_on_sales_invoice(self):
-        """Update status based on linked Sales Invoice outstanding amount"""
-        if self.sales_invoice:
-            sales_invoice = frappe.get_doc("Sales Invoice", self.sales_invoice)
-            
-            # Update status based on outstanding amount
-            if sales_invoice.outstanding_amount <= 0:
-                self.db_set("status", "Paid")
-            elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
-                self.db_set("status", "Partially Paid")
-            else:
-                self.db_set("status", "Unpaid")
-            
-            # Also update the linked SHG Contribution
-            contribution_name = frappe.db.get_value("SHG Contribution", 
-                                                  {"invoice_reference": self.name})
-            if contribution_name:
-                contribution = frappe.get_doc("SHG Contribution", contribution_name)
-                # Update contribution status to match invoice status
-                contribution.db_set("status", self.status)
+        
+        # Send email with invoice attachment
+        frappe.sendmail(
+            recipients=[member.email],
+            subject=subject,
+            message=message,
+            attachments=[frappe.attach_print("Sales Invoice", self.sales_invoice, file_name=self.sales_invoice)]
+        )
+        
+        frappe.msgprint(_("Invoice email sent to {0}").format(member.email))
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - Email Sending Failed")
+        frappe.throw(_("Failed to send invoice email: {0}").format(str(e)))
+        
+@frappe.whitelist()
+def update_status_based_on_sales_invoice(self):
+    """Update status based on linked Sales Invoice outstanding amount"""
+    if self.sales_invoice:
+        sales_invoice = frappe.get_doc("Sales Invoice", self.sales_invoice)
+        
+        # Update status based on outstanding amount
+        if sales_invoice.outstanding_amount <= 0:
+            self.db_set("status", "Paid")
+        elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
+            self.db_set("status", "Partially Paid")
+        else:
+            self.db_set("status", "Unpaid")
+        
+        # Also update the linked SHG Contribution
+        contribution_name = frappe.db.get_value("SHG Contribution", 
+                                              {"invoice_reference": self.name})
+        if contribution_name:
+            contribution = frappe.get_doc("SHG Contribution", contribution_name)
+            # Update contribution status to match invoice status
+            contribution.db_set("status", self.status)
 
 @frappe.whitelist()
 def validate_contribution_invoice(doc, method=None):
@@ -379,7 +416,7 @@ def validate_contribution_invoice(doc, method=None):
                 frappe.throw(f"Missing required field: {field}")
 
         # Validate amount
-        if float(invoice.amount) <= 0:
+        if flt(invoice.amount) <= 0:
             frappe.throw("Amount must be greater than zero.")
 
         # Validate member
@@ -432,4 +469,42 @@ def auto_submit_contribution_invoices():
         
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "auto_submit_contribution_invoices_error")
+        frappe.throw(str(e))
+
+@frappe.whitelist()
+def mark_overdue_invoices():
+    """
+    Scheduled function to mark overdue invoices and calculate late fees
+    """
+    try:
+        # Get all unpaid invoices where due date has passed
+        overdue_invoices = frappe.get_all("SHG Contribution Invoice",
+                                        filters={
+                                            "status": "Unpaid",
+                                            "due_date": ["<", today()],
+                                            "docstatus": 1
+                                        },
+                                        fields=["name"])
+        
+        updated_count = 0
+        for invoice_data in overdue_invoices:
+            try:
+                invoice = frappe.get_doc("SHG Contribution Invoice", invoice_data.name)
+                # Update status to Overdue
+                invoice.db_set("status", "Overdue")
+                
+                # Calculate and store late fee
+                late_fee = invoice.calculate_late_fee()
+                if late_fee > 0:
+                    invoice.db_set("late_fee_amount", late_fee)
+                
+                updated_count += 1
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), f"Failed to process overdue invoice {invoice_data.name}")
+        
+        frappe.msgprint(f"Marked {updated_count} invoices as overdue")
+        return updated_count
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Mark Overdue Invoices Failed")
         frappe.throw(str(e))

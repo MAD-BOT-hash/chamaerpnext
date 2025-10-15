@@ -1,507 +1,569 @@
 {
-    "actions": [],
-    "creation": "2025-09-25 10:00:00",
-    "doctype": "DocType",
-    "engine": "InnoDB",
-    "field_order": [
-        "contribution_settings_section",
-        "default_contribution_amount",
-        "contribution_frequency",
-        "minimum_contribution",
-        "default_contribution_payment_method",
-        "default_credit_period_days",
-        "column_break_4",
-        "allow_voluntary_contributions",
-        "voluntary_contribution_limit",
-        "allow_historical_backdated_invoices",
-        "loan_settings_section",
-        "default_interest_rate",
-        "interest_calculation_method",
-        "maximum_loan_amount",
-        "column_break_9",
-        "loan_tenure_months",
-        "penalty_rate",
-        "penalty_calculation_method",
-        "meeting_settings_section",
-        "meeting_frequency",
-        "absentee_fine",
-        "lateness_fine",
-        "absent_fee",
-        "auto_invoice_absentees",
-        "invoice_item",
-        "income_account",
-        "cost_center",
-        "column_break_14",
-        "meeting_quorum_percentage",
-        "mpesa_settings_section",
-        "mpesa_enabled",
-        "mpesa_consumer_key",
-        "mpesa_consumer_secret",
-        "mpesa_shortcode",
-        "column_break_20",
-        "mpesa_passkey",
-        "mpesa_initiator_name",
-        "mpesa_security_credential",
-        "notification_settings_section",
-        "sms_enabled",
-        "sms_api_key",
-        "sms_username",
-        "column_break_18",
-        "sms_sender_id",
-        "email_enabled",
-        "smtp_server",
-        "enable_monthly_statements",
-        "statement_sender_email",
-        "statement_email_subject",
-        "column_break_22",
-        "statement_email_template",
-        "accounting_settings_section",
-        "default_bank_account",
-        "default_cash_account",
-        "default_loan_account",
-        "default_interest_income_account",
-        "contribution_posting_method",
-        "loan_disbursement_posting_method",
-        "loan_repayment_posting_method",
-        "meeting_fine_posting_method",
-        "default_contribution_voucher_type",
-        "receive_payment_settings_section",
-        "default_payment_method",
-        "default_debit_account",
-        "default_credit_account",
-        "auto_email_receipt",
-        "column_break_25",
-        "payment_terms_template",
-        "member_account_settings_section",
-        "default_account_prefix",
-        "default_parent_ledger",
-        "auto_create_missing_member_accounts",
-        "system_settings_section",
-        "currency",
-        "fiscal_year_start_month",
-        "backup_frequency"
-    ],
-    "fields": [
-        {
-            "fieldname": "contribution_settings_section",
-            "fieldtype": "Section Break",
-            "label": "Contribution Settings"
-        },
-        {
-            "default": "500",
-            "fieldname": "default_contribution_amount",
-            "fieldtype": "Currency",
-            "label": "Default Weekly Contribution (KES)",
-            "precision": 2,
-            "reqd": 1
-        },
-        {
-            "default": "Weekly",
-            "fieldname": "contribution_frequency",
-            "fieldtype": "Select",
-            "label": "Default Frequency",
-            "options": "Weekly\nBi-weekly\nMonthly\nBi-Monthly"
-        },
-        {
-            "default": "Mpesa",
-            "fieldname": "default_contribution_payment_method",
-            "fieldtype": "Select",
-            "label": "Default Contribution Payment Method",
-            "options": "Cash\nMobile Money\nMpesa\nBank Transfer\nCheque"
-        },
-        {
-            "default": "30",
-            "description": "Number of days after invoice date when payment is due",
-            "fieldname": "default_credit_period_days",
-            "fieldtype": "Int",
-            "label": "Default Credit Period (days)",
-            "non_negative": 1
-        },
-        {
-            "fieldname": "column_break_4",
-            "fieldtype": "Column Break"
-        },
-        {
-            "default": "1",
-            "fieldname": "allow_voluntary_contributions",
-            "fieldtype": "Check",
-            "label": "Allow Voluntary Contributions"
-        },
-        {
-            "default": "0",
-            "fieldname": "allow_historical_backdated_invoices",
-            "fieldtype": "Check",
-            "label": "Allow Historical Backdated Invoices",
-            "description": "If enabled, skip date validation and always use the supplier invoice date for backdated invoices"
-        },
-        {
-            "fieldname": "loan_settings_section",
-            "fieldtype": "Section Break",
-            "label": "Loan Settings"
-        },
-        {
-            "default": "12",
-            "fieldname": "default_interest_rate",
-            "fieldtype": "Percent",
-            "label": "Default Interest Rate (%)",
-            "precision": 2,
-            "reqd": 1
-        },
-        {
-            "default": "Reducing Balance",
-            "fieldname": "interest_calculation_method",
-            "fieldtype": "Select",
-            "label": "Interest Calculation",
-            "options": "Flat Rate\nReducing Balance"
-        },
-        {
-            "fieldname": "column_break_9",
-            "fieldtype": "Column Break"
-        },
-        {
-            "default": "5",
-            "fieldname": "penalty_rate",
-            "fieldtype": "Percent",
-            "label": "Penalty Rate (%)",
-            "precision": 2
-        },
-        {
-            "fieldname": "meeting_settings_section",
-            "fieldtype": "Section Break",
-            "label": "Meeting Settings"
-        },
-        {
-            "default": "Weekly",
-            "fieldname": "meeting_frequency",
-            "fieldtype": "Select",
-            "label": "Meeting Frequency",
-            "options": "Weekly\nBi-weekly\nMonthly"
-        },
-        {
-            "default": "50",
-            "fieldname": "absentee_fine",
-            "fieldtype": "Currency",
-            "label": "Absentee Fine (KES)",
-            "precision": 2
-        },
-        {
-            "default": "20",
-            "fieldname": "lateness_fine",
-            "fieldtype": "Currency",
-            "label": "Lateness Fine (KES)",
-            "precision": 2
-        },
-        {
-            "fieldname": "absent_fee",
-            "fieldtype": "Currency",
-            "label": "Absent Fee (KES)",
-            "precision": 2
-        },
-        {
-            "fieldname": "auto_invoice_absentees",
-            "fieldtype": "Check",
-            "label": "Auto Invoice Absentees"
-        },
-        {
-            "fieldname": "invoice_item",
-            "fieldtype": "Link",
-            "label": "Invoice Item",
-            "options": "Item"
-        },
-        {
-            "fieldname": "income_account",
-            "fieldtype": "Link",
-            "label": "Income Account",
-            "options": "Account"
-        },
-        {
-            "fieldname": "cost_center",
-            "fieldtype": "Link",
-            "label": "Cost Center",
-            "options": "Cost Center"
-        },
-        {
-            "fieldname": "column_break_14",
-            "fieldtype": "Column Break"
-        },
-        {
-            "default": "60",
-            "fieldname": "meeting_quorum_percentage",
-            "fieldtype": "Percent",
-            "label": "Quorum Percentage"
-        },
-        {
-            "fieldname": "mpesa_settings_section",
-            "fieldtype": "Section Break",
-            "label": "Mpesa Payment Settings"
-        },
-        {
-            "fieldname": "mpesa_enabled",
-            "fieldtype": "Check",
-            "label": "Enable Mpesa Payments"
-        },
-        {
-            "depends_on": "mpesa_enabled",
-            "fieldname": "mpesa_consumer_key",
-            "fieldtype": "Data",
-            "label": "Consumer Key"
-        },
-        {
-            "depends_on": "mpesa_enabled",
-            "fieldname": "mpesa_consumer_secret",
-            "fieldtype": "Password",
-            "label": "Consumer Secret"
-        },
-        {
-            "depends_on": "mpesa_enabled",
-            "fieldname": "mpesa_shortcode",
-            "fieldtype": "Data",
-            "label": "Shortcode"
-        },
-        {
-            "fieldname": "column_break_20",
-            "fieldtype": "Column Break"
-        },
-        {
-            "depends_on": "mpesa_enabled",
-            "fieldname": "mpesa_passkey",
-            "fieldtype": "Data",
-            "label": "Passkey"
-        },
-        {
-            "depends_on": "mpesa_enabled",
-            "fieldname": "mpesa_initiator_name",
-            "fieldtype": "Data",
-            "label": "Initiator Name"
-        },
-        {
-            "depends_on": "mpesa_enabled",
-            "fieldname": "mpesa_security_credential",
-            "fieldtype": "Password",
-            "label": "Security Credential"
-        },
-        {
-            "fieldname": "notification_settings_section",
-            "fieldtype": "Section Break",
-            "label": "Notification Settings"
-        },
-        {
-            "fieldname": "sms_enabled",
-            "fieldtype": "Check",
-            "label": "Enable SMS Notifications"
-        },
-        {
-            "depends_on": "sms_enabled",
-            "fieldname": "sms_api_key",
-            "fieldtype": "Password",
-            "label": "SMS API Key"
-        },
-        {
-            "depends_on": "sms_enabled",
-            "fieldname": "sms_username",
-            "fieldtype": "Data",
-            "label": "SMS Username"
-        },
-        {
-            "fieldname": "column_break_18",
-            "fieldtype": "Column Break"
-        },
-        {
-            "depends_on": "sms_enabled",
-            "default": "SHG",
-            "fieldname": "sms_sender_id",
-            "fieldtype": "Data",
-            "label": "SMS Sender ID"
-        },
-        {
-            "fieldname": "column_break_22",
-            "fieldtype": "Column Break"
-        },
-        {
-            "default": "1",
-            "fieldname": "enable_monthly_statements",
-            "fieldtype": "Check",
-            "label": "Enable Monthly Statements"
-        },
-        {
-            "depends_on": "enable_monthly_statements",
-            "fieldname": "statement_sender_email",
-            "fieldtype": "Data",
-            "label": "Statement Sender Email"
-        },
-        {
-            "depends_on": "enable_monthly_statements",
-            "fieldname": "statement_email_subject",
-            "fieldtype": "Data",
-            "label": "Statement Email Subject",
-            "default": "Monthly SHG Statement"
-        },
-        {
-            "fieldname": "column_break_22",
-            "fieldtype": "Column Break"
-        },
-        {
-            "depends_on": "enable_monthly_statements",
-            "fieldname": "statement_email_template",
-            "fieldtype": "Text Editor",
-            "label": "Statement Email Template",
-            "default": "Dear {member_name},\n\nPlease find your monthly statement attached.\n\nTotal Contributions: KES {total_contributions}\nTotal Loan Repayments: KES {total_repayments}\nOutstanding Loan Balance: KES {outstanding_balance}\n\nThank you for your continued support.\n\nSHG Management"
-        },
-        {
-            "fieldname": "accounting_settings_section",
-            "fieldtype": "Section Break",
-            "label": "Accounting Settings"
-        },
-        {
-            "fieldname": "default_bank_account",
-            "fieldtype": "Link",
-            "label": "Default Bank Account",
-            "options": "Account"
-        },
-        {
-            "fieldname": "default_cash_account",
-            "fieldtype": "Link",
-            "label": "Default Cash Account",
-            "options": "Account"
-        },
-        {
-            "fieldname": "default_loan_account",
-            "fieldtype": "Link",
-            "label": "Default Loan Account",
-            "options": "Account"
-        },
-        {
-            "fieldname": "default_interest_income_account",
-            "fieldtype": "Link",
-            "label": "Default Interest Income Account",
-            "options": "Account"
-        },
-        {
-            "fieldname": "contribution_posting_method",
-            "fieldtype": "Select",
-            "label": "Contribution Posting Method",
-            "options": "Journal Entry\nPayment Entry",
-            "default": "Journal Entry"
-        },
-        {
-            "fieldname": "loan_disbursement_posting_method",
-            "fieldtype": "Select",
-            "label": "Loan Disbursement Posting Method",
-            "options": "Journal Entry\nPayment Entry",
-            "default": "Payment Entry"
-        },
-        {
-            "fieldname": "loan_repayment_posting_method",
-            "fieldtype": "Select",
-            "label": "Loan Repayment Posting Method",
-            "options": "Journal Entry\nPayment Entry",
-            "default": "Payment Entry"
-        },
-        {
-            "fieldname": "meeting_fine_posting_method",
-            "fieldtype": "Select",
-            "label": "Meeting Fine Posting Method",
-            "options": "Journal Entry\nPayment Entry",
-            "default": "Payment Entry"
-        },
-        {
-            "fieldname": "default_contribution_voucher_type",
-            "fieldtype": "Select",
-            "label": "Default Contribution Voucher Type",
-            "options": "Contribution Entry\nBank Entry\nCash Entry\nCredit Card Entry\nWrite Off Entry\nOpening Entry\nContra Entry\nExcise Entry\nAdjustment Entry\nPurchase Entry\nSales Entry\nStock Entry\nDebit Note\nCredit Note\nInter Company Journal Entry\nInter Company Payment\nBill of Entry",
-            "default": "Contribution Entry",
-            "description": "Default voucher type to be used when posting contribution entries"
-        },
-        {
-            "fieldname": "receive_payment_settings_section",
-            "fieldtype": "Section Break",
-            "label": "Receive Payment Settings"
-        },
-        {
-            "fieldname": "default_payment_method",
-            "fieldtype": "Select",
-            "label": "Default Payment Method",
-            "options": "Cash\nBank Transfer\nMobile Money\nCheque"
-        },
-        {
-            "fieldname": "default_debit_account",
-            "fieldtype": "Link",
-            "label": "Default Debit Account",
-            "options": "Account"
-        },
-        {
-            "fieldname": "default_credit_account",
-            "fieldtype": "Link",
-            "label": "Default Credit Account",
-            "options": "Account"
-        },
-        {
-            "default": "0",
-            "fieldname": "auto_email_receipt",
-            "fieldtype": "Check",
-            "label": "Auto Email Receipt"
-        },
-        {
-            "fieldname": "column_break_25",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "member_account_settings_section",
-            "fieldtype": "Section Break",
-            "label": "Member Account Settings"
-        },
-        {
-            "default": "PFG",
-            "fieldname": "default_account_prefix",
-            "fieldtype": "Data",
-            "label": "Default Account Prefix"
-        },
-        {
-            "fieldname": "default_parent_ledger",
-            "fieldtype": "Link",
-            "label": "Default Parent Ledger",
-            "options": "Account"
-        },
-        {
-            "default": "0",
-            "fieldname": "auto_create_missing_member_accounts",
-            "fieldtype": "Check",
-            "label": "Auto Create Missing Member Accounts"
-        },
-        {
-            "fieldname": "payment_terms_template",
-            "fieldtype": "Link",
-            "label": "Payment Terms Template",
-            "options": "Payment Terms Template"
-        },
-        {
-            "fieldname": "system_settings_section",
-            "fieldtype": "Section Break",
-            "label": "System Settings"
-        },
-        {
-            "default": "KES",
-            "fieldname": "currency",
-            "fieldtype": "Link",
-            "label": "Default Currency",
-            "options": "Currency"
-        }
-    ],
-    "issingle": 1,
-    "links": [],
-    "modified": "2025-09-25 10:00:00",
-    "modified_by": "Administrator",
-    "module": "SHG",
-    "name": "SHG Settings",
-    "owner": "Administrator",
-    "permissions": [
-        {
-            "create": 1,
-            "read": 1,
-            "role": "SHG Admin",
-            "write": 1
-        }
-    ],
-    "sort_field": "modified",
-    "sort_order": "DESC"
+ "actions": [],
+ "creation": "2025-09-25 10:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "contribution_settings_section",
+  "default_contribution_amount",
+  "contribution_frequency",
+  "minimum_contribution",
+  "default_contribution_payment_method",
+  "default_credit_period_days",
+  "column_break_4",
+  "allow_voluntary_contributions",
+  "voluntary_contribution_limit",
+  "allow_historical_backdated_invoices",
+  "loan_settings_section",
+  "default_interest_rate",
+  "interest_calculation_method",
+  "maximum_loan_amount",
+  "column_break_9",
+  "loan_tenure_months",
+  "penalty_rate",
+  "penalty_calculation_method",
+  "meeting_settings_section",
+  "meeting_frequency",
+  "absentee_fine",
+  "lateness_fine",
+  "absent_fee",
+  "auto_invoice_absentees",
+  "invoice_item",
+  "income_account",
+  "cost_center",
+  "column_break_14",
+  "meeting_quorum_percentage",
+  "mpesa_settings_section",
+  "mpesa_enabled",
+  "mpesa_consumer_key",
+  "mpesa_consumer_secret",
+  "mpesa_shortcode",
+  "column_break_20",
+  "mpesa_passkey",
+  "mpesa_initiator_name",
+  "mpesa_security_credential",
+  "notification_settings_section",
+  "sms_enabled",
+  "sms_api_key",
+  "sms_username",
+  "column_break_18",
+  "sms_sender_id",
+  "email_enabled",
+  "smtp_server",
+  "enable_monthly_statements",
+  "statement_sender_email",
+  "statement_email_subject",
+  "column_break_22",
+  "statement_email_template",
+  "accounting_settings_section",
+  "default_income_account",
+  "default_receivable_account",
+  "default_bank_account",
+  "default_cash_account",
+  "default_loan_account",
+  "default_interest_income_account",
+  "contribution_posting_method",
+  "loan_disbursement_posting_method",
+  "loan_repayment_posting_method",
+  "meeting_fine_posting_method",
+  "default_contribution_voucher_type",
+  "receive_payment_settings_section",
+  "default_payment_method",
+  "default_debit_account",
+  "default_credit_account",
+  "auto_email_receipt",
+  "column_break_25",
+  "payment_terms_template",
+  "member_account_settings_section",
+  "default_account_prefix",
+  "default_parent_ledger",
+  "auto_create_missing_member_accounts",
+  "workflow_automation_section",
+  "auto_generate_sales_invoice",
+  "auto_create_contribution_on_invoice_submit",
+  "auto_apply_payment_on_payment_entry_submit",
+  "column_break_27",
+  "apply_late_fee_policy",
+  "late_fee_rate",
+  "system_settings_section",
+  "currency",
+  "fiscal_year_start_month",
+  "backup_frequency"
+ ],
+ "fields": [
+  {
+   "fieldname": "contribution_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Contribution Settings"
+  },
+  {
+   "default": "500",
+   "fieldname": "default_contribution_amount",
+   "fieldtype": "Currency",
+   "label": "Default Weekly Contribution (KES)",
+   "precision": 2,
+   "reqd": 1
+  },
+  {
+   "default": "Weekly",
+   "fieldname": "contribution_frequency",
+   "fieldtype": "Select",
+   "label": "Default Frequency",
+   "options": "Weekly\nBi-weekly\nMonthly\nBi-Monthly"
+  },
+  {
+   "default": "Mpesa",
+   "fieldname": "default_contribution_payment_method",
+   "fieldtype": "Select",
+   "label": "Default Contribution Payment Method",
+   "options": "Cash\nMobile Money\nMpesa\nBank Transfer\nCheque"
+  },
+  {
+   "default": "30",
+   "description": "Number of days after invoice date when payment is due",
+   "fieldname": "default_credit_period_days",
+   "fieldtype": "Int",
+   "label": "Default Credit Period (days)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "allow_voluntary_contributions",
+   "fieldtype": "Check",
+   "label": "Allow Voluntary Contributions"
+  },
+  {
+   "default": "0",
+   "fieldname": "allow_historical_backdated_invoices",
+   "fieldtype": "Check",
+   "label": "Allow Historical Backdated Invoices",
+   "description": "If enabled, skip date validation and always use the supplier invoice date for backdated invoices"
+  },
+  {
+   "fieldname": "loan_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Loan Settings"
+  },
+  {
+   "default": "12",
+   "fieldname": "default_interest_rate",
+   "fieldtype": "Percent",
+   "label": "Default Interest Rate (%)",
+   "precision": 2,
+   "reqd": 1
+  },
+  {
+   "default": "Reducing Balance",
+   "fieldname": "interest_calculation_method",
+   "fieldtype": "Select",
+   "label": "Interest Calculation",
+   "options": "Flat Rate\nReducing Balance"
+  },
+  {
+   "fieldname": "column_break_9",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "5",
+   "fieldname": "penalty_rate",
+   "fieldtype": "Percent",
+   "label": "Penalty Rate (%)",
+   "precision": 2
+  },
+  {
+   "fieldname": "meeting_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Meeting Settings"
+  },
+  {
+   "default": "Weekly",
+   "fieldname": "meeting_frequency",
+   "fieldtype": "Select",
+   "label": "Meeting Frequency",
+   "options": "Weekly\nBi-weekly\nMonthly"
+  },
+  {
+   "default": "50",
+   "fieldname": "absentee_fine",
+   "fieldtype": "Currency",
+   "label": "Absentee Fine (KES)",
+   "precision": 2
+  },
+  {
+   "default": "20",
+   "fieldname": "lateness_fine",
+   "fieldtype": "Currency",
+   "label": "Lateness Fine (KES)",
+   "precision": 2
+  },
+  {
+   "fieldname": "absent_fee",
+   "fieldtype": "Currency",
+   "label": "Absent Fee (KES)",
+   "precision": 2
+  },
+  {
+   "fieldname": "auto_invoice_absentees",
+   "fieldtype": "Check",
+   "label": "Auto Invoice Absentees"
+  },
+  {
+   "fieldname": "invoice_item",
+   "fieldtype": "Link",
+   "label": "Invoice Item",
+   "options": "Item"
+  },
+  {
+   "fieldname": "income_account",
+   "fieldtype": "Link",
+   "label": "Income Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "column_break_14",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "60",
+   "fieldname": "meeting_quorum_percentage",
+   "fieldtype": "Percent",
+   "label": "Quorum Percentage"
+  },
+  {
+   "fieldname": "mpesa_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Mpesa Payment Settings"
+  },
+  {
+   "fieldname": "mpesa_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Mpesa Payments"
+  },
+  {
+   "depends_on": "mpesa_enabled",
+   "fieldname": "mpesa_consumer_key",
+   "fieldtype": "Data",
+   "label": "Consumer Key"
+  },
+  {
+   "depends_on": "mpesa_enabled",
+   "fieldname": "mpesa_consumer_secret",
+   "fieldtype": "Password",
+   "label": "Consumer Secret"
+  },
+  {
+   "depends_on": "mpesa_enabled",
+   "fieldname": "mpesa_shortcode",
+   "fieldtype": "Data",
+   "label": "Shortcode"
+  },
+  {
+   "fieldname": "column_break_20",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "mpesa_enabled",
+   "fieldname": "mpesa_passkey",
+   "fieldtype": "Data",
+   "label": "Passkey"
+  },
+  {
+   "depends_on": "mpesa_enabled",
+   "fieldname": "mpesa_initiator_name",
+   "fieldtype": "Data",
+   "label": "Initiator Name"
+  },
+  {
+   "depends_on": "mpesa_enabled",
+   "fieldname": "mpesa_security_credential",
+   "fieldtype": "Password",
+   "label": "Security Credential"
+  },
+  {
+   "fieldname": "notification_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Notification Settings"
+  },
+  {
+   "fieldname": "sms_enabled",
+   "fieldtype": "Check",
+   "label": "Enable SMS Notifications"
+  },
+  {
+   "depends_on": "sms_enabled",
+   "fieldname": "sms_api_key",
+   "fieldtype": "Password",
+   "label": "SMS API Key"
+  },
+  {
+   "depends_on": "sms_enabled",
+   "fieldname": "sms_username",
+   "fieldtype": "Data",
+   "label": "SMS Username"
+  },
+  {
+   "fieldname": "column_break_18",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "sms_enabled",
+   "default": "SHG",
+   "fieldname": "sms_sender_id",
+   "fieldtype": "Data",
+   "label": "SMS Sender ID"
+  },
+  {
+   "fieldname": "column_break_22",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_monthly_statements",
+   "fieldtype": "Check",
+   "label": "Enable Monthly Statements"
+  },
+  {
+   "depends_on": "enable_monthly_statements",
+   "fieldname": "statement_sender_email",
+   "fieldtype": "Data",
+   "label": "Statement Sender Email"
+  },
+  {
+   "depends_on": "enable_monthly_statements",
+   "fieldname": "statement_email_subject",
+   "fieldtype": "Data",
+   "label": "Statement Email Subject",
+   "default": "Monthly SHG Statement"
+  },
+  {
+   "fieldname": "column_break_22",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "enable_monthly_statements",
+   "fieldname": "statement_email_template",
+   "fieldtype": "Text Editor",
+   "label": "Statement Email Template",
+   "default": "Dear {member_name},\n\nPlease find your monthly statement attached.\n\nTotal Contributions: KES {total_contributions}\nTotal Loan Repayments: KES {total_repayments}\nOutstanding Loan Balance: KES {outstanding_balance}\n\nThank you for your continued support.\n\nSHG Management"
+  },
+  {
+   "fieldname": "accounting_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Accounting Settings"
+  },
+  {
+   "fieldname": "default_income_account",
+   "fieldtype": "Link",
+   "label": "Default Income Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "default_receivable_account",
+   "fieldtype": "Link",
+   "label": "Default Receivable Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "default_bank_account",
+   "fieldtype": "Link",
+   "label": "Default Bank Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "default_cash_account",
+   "fieldtype": "Link",
+   "label": "Default Cash Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "default_loan_account",
+   "fieldtype": "Link",
+   "label": "Default Loan Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "default_interest_income_account",
+   "fieldtype": "Link",
+   "label": "Default Interest Income Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "contribution_posting_method",
+   "fieldtype": "Select",
+   "label": "Contribution Posting Method",
+   "options": "Journal Entry\nPayment Entry",
+   "default": "Journal Entry"
+  },
+  {
+   "fieldname": "loan_disbursement_posting_method",
+   "fieldtype": "Select",
+   "label": "Loan Disbursement Posting Method",
+   "options": "Journal Entry\nPayment Entry",
+   "default": "Payment Entry"
+  },
+  {
+   "fieldname": "loan_repayment_posting_method",
+   "fieldtype": "Select",
+   "label": "Loan Repayment Posting Method",
+   "options": "Journal Entry\nPayment Entry",
+   "default": "Payment Entry"
+  },
+  {
+   "fieldname": "meeting_fine_posting_method",
+   "fieldtype": "Select",
+   "label": "Meeting Fine Posting Method",
+   "options": "Journal Entry\nPayment Entry",
+   "default": "Payment Entry"
+  },
+  {
+   "fieldname": "default_contribution_voucher_type",
+   "fieldtype": "Select",
+   "label": "Default Contribution Voucher Type",
+   "options": "Contribution Entry\nBank Entry\nCash Entry\nCredit Card Entry\nWrite Off Entry\nOpening Entry\nContra Entry\nExcise Entry\nAdjustment Entry\nPurchase Entry\nSales Entry\nStock Entry\nDebit Note\nCredit Note\nInter Company Journal Entry\nInter Company Payment\nBill of Entry",
+   "default": "Contribution Entry",
+   "description": "Default voucher type to be used when posting contribution entries"
+  },
+  {
+   "fieldname": "receive_payment_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Receive Payment Settings"
+  },
+  {
+   "fieldname": "default_payment_method",
+   "fieldtype": "Select",
+   "label": "Default Payment Method",
+   "options": "Cash\nBank Transfer\nMobile Money\nCheque"
+  },
+  {
+   "fieldname": "default_debit_account",
+   "fieldtype": "Link",
+   "label": "Default Debit Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "default_credit_account",
+   "fieldtype": "Link",
+   "label": "Default Credit Account",
+   "options": "Account"
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_email_receipt",
+   "fieldtype": "Check",
+   "label": "Auto Email Receipt"
+  },
+  {
+   "fieldname": "column_break_25",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "member_account_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Member Account Settings"
+  },
+  {
+   "default": "PFG",
+   "fieldname": "default_account_prefix",
+   "fieldtype": "Data",
+   "label": "Default Account Prefix"
+  },
+  {
+   "fieldname": "default_parent_ledger",
+   "fieldtype": "Link",
+   "label": "Default Parent Ledger",
+   "options": "Account"
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_create_missing_member_accounts",
+   "fieldtype": "Check",
+   "label": "Auto Create Missing Member Accounts"
+  },
+  {
+   "fieldname": "payment_terms_template",
+   "fieldtype": "Link",
+   "label": "Payment Terms Template",
+   "options": "Payment Terms Template"
+  },
+  {
+   "fieldname": "workflow_automation_section",
+   "fieldtype": "Section Break",
+   "label": "Workflow Automation"
+  },
+  {
+   "default": "1",
+   "fieldname": "auto_generate_sales_invoice",
+   "fieldtype": "Check",
+   "label": "Auto Generate Sales Invoice"
+  },
+  {
+   "default": "1",
+   "fieldname": "auto_create_contribution_on_invoice_submit",
+   "fieldtype": "Check",
+   "label": "Auto Create Contribution on Invoice Submit"
+  },
+  {
+   "default": "1",
+   "fieldname": "auto_apply_payment_on_payment_entry_submit",
+   "fieldtype": "Check",
+   "label": "Auto Apply Payment on Payment Entry Submit"
+  },
+  {
+   "fieldname": "column_break_27",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "apply_late_fee_policy",
+   "fieldtype": "Check",
+   "label": "Apply Late Fee Policy"
+  },
+  {
+   "default": "5",
+   "depends_on": "apply_late_fee_policy",
+   "fieldname": "late_fee_rate",
+   "fieldtype": "Percent",
+   "label": "Late Fee Rate (%)",
+   "precision": 2
+  },
+  {
+   "fieldname": "system_settings_section",
+   "fieldtype": "Section Break",
+   "label": "System Settings"
+  },
+  {
+   "default": "KES",
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Default Currency",
+   "options": "Currency"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2025-09-25 10:00:00",
+ "modified_by": "Administrator",
+ "module": "SHG",
+ "name": "SHG Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "read": 1,
+   "role": "SHG Admin",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
 }

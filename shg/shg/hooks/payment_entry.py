@@ -63,13 +63,21 @@ def payment_entry_validate(doc, method):
 def payment_entry_on_submit(doc, method):
     """
     Hook function called when Payment Entry is submitted.
-    Updates the status of related SHG Contribution Invoices.
+    Updates the status of related SHG Contribution Invoices and SHG Contributions.
     """
-    # Check if this Payment Entry is allocated to any Sales Invoices
+    # Check if auto-apply payment is enabled in settings
+    auto_apply_payment = frappe.db.get_single_value("SHG Settings", "auto_apply_payment_on_payment_entry_submit")
+    if not auto_apply_payment:
+        return
+    
+    # Process all references in the Payment Entry
     for reference in doc.references:
         if reference.reference_doctype == "Sales Invoice" and reference.reference_name:
             # Update the SHG Contribution Invoice status
             update_shg_contribution_invoice_status(reference.reference_name)
+            
+            # Update the related SHG Contribution status
+            update_shg_contribution_status(reference.reference_name)
 
 def update_shg_contribution_invoice_status(sales_invoice_name):
     """
@@ -95,5 +103,50 @@ def update_shg_contribution_invoice_status(sales_invoice_name):
             else:
                 shg_invoice.db_set("status", "Unpaid")
                 
+            # Record payment entry reference
+            shg_invoice.db_set("payment_reference", sales_invoice_name)
+                
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice Status Update Failed")
+
+def update_shg_contribution_status(sales_invoice_name):
+    """
+    Update the SHG Contribution status based on the Sales Invoice status
+    
+    Args:
+        sales_invoice_name (str): Name of the Sales Invoice
+    """
+    try:
+        # Get the SHG Contribution linked to the Sales Invoice through the Contribution Invoice
+        shg_invoice_name = frappe.db.get_value("SHG Contribution Invoice", 
+                                              {"sales_invoice": sales_invoice_name})
+        
+        if shg_invoice_name:
+            # Get the SHG Contribution linked to this Contribution Invoice
+            shg_contribution_name = frappe.db.get_value("SHG Contribution", 
+                                                      {"invoice_reference": shg_invoice_name})
+            
+            if shg_contribution_name:
+                shg_contribution = frappe.get_doc("SHG Contribution", shg_contribution_name)
+                sales_invoice = frappe.get_doc("Sales Invoice", sales_invoice_name)
+                
+                # Update status based on outstanding amount
+                if sales_invoice.outstanding_amount <= 0:
+                    shg_contribution.db_set("status", "Paid")
+                    # Update amount paid
+                    shg_contribution.db_set("amount_paid", shg_contribution.expected_amount)
+                    shg_contribution.db_set("unpaid_amount", 0)
+                elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
+                    shg_contribution.db_set("status", "Partially Paid")
+                    # Calculate paid amount
+                    paid_amount = sales_invoice.grand_total - sales_invoice.outstanding_amount
+                    shg_contribution.db_set("amount_paid", paid_amount)
+                    shg_contribution.db_set("unpaid_amount", sales_invoice.outstanding_amount)
+                else:
+                    shg_contribution.db_set("status", "Unpaid")
+                    
+                # Save the contribution to trigger any necessary updates
+                shg_contribution.save()
+                
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "SHG Contribution Status Update Failed")

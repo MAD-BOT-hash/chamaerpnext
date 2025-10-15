@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import nowdate, getdate, formatdate, add_days, today
+from frappe.utils import flt
 
 class SHGContribution(Document):
     def validate(self):
@@ -83,12 +84,12 @@ class SHGContribution(Document):
         try:
             # Update paid amounts
             current_paid = self.amount_paid or 0
-            new_paid = current_paid + paid_amount
+            new_paid = current_paid + flt(paid_amount)
             self.db_set("amount_paid", new_paid)
             
             # Recalculate unpaid amount and status
             expected = self.expected_amount or self.amount
-            unpaid = max(0, expected - new_paid)
+            unpaid = max(0, flt(expected) - flt(new_paid))
             self.db_set("unpaid_amount", unpaid)
             
             # Update status
@@ -99,6 +100,13 @@ class SHGContribution(Document):
             else:
                 self.db_set("status", "Unpaid")
                 
+            # Update the linked SHG Contribution Invoice if exists
+            if self.invoice_reference:
+                invoice = frappe.get_doc("SHG Contribution Invoice", self.invoice_reference)
+                if invoice:
+                    # Update invoice status based on contribution status
+                    invoice.db_set("status", self.status)
+                    
             # Update member financial summary
             member = frappe.get_doc("SHG Member", self.member)
             member.update_financial_summary()
@@ -370,3 +378,36 @@ def send_contribution_reminder(contribution):
             frappe.msgprint(f"Reminder email sent to {member.member_name}")
     except Exception as e:
         frappe.log_error(f"Failed to send reminder for contribution {contribution.name}: {str(e)}")
+
+@frappe.whitelist()
+def sync_contribution_invoice_status(contribution_name):
+    """
+    Synchronize the status between SHG Contribution and SHG Contribution Invoice
+    
+    Args:
+        contribution_name (str): Name of the SHG Contribution
+    """
+    try:
+        # Get the SHG Contribution
+        contribution = frappe.get_doc("SHG Contribution", contribution_name)
+        
+        # If there's a linked invoice, update its status
+        if contribution.invoice_reference:
+            invoice = frappe.get_doc("SHG Contribution Invoice", contribution.invoice_reference)
+            if invoice:
+                # Update invoice status to match contribution status
+                invoice.db_set("status", contribution.status)
+                
+                # Also update the linked Sales Invoice if exists
+                if invoice.sales_invoice:
+                    sales_invoice = frappe.get_doc("Sales Invoice", invoice.sales_invoice)
+                    # Update status based on outstanding amount
+                    if sales_invoice.outstanding_amount <= 0:
+                        invoice.db_set("status", "Paid")
+                    elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
+                        invoice.db_set("status", "Partially Paid")
+                    else:
+                        invoice.db_set("status", "Unpaid")
+                        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice Status Sync Failed")

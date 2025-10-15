@@ -21,6 +21,9 @@
   "description",
   "accounting_section",
   "sales_invoice",
+  "linked_sales_invoice",
+  "linked_shg_contribution",
+  "late_fee_amount",
   "payment_reference",
   "posted_to_gl",
   "posted_on"
@@ -120,6 +123,27 @@
    "label": "Sales Invoice",
    "options": "Sales Invoice",
    "read_only": 1
+  },
+  {
+   "fieldname": "linked_sales_invoice",
+   "fieldtype": "Link",
+   "label": "Linked Sales Invoice",
+   "options": "Sales Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "linked_shg_contribution",
+   "fieldtype": "Link",
+   "label": "Linked SHG Contribution",
+   "options": "SHG Contribution",
+   "read_only": 1
+  },
+  {
+   "fieldname": "late_fee_amount",
+   "fieldtype": "Currency",
+   "label": "Late Fee Amount",
+   "read_only": 1,
+   "precision": 2
   },
   {
    "fieldname": "payment_reference",

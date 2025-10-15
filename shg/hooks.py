@@ -52,7 +52,8 @@ scheduler_events = {
         "shg.tasks.send_daily_reminders",
         "shg.tasks.calculate_loan_penalties",
         "shg.tasks.generate_billable_contribution_invoices",
-        "shg.shg.doctype.shg_contribution.shg_contribution.update_overdue_contributions"
+        "shg.shg.doctype.shg_contribution.shg_contribution.update_overdue_contributions",
+        "shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.mark_overdue_invoices"
     ],
     "weekly": [
         "shg.tasks.send_weekly_contribution_reminders"
