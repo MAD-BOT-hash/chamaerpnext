@@ -149,6 +149,9 @@ def create_contribution_from_invoice(doc, method=None):
         if payment_entry:
             payment_method = frappe.db.get_value("Payment Entry", payment_entry, "mode_of_payment")
 
+        # Get default payment method from settings or default to Mpesa
+        default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
+
         # Create new SHG Contribution
         contribution = frappe.get_doc({
             "doctype": "SHG Contribution",
@@ -158,7 +161,7 @@ def create_contribution_from_invoice(doc, method=None):
             "contribution_date": doc.invoice_date or nowdate(),
             "posting_date": doc.invoice_date or nowdate(),
             "amount": float(doc.amount or 0),
-            "payment_method": payment_method or "Not Specified",
+            "payment_method": payment_method or default_payment_method,
             "invoice_reference": doc.name,
             "status": "Unpaid"
         })
@@ -186,6 +189,9 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
         created_invoices = []
         
         for member in active_members:
+            # Get default payment method from settings or default to Mpesa
+            default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
+            
             # Create SHG Contribution Invoice
             invoice = frappe.get_doc({
                 "doctype": "SHG Contribution Invoice",
@@ -193,6 +199,7 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
                 "member_name": member.member_name,
                 "contribution_type": contribution_type,
                 "amount": amount,
+                "payment_method": default_payment_method,
                 "invoice_date": invoice_date or nowdate(),
                 "status": "Draft"
             })
@@ -218,6 +225,9 @@ def create_linked_contribution(invoice_doc):
     Create a draft SHG Contribution linked to the invoice
     """
     try:
+        # Get default payment method from settings or default to Mpesa
+        default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
+        
         # Create new SHG Contribution in draft status
         contribution = frappe.get_doc({
             "doctype": "SHG Contribution",
@@ -228,7 +238,7 @@ def create_linked_contribution(invoice_doc):
             "posting_date": invoice_doc.invoice_date or nowdate(),
             "amount": float(invoice_doc.amount or 0),
             "expected_amount": float(invoice_doc.amount or 0),
-            "payment_method": "Not Specified",
+            "payment_method": default_payment_method,
             "invoice_reference": invoice_doc.name,
             "status": "Unpaid",
             "docstatus": 0  # Draft status

@@ -8,6 +8,7 @@
         "default_contribution_amount",
         "contribution_frequency",
         "minimum_contribution",
+        "default_contribution_payment_method",
         "column_break_4",
         "allow_voluntary_contributions",
         "voluntary_contribution_limit",
@@ -97,6 +98,13 @@
             "fieldtype": "Select",
             "label": "Default Frequency",
             "options": "Weekly\nBi-weekly\nMonthly\nBi-Monthly"
+        },
+        {
+            "default": "Mpesa",
+            "fieldname": "default_contribution_payment_method",
+            "fieldtype": "Select",
+            "label": "Default Contribution Payment Method",
+            "options": "Cash\nMobile Money\nMpesa\nBank Transfer\nCheque"
         },
         {
             "fieldname": "column_break_4",
