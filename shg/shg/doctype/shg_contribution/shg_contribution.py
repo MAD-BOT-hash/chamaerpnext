@@ -11,19 +11,21 @@ class SHGContribution(Document):
         self.set_contribution_details()
         self.calculate_unpaid_amount()
         
-        # Ensure amount is rounded to 2 decimal places
+        # Ensure amount is rounded to 2 decimal places using flt for safety
         if self.amount:
-            self.amount = round(float(self.amount), 2)
+            self.amount = round(flt(self.amount), 2)
         if self.expected_amount:
-            self.expected_amount = round(float(self.expected_amount), 2)
+            self.expected_amount = round(flt(self.expected_amount), 2)
         if self.amount_paid:
-            self.amount_paid = round(float(self.amount_paid), 2)
+            self.amount_paid = round(flt(self.amount_paid), 2)
         if self.unpaid_amount:
-            self.unpaid_amount = round(float(self.unpaid_amount), 2)
+            self.unpaid_amount = round(flt(self.unpaid_amount), 2)
         
     def validate_amount(self):
         """Validate contribution amount"""
-        if self.amount <= 0:
+        # Safely convert to float to prevent NoneType errors
+        amount = flt(self.amount)
+        if amount <= 0:
             frappe.throw(_("Contribution amount must be greater than zero"))
             
     def validate_duplicate(self):
@@ -60,21 +62,29 @@ class SHGContribution(Document):
             
     def calculate_unpaid_amount(self):
         """Calculate unpaid amount and set status"""
+        # Safely handle None values with flt()
+        expected = flt(self.expected_amount)
+        amount = flt(self.amount)
+        paid = flt(self.amount_paid)
+        
         # If expected_amount is not set, use the amount field as expected_amount
-        if not self.expected_amount:
-            self.expected_amount = self.amount
+        if expected <= 0:
+            expected = amount
+            self.expected_amount = expected
             
         # If amount_paid is not set, initialize it to 0
-        if not self.amount_paid:
-            self.amount_paid = 0
+        if paid <= 0:
+            paid = 0
+            self.amount_paid = paid
             
-        # Calculate unpaid amount
-        self.unpaid_amount = max(0, self.expected_amount - self.amount_paid)
+        # Calculate unpaid amount safely
+        unpaid = flt(max(0, expected - paid))
+        self.unpaid_amount = unpaid
         
         # Set status based on unpaid amount
-        if self.unpaid_amount <= 0:
+        if unpaid <= 0:
             self.status = "Paid"
-        elif self.amount_paid > 0:
+        elif paid > 0:
             self.status = "Partially Paid"
         else:
             self.status = "Unpaid"
@@ -82,14 +92,14 @@ class SHGContribution(Document):
     def update_payment_status(self, paid_amount):
         """Update payment status when a payment is received"""
         try:
-            # Update paid amounts
-            current_paid = self.amount_paid or 0
-            new_paid = current_paid + paid_amount
+            # Safely handle numeric fields
+            current_paid = flt(self.amount_paid or 0)
+            new_paid = flt(current_paid + flt(paid_amount))
             self.db_set("amount_paid", new_paid)
             
             # Recalculate unpaid amount and status
-            expected = self.expected_amount or self.amount
-            unpaid = max(0, expected - new_paid)
+            expected = flt(self.expected_amount or self.amount)
+            unpaid = flt(max(0, flt(expected) - flt(new_paid)))
             self.db_set("unpaid_amount", unpaid)
             
             # Update status
@@ -100,12 +110,19 @@ class SHGContribution(Document):
             else:
                 self.db_set("status", "Unpaid")
                 
+            # Update the linked SHG Contribution Invoice if exists
+            if self.invoice_reference:
+                invoice = frappe.get_doc("SHG Contribution Invoice", self.invoice_reference)
+                if invoice:
+                    # Update invoice status based on contribution status
+                    invoice.db_set("status", self.status)
+                    
             # Update member financial summary
             member = frappe.get_doc("SHG Member", self.member)
             member.update_financial_summary()
             
         except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Update Payment Status Failed")
+            frappe.log_error(frappe.get_traceback(), f"Update Payment Status Failed for Member {self.member} with Amount {paid_amount}")
             frappe.throw(_("Failed to update payment status: {0}").format(str(e)))
             
     def on_submit(self):
@@ -396,6 +413,28 @@ def create_contribution_from_invoice(doc, method=None):
 
         # Get default payment method from settings or default to Mpesa
         default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
+        
+        # Safely handle numeric fields
+        amount = flt(doc.amount or 0)
+        expected_amount = flt(doc.amount or 0)
+        
+        # Validate amount
+        if amount <= 0:
+            # Try to get default amount from contribution type
+            if doc.contribution_type:
+                default_amount = frappe.db.get_value("SHG Contribution Type", doc.contribution_type, "default_amount")
+                amount = flt(default_amount or 0)
+                expected_amount = flt(default_amount or 0)
+            
+            # If still no valid amount, try SHG Settings
+            if amount <= 0:
+                default_amount = frappe.db.get_single_value("SHG Settings", "default_contribution_amount")
+                amount = flt(default_amount or 0)
+                expected_amount = flt(default_amount or 0)
+                
+            # If still no valid amount, throw error
+            if amount <= 0:
+                frappe.throw(_("Contribution amount must be greater than zero. No valid amount found in invoice, contribution type, or SHG Settings."))
 
         # Create new SHG Contribution
         contribution = frappe.get_doc({
@@ -405,8 +444,8 @@ def create_contribution_from_invoice(doc, method=None):
             "contribution_type": doc.contribution_type,
             "contribution_date": doc.invoice_date or nowdate(),
             "posting_date": doc.invoice_date or nowdate(),
-            "amount": flt(doc.amount or 0),
-            "expected_amount": flt(doc.amount or 0),
+            "amount": amount,
+            "expected_amount": expected_amount,
             "payment_method": payment_method or default_payment_method,
             "invoice_reference": doc.name,
             "status": "Unpaid"
@@ -421,7 +460,7 @@ def create_contribution_from_invoice(doc, method=None):
         return contribution
 
     except Exception as e:
-        frappe.log_error(message=frappe.get_traceback(), title=f"Auto SHG Contribution Creation Failed for {doc.name}")
+        frappe.log_error(message=frappe.get_traceback(), title=f"Auto SHG Contribution Creation Failed for Member {doc.member} with Invoice {doc.name}")
         return None
 
 def create_linked_contribution(invoice_doc):
@@ -432,6 +471,28 @@ def create_linked_contribution(invoice_doc):
         # Get default payment method from settings or default to Mpesa
         default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
         
+        # Safely handle numeric fields
+        amount = flt(invoice_doc.amount or 0)
+        expected_amount = flt(invoice_doc.amount or 0)
+        
+        # Validate amount
+        if amount <= 0:
+            # Try to get default amount from contribution type
+            if invoice_doc.contribution_type:
+                default_amount = frappe.db.get_value("SHG Contribution Type", invoice_doc.contribution_type, "default_amount")
+                amount = flt(default_amount or 0)
+                expected_amount = flt(default_amount or 0)
+            
+            # If still no valid amount, try SHG Settings
+            if amount <= 0:
+                default_amount = frappe.db.get_single_value("SHG Settings", "default_contribution_amount")
+                amount = flt(default_amount or 0)
+                expected_amount = flt(default_amount or 0)
+                
+            # If still no valid amount, throw error
+            if amount <= 0:
+                frappe.throw(_("Contribution amount must be greater than zero. No valid amount found in invoice, contribution type, or SHG Settings."))
+
         # Create new SHG Contribution in draft status
         contribution = frappe.get_doc({
             "doctype": "SHG Contribution",
@@ -440,8 +501,8 @@ def create_linked_contribution(invoice_doc):
             "contribution_type": invoice_doc.contribution_type,
             "contribution_date": invoice_doc.invoice_date or nowdate(),
             "posting_date": invoice_doc.invoice_date or nowdate(),
-            "amount": flt(invoice_doc.amount or 0),
-            "expected_amount": flt(invoice_doc.amount or 0),
+            "amount": amount,
+            "expected_amount": expected_amount,
             "payment_method": default_payment_method,
             "invoice_reference": invoice_doc.name,
             "status": "Unpaid",
@@ -454,4 +515,4 @@ def create_linked_contribution(invoice_doc):
         frappe.logger().info(f"[SHG] Created draft SHG Contribution {contribution.name} for Invoice {invoice_doc.name}")
         
     except Exception as e:
-        frappe.log_error(message=frappe.get_traceback(), title=f"Draft SHG Contribution Creation Failed for Invoice {invoice_doc.name}")
+        frappe.log_error(message=frappe.get_traceback(), title=f"Draft SHG Contribution Creation Failed for Member {invoice_doc.member} with Invoice {invoice_doc.name}")

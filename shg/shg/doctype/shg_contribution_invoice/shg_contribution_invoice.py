@@ -97,6 +97,39 @@ class SHGContributionInvoice(Document):
             item_name = self.contribution_type or "SHG Contribution"
             description = self.description or f"Contribution invoice for {formatdate(self.invoice_date, 'MMMM yyyy')}"
             
+            # Safely handle numeric fields with flt() to prevent NoneType multiplication
+            amount = flt(self.amount)
+            qty = flt(1)  # Default to 1 qty
+            rate = flt(amount)  # Rate defaults to amount when qty is 1
+            
+            # Validate that we have a valid amount
+            if amount <= 0:
+                # Try to get default amount from contribution type if available
+                if self.contribution_type:
+                    default_amount = frappe.db.get_value("SHG Contribution Type", self.contribution_type, "default_amount")
+                    amount = flt(default_amount or 0)
+                    rate = flt(amount)
+                
+                # If still no valid amount, try to get from SHG Settings
+                if amount <= 0:
+                    default_amount = frappe.db.get_single_value("SHG Settings", "default_contribution_amount")
+                    amount = flt(default_amount or 0)
+                    rate = flt(amount)
+                    
+                # If still no valid amount, throw error
+                if amount <= 0:
+                    frappe.throw(_("Contribution amount must be greater than zero. No valid amount found in invoice, contribution type, or SHG Settings."))
+            
+            # Ensure rate is properly calculated
+            if qty > 0:
+                rate = flt(amount / qty)
+            else:
+                rate = flt(amount)
+                qty = flt(1)
+            
+            # Calculate total safely
+            total = flt(qty * rate)
+            
             if self.contribution_type:
                 contrib_type = frappe.get_doc("SHG Contribution Type", self.contribution_type)
                 if contrib_type.item_code:
@@ -110,6 +143,22 @@ class SHGContributionInvoice(Document):
             # Check if historical backdated invoices are allowed
             allow_historical = frappe.db.get_single_value("SHG Settings", "allow_historical_backdated_invoices") or 0
             
+            # Get default accounts from SHG Settings
+            settings = frappe.get_single("SHG Settings")
+            default_income_account = settings.default_income_account
+            receivable_account = settings.default_receivable_account
+            cost_center = settings.cost_center
+            company = frappe.defaults.get_user_default("Company")
+            
+            # Validate that required accounts exist
+            if not default_income_account:
+                # Try to get from company defaults
+                company_doc = frappe.get_doc("Company", company)
+                default_income_account = company_doc.default_income_account
+            
+            if not default_income_account:
+                frappe.throw(_("No default income account found. Please configure in SHG Settings or Company defaults."))
+            
             # Create Sales Invoice with forced dates and bypass validation
             sales_invoice = frappe.get_doc({
                 "doctype": "Sales Invoice",
@@ -119,15 +168,23 @@ class SHGContributionInvoice(Document):
                 "set_posting_time": 1 if allow_historical else 0,  # Enable posting time override for historical entries
                 "shg_contribution_invoice": self.name,
                 "remarks": f"Auto-generated for SHG Contribution Invoice {self.name}",
+                "company": company,
+                "cost_center": cost_center,
                 "items": [{
                     "item_code": item_code,
                     "item_name": item_name,
                     "description": description,
-                    "qty": 1,
-                    "rate": flt(self.amount),
-                    "amount": flt(self.amount)
+                    "qty": flt(qty),
+                    "rate": flt(rate),
+                    "amount": flt(total),
+                    "income_account": default_income_account,
                 }]
             })
+            
+            # Ensure all monetary fields are floats
+            sales_invoice.total = flt(sales_invoice.total)
+            sales_invoice.grand_total = flt(sales_invoice.grand_total)
+            sales_invoice.rounded_total = flt(sales_invoice.rounded_total)
             
             # Use flags before insert instead of passing parameters
             sales_invoice.flags.ignore_mandatory = True
@@ -144,7 +201,7 @@ class SHGContributionInvoice(Document):
             frappe.db.commit()
             
         except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - Sales Invoice Creation Failed")
+            frappe.log_error(frappe.get_traceback(), f"SHG Contribution Invoice - Sales Invoice Creation Failed for Member {self.member} with Amount {self.amount}")
             frappe.throw(_("Failed to create Sales Invoice: {0}").format(str(e)))
             
     def calculate_late_fee(self):

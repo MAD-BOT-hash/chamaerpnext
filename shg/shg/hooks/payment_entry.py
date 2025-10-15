@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from frappe.utils.data import flt
 from shg.shg.utils.member_account_mapping import set_member_credit_account as map_member_account
 
 def set_reference_fields(pe, source_doc):
@@ -130,18 +131,23 @@ def update_shg_contribution_status(sales_invoice_name):
                 shg_contribution = frappe.get_doc("SHG Contribution", shg_contribution_name)
                 sales_invoice = frappe.get_doc("Sales Invoice", sales_invoice_name)
                 
+                # Safely handle numeric fields
+                outstanding_amount = flt(sales_invoice.outstanding_amount)
+                grand_total = flt(sales_invoice.grand_total)
+                
                 # Update status based on outstanding amount
-                if sales_invoice.outstanding_amount <= 0:
+                if outstanding_amount <= 0:
                     shg_contribution.db_set("status", "Paid")
                     # Update amount paid
-                    shg_contribution.db_set("amount_paid", shg_contribution.expected_amount)
+                    expected_amount = flt(shg_contribution.expected_amount or shg_contribution.amount)
+                    shg_contribution.db_set("amount_paid", expected_amount)
                     shg_contribution.db_set("unpaid_amount", 0)
-                elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
+                elif outstanding_amount < grand_total:
                     shg_contribution.db_set("status", "Partially Paid")
                     # Calculate paid amount
-                    paid_amount = sales_invoice.grand_total - sales_invoice.outstanding_amount
+                    paid_amount = flt(grand_total - outstanding_amount)
                     shg_contribution.db_set("amount_paid", paid_amount)
-                    shg_contribution.db_set("unpaid_amount", sales_invoice.outstanding_amount)
+                    shg_contribution.db_set("unpaid_amount", outstanding_amount)
                 else:
                     shg_contribution.db_set("status", "Unpaid")
                     
@@ -150,4 +156,4 @@ def update_shg_contribution_status(sales_invoice_name):
                 shg_contribution.save()
                 
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "SHG Contribution Status Update Failed")
+        frappe.log_error(frappe.get_traceback(), f"SHG Contribution Status Update Failed for Sales Invoice {sales_invoice_name}")
