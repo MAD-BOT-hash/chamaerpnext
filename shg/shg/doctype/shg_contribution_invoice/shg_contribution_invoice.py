@@ -10,6 +10,7 @@ class SHGContributionInvoice(Document):
     def validate(self):
         self.validate_amount()
         self.set_description()
+        self.validate_payment_method()
         
         # Ensure amount is rounded to 2 decimal places
         if self.amount:
@@ -45,6 +46,12 @@ class SHGContributionInvoice(Document):
         if not self.description and self.invoice_date:
             month_year = formatdate(self.invoice_date, "MMMM yyyy")
             self.description = f"Contribution invoice for {month_year}"
+            
+    def validate_payment_method(self):
+        valid_methods = ["Cash", "Mobile Money", "Mpesa", "Bank Transfer", "Cheque"]
+        if not self.payment_method or self.payment_method not in valid_methods:
+            default_method = frappe.db.get_single_value("SHG Settings", "default_payment_method") or "Mpesa"
+            self.payment_method = default_method
             
     def on_submit(self):
         # Create Sales Invoice
