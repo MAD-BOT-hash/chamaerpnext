@@ -52,3 +52,18 @@ class SHGSettings(Document):
         # Validate member account settings
         if self.default_parent_ledger and not frappe.db.exists("Account", self.default_parent_ledger):
             frappe.throw("Default Parent Ledger does not exist")
+
+# Copyright (c) 2025, Your Company and contributors
+# For license information, please see license.txt
+
+import frappe
+
+def update_shg_settings_fields():
+    """Ensure SHG Settings record exists and has default values"""
+    if not frappe.db.exists("SHG Settings"):
+        settings = frappe.get_doc({
+            "doctype": "SHG Settings"
+        })
+        settings.insert(ignore_permissions=True)
+        frappe.db.commit()
+        frappe.msgprint("SHG Settings record created successfully")

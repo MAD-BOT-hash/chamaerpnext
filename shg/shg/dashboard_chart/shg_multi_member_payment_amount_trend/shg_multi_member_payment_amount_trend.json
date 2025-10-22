@@ -1,0 +1,27 @@
+{
+ "actions": [],
+ "chart_type": "Sum",
+ "creation": "2025-10-22 10:00:00",
+ "custom_options": "{\"colors\":[\"#449CF0\"]}",
+ "doctype": "Dashboard Chart",
+ "document_type": "SHG Multi Member Payment",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"SHG Multi Member Payment\",\"docstatus\",\"=\",\"1\",false]]",
+ "group_by_type": "Sum",
+ "is_public": 1,
+ "is_standard": 1,
+ "module": "SHG",
+ "name": "SHG Multi Member Payment Amount Trend",
+ "number_of_groups": 12,
+ "source": "SHG Multi Member Payment",
+ "time_interval": "Monthly",
+ "timeseries": 1,
+ "type": "Line",
+ "use_report_chart": 0,
+ "x_field": "payment_date",
+ "y_axis": [
+  {
+   "y_field": "total_amount"
+  }
+ ]
+}

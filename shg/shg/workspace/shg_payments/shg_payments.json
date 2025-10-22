@@ -1,0 +1,138 @@
+{
+ "charts": [
+  {
+   "chart_name": "SHG Multi Member Payment Trend",
+   "label": "Payment Trend"
+  },
+  {
+   "chart_name": "SHG Multi Member Payment Amount Trend",
+   "label": "Payment Amount Trend"
+  }
+ ],
+ "content": "[{\"id\":\"zJ9N5z\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">SHG Payments</span>\",\"col\":12}},{\"id\":\"C6XU5O\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"SHG Multi Member Payment\",\"col\":3}},{\"id\":\"b-iconic-links\",\"type\":\"card\",\"data\":{\"card_name\":\"Iconic Links\",\"col\":12}},{\"id\":\"b-reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":12}},{\"id\":\"b-settings\",\"type\":\"card\",\"data\":{\"card_name\":\"Settings\",\"col\":12}}]",
+ "creation": "2025-10-22 10:00:00",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "is_hidden": 0,
+ "label": "SHG Payments",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Iconic Links",
+   "link_count": 4,
+   "link_to": "SHG Multi Member Payment",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SHG Multi Member Payment",
+   "link_count": 0,
+   "link_to": "SHG Multi Member Payment",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "DocType"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SHG Payment Entry",
+   "link_count": 0,
+   "link_to": "SHG Payment Entry",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "DocType"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SHG Contribution Invoice",
+   "link_count": 0,
+   "link_to": "SHG Contribution Invoice",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "DocType"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Reports",
+   "link_count": 1,
+   "link_to": "SHG Multi Member Payment Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "SHG Multi Member Payment Summary",
+   "link_count": 0,
+   "link_to": "SHG Multi Member Payment Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Report"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Settings",
+   "link_count": 1,
+   "link_to": "SHG Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SHG Settings",
+   "link_count": 0,
+   "link_to": "SHG Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "DocType"
+  }
+ ],
+ "modified": "2025-10-22 10:00:00",
+ "module": "SHG",
+ "name": "SHG Payments",
+ "number_cards": [
+  {
+   "label": "Payments Today",
+   "number_card_name": "SHG Multi Member Payments Today"
+  },
+  {
+   "label": "Payment Amount Today",
+   "number_card_name": "SHG Multi Member Payment Amount Today"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "SHG",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "SHG Admin"
+  },
+  {
+   "role": "SHG Treasurer"
+  }
+ ],
+ "sequence_id": 4.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "SHG Multi Member Payment",
+   "link_to": "SHG Multi Member Payment",
+   "type": "DocType"
+  }
+ ]
+}

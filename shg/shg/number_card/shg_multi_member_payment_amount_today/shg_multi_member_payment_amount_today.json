@@ -1,0 +1,18 @@
+{
+ "actions": [],
+ "creation": "2025-10-22 10:00:00",
+ "doctype": "Number Card",
+ "document_type": "SHG Multi Member Payment",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"SHG Multi Member Payment\",\"docstatus\",\"=\",\"1\",false],[\"SHG Multi Member Payment\",\"payment_date\",\"Today\",true]]",
+ "function": "Sum",
+ "is_public": 1,
+ "is_standard": 1,
+ "label": "SHG Multi Member Payment Amount Today",
+ "module": "SHG",
+ "name": "SHG Multi Member Payment Amount Today",
+ "show_percentage_stats": 1,
+ "stats_time_interval": "Daily",
+ "type": "Document Type",
+ "aggregate_function_based_on": "total_amount"
+}

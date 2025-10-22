@@ -1,0 +1,1 @@
+shg.shg.doctype.shg_settings.shg_settings.update_shg_settings_fields

@@ -52,8 +52,7 @@ scheduler_events = {
         "shg.tasks.send_daily_reminders",
         "shg.tasks.calculate_loan_penalties",
         "shg.tasks.generate_billable_contribution_invoices",
-        "shg.shg.doctype.shg_contribution.shg_contribution.update_overdue_contributions",
-        "shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.mark_overdue_invoices"
+        "shg.shg.doctype.shg_contribution.shg_contribution.update_overdue_contributions"
     ],
     "weekly": [
         "shg.tasks.send_weekly_contribution_reminders"
@@ -78,12 +77,14 @@ doctype_js = {
     "SHG Member Attendance": "public/js/shg_member_attendance.js",
     "SHG Settings": "public/js/shg_settings.js",
     "SHG Contribution Invoice": "public/js/shg_contribution_invoice.js",
-    "SHG Payment Entry": "shg/doctype/shg_payment_entry/shg_payment_entry.js"
+    "SHG Payment Entry": "shg/doctype/shg_payment_entry/shg_payment_entry.js",
+    "SHG Multi Member Payment": "shg/shg/doctype/shg_multi_member_payment/shg_multi_member_payment.js"
 }
 
 # List JS
 doctype_list_js = {
-    "SHG Payment Entry": "public/js/shg_payment_entry_list.js"
+    "SHG Payment Entry": "public/js/shg_payment_entry_list.js",
+    "SHG Contribution Invoice": "shg/shg/doctype/shg_contribution_invoice/shg_contribution_invoice_list.js"
 }
 
 # Fix for workspace path issue
@@ -104,4 +105,10 @@ website_route_rules = [
     {"from_route": "/api/method/shg.api.get_notifications", "to_route": "shg.api.get_notifications"},
     {"from_route": "/api/method/shg.api.get_upcoming_meetings", "to_route": "shg.api.get_upcoming_meetings"},
     {"from_route": "/api/method/shg.api.get_member_profile", "to_route": "shg.api.get_member_profile"}
+]
+
+# Whitelisted methods
+whitelisted_methods = [
+    "shg.shg.api.get_unpaid_contribution_invoices",
+    "shg.shg.api.create_multi_member_payment"
 ]
