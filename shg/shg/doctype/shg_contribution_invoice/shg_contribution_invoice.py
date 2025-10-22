@@ -265,8 +265,11 @@ class SHGContributionInvoice(Document):
             
         days_overdue = (today_date - due_date).days
         
-        # Calculate late fee amount safely using flt()
-        late_fee_amount = flt(self.amount or 0) * (flt(late_fee_rate or 0) / 100) * flt(days_overdue or 0)
+        # Calculate late fee amount safely using flt() to prevent NoneType multiplication
+        amount = flt(self.amount or 0)
+        rate = flt(late_fee_rate or 0)
+        days = flt(days_overdue or 0)
+        late_fee_amount = amount * (rate / 100) * days
         
         return late_fee_amount
 
