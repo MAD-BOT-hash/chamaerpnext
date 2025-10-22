@@ -8,14 +8,21 @@ from frappe.utils import flt, today, getdate
 from frappe.desk.form.assign_to import add as assign_to
 
 @frappe.whitelist()
-def get_unpaid_invoices(company=None):
+def get_unpaid_invoices(filters=None):
     """Fetch all unpaid contribution invoices for selection"""
+    # Base filters for unpaid invoices
+    base_filters = {
+        "status": ["in", ["Unpaid", "Partially Paid"]],
+        "docstatus": 1
+    }
+    
+    # Merge with provided filters
+    if filters:
+        base_filters.update(filters)
+    
     invoices = frappe.get_all(
         "SHG Contribution Invoice",
-        filters={
-            "status": ["in", ["Unpaid", "Partially Paid"]],
-            "docstatus": 1
-        },
+        filters=base_filters,
         fields=[
             "name as invoice",
             "member",
@@ -104,7 +111,7 @@ class SHGMultiMemberPayment(Document):
         
         for invoice in self.invoices:
             total_invoices += 1
-            total_amount += flt(invoice.payment_amount)
+            total_amount += flt(invoice.payment_amount or 0)
             
         self.total_selected_invoices = total_invoices
         self.total_payment_amount = total_amount
