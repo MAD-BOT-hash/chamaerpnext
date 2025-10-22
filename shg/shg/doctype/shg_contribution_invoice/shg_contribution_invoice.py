@@ -110,93 +110,37 @@ class SHGContributionInvoice(Document):
                 self.db_set("linked_shg_contribution", contribution.name)
 
     def create_sales_invoice(self):
-        """Create a Sales Invoice from SHG Contribution Invoice."""
+        company = frappe.db.get_single_value("SHG Settings", "company") or "Pioneer Friends Group"
 
-        try:
-            # --- Fetch SHG Settings and Company ---
-            try:
-                settings = frappe.get_single("SHG Settings")
-                company = getattr(settings, "company", None)
-            except Exception:
-                settings = None
-                company = None
+        member_account = get_or_create_member_account(self.member, company)
+        income_account = frappe.db.get_value(
+            "Account", {"account_type": "Income Account", "company": company, "is_group": 0}, "name"
+        ) or frappe.throw("No Income Account found for this Company.")
 
-            # fallback to ERPNext default company
-            if not company:
-                company = frappe.defaults.get_global_default("company")
+        # Protect from NoneType math
+        qty = self.qty or 1
+        rate = self.rate or self.amount or 0
 
-            if not company:
-                frappe.throw("No default company found. Please set it in SHG Settings or System Defaults.")
+        invoice = frappe.new_doc("Sales Invoice")
+        invoice.company = company
+        invoice.customer = self.member_name
+        invoice.posting_date = self.invoice_date or nowdate()
+        invoice.due_date = self.invoice_date or nowdate()
+        invoice.debit_to = member_account
+        invoice.append("items", {
+            "item_name": "SHG Contribution",
+            "qty": qty,
+            "rate": rate,
+            "income_account": income_account,
+            "description": f"Contribution for {self.member}"
+        })
 
-            # --- Validate Required Fields ---
-            if not self.member:
-                frappe.throw("Member ID is required to create Sales Invoice.")
-            if not self.amount:
-                frappe.throw("Amount cannot be empty for Sales Invoice creation.")
+        invoice.flags.ignore_mandatory = True
+        invoice.insert(ignore_permissions=True)
+        invoice.submit()
+        frappe.msgprint(f"Sales Invoice {invoice.name} created and submitted for {self.member_name}")
 
-            # --- Fetch Accounts ---
-            default_income_account = None
-            if settings:
-                default_income_account = getattr(settings, "default_income_account", None)
-
-            if not default_income_account:
-                default_income_account = frappe.db.get_value("Company", company, "default_income_account")
-
-            if not default_income_account:
-                default_income_account = frappe.db.get_single_value("Accounts Settings", "default_income_account")
-
-            if not default_income_account:
-                frappe.throw("No default income account set. Please set one in SHG Settings or Company defaults.")
-
-            # --- Get Customer linked to Member ---
-            customer = frappe.db.get_value("SHG Member", self.member, "customer")
-            if not customer:
-                frappe.throw(f"No Customer linked to Member ID {self.member}")
-
-            # --- Ensure numeric values ---
-            qty = flt(self.qty or 1)
-            rate = flt(self.rate or self.amount or 0)
-            total = qty * rate
-
-            # --- Create Sales Invoice Document ---
-            invoice = frappe.new_doc("Sales Invoice")
-            invoice.customer = customer
-            invoice.company = company
-
-            # use Supplier Invoice Date for historical entries
-            invoice.posting_date = self.supplier_invoice_date or nowdate()
-            invoice.due_date = self.supplier_invoice_date or nowdate()
-
-            invoice.set_posting_time = 1  # allow backdated posting
-            invoice.naming_series = "SINV-.YYYY.-"
-            invoice.remarks = f"Generated from SHG Contribution Invoice {self.name}"
-
-            invoice.append("items", {
-                "item_name": "Member Contribution",
-                "description": f"Contribution by member {self.member}",
-                "income_account": default_income_account,
-                "qty": qty,
-                "rate": rate,
-                "amount": total,
-            })
-
-            invoice.flags.ignore_permissions = True
-            invoice.insert()
-            invoice.submit()
-
-            # --- Link Sales Invoice back to SHG Contribution Invoice ---
-            self.sales_invoice = invoice.name
-            self.db_set("sales_invoice", invoice.name)
-            self.db_set("linked_sales_invoice", invoice.name)
-            self.db_set("status", "Unpaid")
-
-            frappe.msgprint(f"Sales Invoice {invoice.name} created successfully for member {self.member}")
-
-            return invoice.name
-
-        except Exception as e:
-            frappe.log_error(f"Failed to create Sales Invoice: {frappe.get_traceback()}", "SHG Contribution Invoice Error")
-            frappe.throw(f"Failed to create Sales Invoice: {str(e)}")
+        return invoice
 
     def calculate_late_fee(self):
         """Calculate late payment fee based on SHG Settings"""
@@ -587,3 +531,32 @@ def mark_overdue_invoices():
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Mark Overdue Invoices Failed")
         frappe.throw(str(e))
+
+
+def get_or_create_member_account(member_id, company):
+    """Ensure the member has a personal ledger account under SHG Members."""
+    parent_account = frappe.db.get_value(
+        "Account",
+        {"account_name": "SHG Members - " + company, "company": company, "is_group": 1},
+        "name"
+    )
+
+    if not parent_account:
+        frappe.throw(f"Parent account 'SHG Members - {company}' not found. Please create it under Accounts Receivable.")
+
+    member_account = frappe.db.exists("Account", {"account_name": f"{member_id} - {company}", "company": company})
+    if member_account:
+        return member_account
+
+    # Auto-create member sub-account
+    acc = frappe.get_doc({
+        "doctype": "Account",
+        "account_name": f"{member_id} - {company}",
+        "parent_account": parent_account,
+        "is_group": 0,
+        "company": company,
+        "account_type": "Receivable"
+    })
+    acc.insert(ignore_permissions=True)
+    frappe.msgprint(f"Created ledger account for {member_id}")
+    return acc.name
