@@ -411,7 +411,7 @@ def send_invoice_email(self):
         
         message = f"""Dear {self.member_name},
 
-Your contribution invoice for {month_year} amounting to KES {self.amount:,.2f} has been generated.
+Your contribution invoice for {month_year} amounting to KES {flt(self.amount or 0):,.2f} has been generated.
 Please make payment by {formatdate(self.due_date)}.
 
 Thank you for your continued support.
