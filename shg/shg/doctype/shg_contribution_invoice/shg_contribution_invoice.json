@@ -15,6 +15,7 @@
   "due_date",
   "column_break_4",
   "contribution_type",
+  "qty",
   "amount",
   "payment_method",
   "status",
@@ -84,6 +85,13 @@
    "fieldtype": "Link",
    "label": "Contribution Type",
    "options": "SHG Contribution Type"
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "label": "Quantity",
+   "default": "1",
+   "precision": 2
   },
   {
    "fieldname": "amount",
