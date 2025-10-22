@@ -93,15 +93,14 @@ class SHGContributionInvoice(Document):
                 frappe.throw(_("Member {0} does not have a linked Customer record").format(member.member_name))
                 
             # Get contribution type details for item
-            item_code = "SHG Contribution"
-            item_name = self.contribution_type or "SHG Contribution"
+            item_name = self.contribution_type or "Contribution"
             description = self.description or f"Contribution invoice for {formatdate(self.invoice_date, 'MMMM yyyy')}"
             
             # Safely handle numeric fields with flt() to prevent NoneType multiplication
-            # Use safe defaults for qty, rate, and amount
-            qty = flt(1)  # Default to 1 qty
-            rate = flt(self.amount or 0)  # Rate defaults to amount when qty is 1
-            amount = flt(qty * rate)  # Calculate amount safely
+            # Use safe defaults for qty, rate, and amount as requested
+            qty = flt(self.qty or 1)
+            rate = flt(self.rate or self.amount or 0)
+            amount = flt(qty * rate)
             
             # Validate that we have a valid amount
             if amount <= 0:
@@ -131,12 +130,6 @@ class SHGContributionInvoice(Document):
             # Calculate total safely
             total = flt(qty * rate)
             
-            if self.contribution_type:
-                contrib_type = frappe.get_doc("SHG Contribution Type", self.contribution_type)
-                if contrib_type.item_code:
-                    item_code = contrib_type.item_code
-                    item_name = contrib_type.contribution_type_name
-            
             # Use invoice_date for both posting_date and due_date to support historical data entry
             posting_date = getdate(self.invoice_date)
             due_date = getdate(self.invoice_date)
@@ -146,16 +139,10 @@ class SHGContributionInvoice(Document):
             
             # Get default accounts from SHG Settings
             settings = frappe.get_single("SHG Settings")
-            default_income_account = settings.default_income_account
-            receivable_account = settings.default_receivable_account
-            cost_center = settings.cost_center
-            company = frappe.defaults.get_user_default("Company")
-            
-            # Validate that required accounts exist
-            if not default_income_account:
-                # Try to get from company defaults
-                company_doc = frappe.get_doc("Company", company)
-                default_income_account = company_doc.default_income_account
+            default_income_account = (
+                settings.default_income_account
+                or frappe.db.get_value("Company", settings.company, "default_income_account")
+            )
             
             if not default_income_account:
                 frappe.throw(_("No default income account found. Please configure in SHG Settings or Company defaults."))
@@ -169,24 +156,25 @@ class SHGContributionInvoice(Document):
                 "set_posting_time": 1 if allow_historical else 0,  # Enable posting time override for historical entries
                 "shg_contribution_invoice": self.name,
                 "remarks": f"Auto-generated for SHG Contribution Invoice {self.name}",
-                "company": company,
-                "cost_center": cost_center,
+                "company": settings.company,
+                "cost_center": settings.cost_center,
                 "items": [{
                     "item_name": item_name or "Contribution",
                     "qty": qty,
                     "rate": rate,
-                    "amount": total,
+                    "amount": amount,
                     "income_account": default_income_account,
                     "description": f"Contribution for {member.member_name or 'Member'}",
                 }]
             })
             
-            # Ensure all monetary fields are floats
+            # Ensure all monetary fields are floats as requested
             sales_invoice.total = flt(sales_invoice.total)
+            sales_invoice.base_total = flt(sales_invoice.base_total)
             sales_invoice.grand_total = flt(sales_invoice.grand_total)
-            sales_invoice.rounded_total = flt(sales_invoice.rounded_total)
             sales_invoice.base_grand_total = flt(sales_invoice.base_grand_total)
-            sales_invoice.base_rounded_total = flt(sales_invoice.base_rounded_total)
+            sales_invoice.rounded_total = flt(sales_invoice.rounded_total)
+            sales_invoice.tax_amount = flt(getattr(sales_invoice, 'tax_amount', 0))
             
             # Use flags before insert instead of passing parameters
             sales_invoice.flags.ignore_mandatory = True
@@ -232,11 +220,50 @@ class SHGContributionInvoice(Document):
             
         days_overdue = (today_date - due_date).days
         
-        # Calculate late fee amount
-        late_fee_amount = flt(self.amount) * (flt(late_fee_rate) / 100) * days_overdue
+        # Calculate late fee amount safely using flt()
+        late_fee_amount = flt(self.amount or 0) * (flt(late_fee_rate or 0) / 100) * flt(days_overdue or 0)
         
         return late_fee_amount
 
+    @frappe.whitelist()
+    def send_invoice_email(self):
+        """Send invoice email to member"""
+        try:
+            if not self.sales_invoice:
+                frappe.throw(_("No Sales Invoice linked to this Contribution Invoice"))
+                
+            member = frappe.get_doc("SHG Member", self.member)
+            
+            if not member.email:
+                frappe.throw(_("Member {0} does not have an email address").format(self.member_name))
+                
+            # Prepare email content
+            month_year = formatdate(self.invoice_date, "MMMM yyyy")
+            subject = f"Your {month_year} SHG Contribution Invoice"
+            
+            message = f"""Dear {self.member_name},
+
+Your contribution invoice for {month_year} amounting to KES {flt(self.amount or 0):,.2f} has been generated.
+Please make payment by {formatdate(self.due_date)}.
+
+Thank you for your continued support.
+
+SHG Management"""
+            
+            # Send email with invoice attachment
+            frappe.sendmail(
+                recipients=[member.email],
+                subject=subject,
+                message=message,
+                attachments=[frappe.attach_print("Sales Invoice", self.sales_invoice, file_name=self.sales_invoice)]
+            )
+            
+            frappe.msgprint(_("Invoice email sent to {0}").format(member.email))
+            
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - Email Sending Failed")
+            frappe.throw(_("Failed to send invoice email: {0}").format(str(e)))
+            
 @frappe.whitelist()
 def create_contribution_from_invoice(doc, method=None):
     """
@@ -393,45 +420,6 @@ def create_linked_contribution(invoice_doc):
     except Exception as e:
         frappe.log_error(message=frappe.get_traceback(), title=f"Draft SHG Contribution Creation Failed for Invoice {invoice_doc.name}")
             
-@frappe.whitelist()
-def send_invoice_email(self):
-    """Send invoice email to member"""
-    try:
-        if not self.sales_invoice:
-            frappe.throw(_("No Sales Invoice linked to this Contribution Invoice"))
-            
-        member = frappe.get_doc("SHG Member", self.member)
-        
-        if not member.email:
-            frappe.throw(_("Member {0} does not have an email address").format(self.member_name))
-            
-        # Prepare email content
-        month_year = formatdate(self.invoice_date, "MMMM yyyy")
-        subject = f"Your {month_year} SHG Contribution Invoice"
-        
-        message = f"""Dear {self.member_name},
-
-Your contribution invoice for {month_year} amounting to KES {flt(self.amount or 0):,.2f} has been generated.
-Please make payment by {formatdate(self.due_date)}.
-
-Thank you for your continued support.
-
-SHG Management"""
-        
-        # Send email with invoice attachment
-        frappe.sendmail(
-            recipients=[member.email],
-            subject=subject,
-            message=message,
-            attachments=[frappe.attach_print("Sales Invoice", self.sales_invoice, file_name=self.sales_invoice)]
-        )
-        
-        frappe.msgprint(_("Invoice email sent to {0}").format(member.email))
-        
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - Email Sending Failed")
-        frappe.throw(_("Failed to send invoice email: {0}").format(str(e)))
-        
 @frappe.whitelist()
 def update_status_based_on_sales_invoice(self):
     """Update status based on linked Sales Invoice outstanding amount"""
