@@ -16,6 +16,7 @@
   "column_break_4",
   "contribution_type",
   "qty",
+  "rate",
   "amount",
   "payment_method",
   "status",
@@ -91,6 +92,12 @@
    "fieldtype": "Float",
    "label": "Quantity",
    "default": "1",
+   "precision": 2
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "label": "Rate (KES)",
    "precision": 2
   },
   {

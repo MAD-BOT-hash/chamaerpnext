@@ -9,6 +9,7 @@ from frappe.utils import getdate, formatdate, today, nowdate, add_days, flt
 class SHGContributionInvoice(Document):
     def validate(self):
         self.validate_qty()
+        self.validate_rate()
         self.validate_amount()
         self.set_description()
         self.validate_payment_method()
@@ -24,7 +25,22 @@ class SHGContributionInvoice(Document):
             
             if due_date < invoice_date:
                 frappe.throw(_("Due Date cannot be before Invoice Date"))
-        
+                
+    def validate_rate(self):
+        """Validate rate field and set default to amount if not provided"""
+        # If rate is not set, default it to the amount field
+        if not self.rate and self.amount:
+            self.rate = self.amount
+        elif self.rate:
+            # Ensure rate is a valid number
+            try:
+                rate = flt(self.rate)
+                if rate < 0:
+                    frappe.throw(_("Rate cannot be negative"))
+                self.rate = rate
+            except (ValueError, TypeError):
+                frappe.throw(_("Invalid rate. Please enter a numeric value."))
+                
     def validate_qty(self):
         """Validate quantity field"""
         # If qty is not set, default to 1
