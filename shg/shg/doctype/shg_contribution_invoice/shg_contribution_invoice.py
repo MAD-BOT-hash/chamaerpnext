@@ -169,11 +169,24 @@ class SHGContributionInvoice(Document):
             # Check if historical backdated invoices are allowed
             allow_historical = frappe.db.get_single_value("SHG Settings", "allow_historical_backdated_invoices") or 0
             
-            # Get default accounts from SHG Settings
-            settings = frappe.get_single("SHG Settings")
+            # Get default accounts from SHG Settings with safe fallback for company
+            try:
+                settings = frappe.get_single("SHG Settings")
+                company = getattr(settings, "company", None)
+                if not company:
+                    company = frappe.defaults.get_global_default("company")
+            except Exception:
+                company = frappe.defaults.get_global_default("company")
+                settings = frappe.get_single("SHG Settings")  # Fallback to get settings for other fields
+            
+            # Validate company is set
+            if not company:
+                frappe.throw(_("Default company is not set in SHG Settings or System Defaults."))
+            
             default_income_account = (
                 settings.default_income_account
-                or frappe.db.get_value("Company", settings.company, "default_income_account")
+                or frappe.db.get_value("Company", company, "default_income_account")
+                or frappe.db.get_single_value("Accounts Settings", "default_income_account")
             )
             
             if not default_income_account:
@@ -188,7 +201,7 @@ class SHGContributionInvoice(Document):
                 "set_posting_time": 1 if allow_historical else 0,  # Enable posting time override for historical entries
                 "shg_contribution_invoice": self.name,
                 "remarks": f"Auto-generated for SHG Contribution Invoice {self.name}",
-                "company": settings.company,
+                "company": company,
                 "cost_center": settings.cost_center,
                 "items": [{
                     "item_name": item_name or "Contribution",

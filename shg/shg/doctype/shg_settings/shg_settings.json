@@ -56,6 +56,7 @@
   "column_break_22",
   "statement_email_template",
   "accounting_settings_section",
+  "company",
   "default_income_account",
   "default_receivable_account",
   "default_bank_account",
@@ -73,7 +74,6 @@
   "default_credit_account",
   "auto_email_receipt",
   "column_break_25",
-  "payment_terms_template",
   "member_account_settings_section",
   "default_account_prefix",
   "default_parent_ledger",
@@ -360,6 +360,12 @@
    "fieldname": "accounting_settings_section",
    "fieldtype": "Section Break",
    "label": "Accounting Settings"
+  },
+  {
+   "fieldname": "company",
+   "label": "Default Company",
+   "fieldtype": "Link",
+   "options": "Company"
   },
   {
    "fieldname": "default_income_account",
