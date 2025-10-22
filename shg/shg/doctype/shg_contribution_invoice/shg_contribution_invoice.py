@@ -98,9 +98,10 @@ class SHGContributionInvoice(Document):
             description = self.description or f"Contribution invoice for {formatdate(self.invoice_date, 'MMMM yyyy')}"
             
             # Safely handle numeric fields with flt() to prevent NoneType multiplication
-            amount = flt(self.amount)
+            # Use safe defaults for qty, rate, and amount
             qty = flt(1)  # Default to 1 qty
-            rate = flt(amount)  # Rate defaults to amount when qty is 1
+            rate = flt(self.amount or 0)  # Rate defaults to amount when qty is 1
+            amount = flt(qty * rate)  # Calculate amount safely
             
             # Validate that we have a valid amount
             if amount <= 0:
@@ -171,13 +172,12 @@ class SHGContributionInvoice(Document):
                 "company": company,
                 "cost_center": cost_center,
                 "items": [{
-                    "item_code": item_code,
-                    "item_name": item_name,
-                    "description": description,
-                    "qty": flt(qty),
-                    "rate": flt(rate),
-                    "amount": flt(total),
+                    "item_name": item_name or "Contribution",
+                    "qty": qty,
+                    "rate": rate,
+                    "amount": total,
                     "income_account": default_income_account,
+                    "description": f"Contribution for {member.member_name or 'Member'}",
                 }]
             })
             
@@ -185,11 +185,13 @@ class SHGContributionInvoice(Document):
             sales_invoice.total = flt(sales_invoice.total)
             sales_invoice.grand_total = flt(sales_invoice.grand_total)
             sales_invoice.rounded_total = flt(sales_invoice.rounded_total)
+            sales_invoice.base_grand_total = flt(sales_invoice.base_grand_total)
+            sales_invoice.base_rounded_total = flt(sales_invoice.base_rounded_total)
             
             # Use flags before insert instead of passing parameters
             sales_invoice.flags.ignore_mandatory = True
             sales_invoice.flags.ignore_validate = True
-            sales_invoice.insert()
+            sales_invoice.insert(ignore_permissions=True)
             sales_invoice.submit()
             
             # Link the Sales Invoice to this Contribution Invoice
@@ -201,8 +203,11 @@ class SHGContributionInvoice(Document):
             frappe.db.commit()
             
         except Exception as e:
-            frappe.log_error(frappe.get_traceback(), f"SHG Contribution Invoice - Sales Invoice Creation Failed for Member {self.member} with Amount {self.amount}")
-            frappe.throw(_("Failed to create Sales Invoice: {0}").format(str(e)))
+            frappe.log_error(
+                f"Failed to create Sales Invoice for {self.member or 'Unknown Member'}: {str(e)}",
+                "SHG Sales Invoice Creation Error"
+            )
+            raise
             
     def calculate_late_fee(self):
         """Calculate late payment fee based on SHG Settings"""
@@ -334,7 +339,7 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
                 "member": member.name,
                 "member_name": member.member_name,
                 "contribution_type": contribution_type,
-                "amount": amount,
+                "amount": flt(amount or 0),
                 "payment_method": default_payment_method,
                 "invoice_date": inv_date,
                 "due_date": due_date,
