@@ -147,9 +147,7 @@ class SHGContribution(Document):
         validate_accounting_integrity(self)
         
     def post_to_ledger(self):
-        """
-        Create a Journal Entry or Payment Entry for this contribution based on settings.
-        """
+        """Post this contribution to GL using correct member ledger accounts."""
         # Get the contribution posting method from settings
         settings = frappe.get_single("SHG Settings")
         posting_method = settings.contribution_posting_method or "Journal Entry"
@@ -516,3 +514,27 @@ def create_linked_contribution(invoice_doc):
         
     except Exception as e:
         frappe.log_error(message=frappe.get_traceback(), title=f"Draft SHG Contribution Creation Failed for Member {invoice_doc.member} with Invoice {invoice_doc.name}")
+
+def get_or_create_member_account(self, member_id, company):
+    """Ensure member has a personal ledger account under SHG Members."""
+    parent_account = frappe.db.get_value(
+        "Account", {"account_name": f"SHG Members - {company}", "company": company, "is_group": 1}, "name"
+    )
+    if not parent_account:
+        frappe.throw(f"Parent account 'SHG Members - {company}' not found under Accounts Receivable.")
+
+    member_account = frappe.db.exists("Account", {"account_name": f"{member_id} - {company}", "company": company})
+    if member_account:
+        return member_account
+
+    account_doc = frappe.get_doc({
+        "doctype": "Account",
+        "account_name": f"{member_id} - {company}",
+        "parent_account": parent_account,
+        "is_group": 0,
+        "company": company,
+        "account_type": "Receivable"
+    })
+    account_doc.insert(ignore_permissions=True)
+    frappe.msgprint(f"Created ledger account for {member_id}")
+    return account_doc.name

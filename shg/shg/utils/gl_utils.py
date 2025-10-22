@@ -260,6 +260,30 @@ def create_contribution_journal_entry(contribution_doc):
     
     return je
 
+
+def create_contribution_journal_entry_example(contribution, member_account, income_account, company, posting_date):
+    """Example Journal Entry creation for contribution."""
+    je = frappe.new_doc("Journal Entry")
+    je.company = company
+    je.posting_date = posting_date
+    je.user_remark = f"Contribution from {contribution.member}"
+
+    je.append("accounts", {
+        "account": member_account,
+        "debit_in_account_currency": flt(contribution.amount),
+        "party_type": "Customer",
+        "party": contribution.member
+    })
+    je.append("accounts", {
+        "account": income_account,
+        "credit_in_account_currency": flt(contribution.amount)
+    })
+
+    je.insert(ignore_permissions=True)
+    je.submit()
+    return je
+
+
 def create_loan_repayment_payment_entry(repayment_doc):
     """
     Create a Payment Entry for loan repayment.
