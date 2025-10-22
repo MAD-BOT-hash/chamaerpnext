@@ -363,7 +363,7 @@ def create_contribution_from_invoice(doc, method=None):
         return None
 
 @frappe.whitelist()
-def generate_multiple_contribution_invoices(contribution_type=None, amount=None, invoice_date=None, supplier_invoice_date=None):
+def generate_multiple_contribution_invoices(contribution_type=None, amount=None, invoice_date=None, supplier_invoice_date=None, qty=None, rate=None):
     """
     Create multiple SHG Contribution Invoices for all active members
     """
@@ -408,13 +408,29 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
             if supplier_invoice_date or (invoice_date and getdate(invoice_date) != getdate(today())):
                 due_date = inv_date
             
+            # Safely handle numeric fields with flt() to prevent NoneType multiplication
+            # Use safe defaults for qty and rate
+            safe_qty = flt(qty or 1)
+            safe_rate = flt(rate or amount or 0)
+            safe_amount = flt(amount or 0)
+            
+            # If rate is not provided but amount is, calculate rate based on qty
+            if not rate and amount:
+                if safe_qty > 0:
+                    safe_rate = flt(safe_amount / safe_qty)
+                else:
+                    safe_rate = flt(safe_amount)
+                    safe_qty = flt(1)
+            
             # Create SHG Contribution Invoice
             invoice = frappe.get_doc({
                 "doctype": "SHG Contribution Invoice",
                 "member": member.name,
                 "member_name": member.member_name,
                 "contribution_type": contribution_type,
-                "amount": flt(amount or 0),
+                "qty": safe_qty,
+                "rate": safe_rate,
+                "amount": safe_amount,
                 "payment_method": default_payment_method,
                 "invoice_date": inv_date,
                 "due_date": due_date,
@@ -446,6 +462,11 @@ def create_linked_contribution(invoice_doc):
         # Get default payment method from settings or default to Mpesa
         default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
         
+        # Safely handle numeric fields with flt() to prevent NoneType multiplication
+        safe_qty = flt(invoice_doc.qty or 1)
+        safe_rate = flt(invoice_doc.rate or invoice_doc.amount or 0)
+        safe_amount = flt(invoice_doc.amount or 0)
+        
         # Create new SHG Contribution in draft status
         contribution = frappe.get_doc({
             "doctype": "SHG Contribution",
@@ -454,8 +475,10 @@ def create_linked_contribution(invoice_doc):
             "contribution_type": invoice_doc.contribution_type,
             "contribution_date": invoice_doc.invoice_date or nowdate(),
             "posting_date": invoice_doc.invoice_date or nowdate(),
-            "amount": flt(invoice_doc.amount or 0),
-            "expected_amount": flt(invoice_doc.amount or 0),
+            "qty": safe_qty,
+            "rate": safe_rate,
+            "amount": safe_amount,
+            "expected_amount": safe_amount,
             "payment_method": default_payment_method,
             "invoice_reference": invoice_doc.name,
             "status": "Unpaid",
