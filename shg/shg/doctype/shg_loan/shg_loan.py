@@ -34,6 +34,20 @@ class SHGLoan(Document):
         if self.loan_type:
             self.load_loan_type_settings()
         
+        # Multi-member validation
+        if self.get("loan_members"):
+            total_allocated = sum(flt(m.allocated_amount) for m in self.loan_members)
+            if total_allocated != flt(self.loan_amount):
+                frappe.throw(_("Total allocated amount ({0}) must equal Loan Amount ({1})").format(total_allocated, self.loan_amount))
+            
+            # Validate each member
+            for m in self.loan_members:
+                self.validate_member_eligibility(m.member, m.allocated_amount)
+        else:
+            # For backward compatibility (single-member loan)
+            if not self.member:
+                frappe.throw(_("Please select at least one member or fill the Loan Members table."))
+
     def validate_amount(self):
         """Validate loan amount"""
         if self.loan_amount <= 0:
@@ -44,6 +58,31 @@ class SHGLoan(Document):
         if self.interest_rate < 0:
             frappe.throw(_("Interest rate cannot be negative"))
             
+    def validate_member_eligibility(self, member_id, allocated_amount):
+        """Check eligibility of each loan member"""
+        if not frappe.db.exists("SHG Member", member_id):
+            frappe.throw(_(f"Member {member_id} does not exist"))
+
+        member = frappe.get_doc("SHG Member", member_id)
+        if member.membership_status != "Active":
+            frappe.throw(_(f"Member {member.member_name} is not active"))
+
+        # Check for overdue loans
+        overdue_loans = frappe.db.sql("""
+            SELECT COUNT(*) 
+            FROM `tabSHG Loan`
+            WHERE member = %s AND status = 'Disbursed' 
+            AND next_due_date < %s AND balance_amount > 0
+        """, (member_id, nowdate()))[0][0]
+        if overdue_loans > 0:
+            frappe.throw(_(f"Member {member.member_name} has overdue loans."))
+
+        # Savings requirement
+        settings = frappe.get_single("SHG Settings")
+        required_savings = settings.default_contribution_amount * 12
+        if member.total_contributions < required_savings:
+            frappe.throw(_(f"Member {member.member_name} does not meet the minimum savings requirement (KES {required_savings:,.2f})"))
+
     @frappe.whitelist()
     def check_member_eligibility(self):
         """Check if member is eligible for loan"""

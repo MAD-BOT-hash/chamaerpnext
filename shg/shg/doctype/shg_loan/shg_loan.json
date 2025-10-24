@@ -45,6 +45,8 @@
         "next_due_date",
         "total_repaid",
         "overdue_amount",
+        "loan_members_section",
+        "loan_members",
         "account_mapping_section",
         "account_mapping",
         "repayment_schedule_section",
@@ -308,6 +310,17 @@
             "label": "Overdue Amount",
             "precision": 2,
             "read_only": 1
+        },
+        {
+            "fieldname": "loan_members_section",
+            "fieldtype": "Section Break",
+            "label": "Loan Members"
+        },
+        {
+            "fieldname": "loan_members",
+            "fieldtype": "Table",
+            "label": "Loan Members",
+            "options": "SHG Loan Member"
         },
         {
             "fieldname": "account_mapping_section",
