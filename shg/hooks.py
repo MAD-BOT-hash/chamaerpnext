@@ -88,7 +88,7 @@ doctype_list_js = {
 }
 
 # Fix for workspace path issue
-app_include_js = ["/assets/shg/js/shg.js", "/assets/shg/js/shg_dashboard.js", "/assets/shg/js/shg_payment_multi.js", "/assets/shg/js/contribution_payment.js"]
+app_include_js = ["/assets/shg/js/shg.js", "/assets/shg/js/shg_dashboard.js", "/assets/shg/js/shg_payment_multi.js"]
 app_include_css = ["/assets/shg/css/shg.css", "/assets/shg/css/shg_dashboard.css"]
 
 # Page extensions
