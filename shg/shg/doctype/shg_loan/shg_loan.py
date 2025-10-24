@@ -6,48 +6,42 @@ import math
 
 class SHGLoan(Document):
     def validate(self):
-        """Round numeric fields before save."""
+        """Validate and prepare loan details for both single and multi-member cases."""
+        
+        # Round numeric fields
         if self.loan_amount:
             self.loan_amount = round(flt(self.loan_amount), 2)
-        if self.monthly_installment:
-            self.monthly_installment = round(flt(self.monthly_installment), 2)
-        if self.total_payable:
-            self.total_payable = round(flt(self.total_payable), 2)
-        if self.balance_amount:
-            self.balance_amount = round(flt(self.balance_amount), 2)
-        if self.disbursed_amount:
-            self.disbursed_amount = round(flt(self.disbursed_amount), 2)
-        if self.total_repaid:
-            self.total_repaid = round(flt(self.total_repaid), 2)
-        if self.overdue_amount:
-            self.overdue_amount = round(flt(self.overdue_amount), 2)
 
-        # Auto populate repayment schedule if missing
-        if not self.repayment_schedule or len(self.repayment_schedule) == 0:
-            self.generate_repayment_schedule()
-            
-        self.validate_amount()
-        self.validate_interest_rate()
-        self.check_member_eligibility()
-        self.calculate_repayment_details()
-        # Load loan type settings if selected
-        if self.loan_type:
-            self.load_loan_type_settings()
-        
-        # Multi-member validation
-        if self.get("loan_members"):
+        # Multi-member logic
+        if self.get("loan_members") and len(self.loan_members) > 0:
             total_allocated = sum(flt(m.allocated_amount) for m in self.loan_members)
-            if total_allocated != flt(self.loan_amount):
-                frappe.throw(_("Total allocated amount ({0}) must equal Loan Amount ({1})").format(total_allocated, self.loan_amount))
-            
-            # Validate each member
+            if abs(total_allocated - flt(self.loan_amount)) > 0.01:
+                frappe.throw(
+                    _("Total allocated amount ({0}) must equal Loan Amount ({1})").format(
+                        frappe.format_value(total_allocated),
+                        frappe.format_value(self.loan_amount)
+                    )
+                )
+
             for m in self.loan_members:
                 self.validate_member_eligibility(m.member, m.allocated_amount)
         else:
-            # For backward compatibility (single-member loan)
+            # Fallback: single-member loan mode
             if not self.member:
                 frappe.throw(_("Please select at least one member or fill the Loan Members table."))
 
+        # Basic numeric validations
+        self.validate_amount()
+        self.validate_interest_rate()
+
+        # Auto-generate repayment schedule if empty
+        if not self.repayment_schedule or len(self.repayment_schedule) == 0:
+            self.generate_repayment_schedule()
+
+        # Load loan type defaults
+        if self.loan_type:
+            self.load_loan_type_settings()
+        
     def validate_amount(self):
         """Validate loan amount"""
         if self.loan_amount <= 0:
@@ -60,28 +54,43 @@ class SHGLoan(Document):
             
     def validate_member_eligibility(self, member_id, allocated_amount):
         """Check eligibility of each loan member"""
+        if not member_id:
+            frappe.throw(_("Member ID missing in Loan Members table."))
+
         if not frappe.db.exists("SHG Member", member_id):
-            frappe.throw(_(f"Member {member_id} does not exist"))
+            frappe.throw(_("Member {0} does not exist").format(member_id))
 
         member = frappe.get_doc("SHG Member", member_id)
-        if member.membership_status != "Active":
-            frappe.throw(_(f"Member {member.member_name} is not active"))
 
-        # Check for overdue loans
-        overdue_loans = frappe.db.sql("""
+        if member.membership_status != "Active":
+            frappe.throw(_("Member {0} is not active").format(member.member_name))
+
+        # Overdue loans check
+        overdue_loans = frappe.db.sql(
+            """
             SELECT COUNT(*) 
             FROM `tabSHG Loan`
-            WHERE member = %s AND status = 'Disbursed' 
-            AND next_due_date < %s AND balance_amount > 0
-        """, (member_id, nowdate()))[0][0]
+            WHERE member = %s 
+            AND status = 'Disbursed'
+            AND next_due_date < %s
+            AND balance_amount > 0
+            """,
+            (member_id, nowdate())
+        )[0][0]
+
         if overdue_loans > 0:
-            frappe.throw(_(f"Member {member.member_name} has overdue loans."))
+            frappe.throw(_("Member {0} has overdue loans").format(member.member_name))
 
         # Savings requirement
         settings = frappe.get_single("SHG Settings")
-        required_savings = settings.default_contribution_amount * 12
-        if member.total_contributions < required_savings:
-            frappe.throw(_(f"Member {member.member_name} does not meet the minimum savings requirement (KES {required_savings:,.2f})"))
+        required_savings = flt(settings.default_contribution_amount) * 12
+
+        if flt(member.total_contributions) < required_savings:
+            frappe.throw(
+                _("Member {0} does not meet the minimum savings requirement of KES {1}").format(
+                    member.member_name, frappe.format_value(required_savings)
+                )
+            )
 
     @frappe.whitelist()
     def check_member_eligibility(self):
