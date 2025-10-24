@@ -112,5 +112,6 @@ whitelisted_methods = [
     "shg.shg.api.get_unpaid_contribution_invoices",
     "shg.shg.api.create_multi_member_payment",
     "shg.api.payments.receive_multiple_payments",
-    "shg.shg.utils.payment_utils.receive_multiple_payments"
+    "shg.shg.utils.payment_utils.receive_multiple_payments",
+    "shg.api.create_payment_entry_from_invoice"
 ]

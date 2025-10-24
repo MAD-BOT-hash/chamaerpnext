@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 
+@frappe.whitelist()
 def create_payment_entry_from_invoice(invoice_name, paid_amount=None):
     """
     Create a payment entry from a sales invoice
