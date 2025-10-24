@@ -88,7 +88,7 @@ doctype_list_js = {
 }
 
 # Fix for workspace path issue
-app_include_js = ["/assets/shg/js/shg.js", "/assets/shg/js/shg_dashboard.js"]
+app_include_js = ["/assets/shg/js/shg.js", "/assets/shg/js/shg_dashboard.js", "/assets/shg/js/shg_payment_multi.js"]
 app_include_css = ["/assets/shg/css/shg.css", "/assets/shg/css/shg_dashboard.css"]
 
 # Page extensions
@@ -110,5 +110,6 @@ website_route_rules = [
 # Whitelisted methods
 whitelisted_methods = [
     "shg.shg.api.get_unpaid_contribution_invoices",
-    "shg.shg.api.create_multi_member_payment"
+    "shg.shg.api.create_multi_member_payment",
+    "shg.api.payments.receive_multiple_payments"
 ]

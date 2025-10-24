@@ -71,5 +71,15 @@ frappe.ui.form.on('SHG Contribution Invoice', {
                 dialog.show();
             }, __('Actions'));
         }
+        
+        // Add Receive Multiple Payments button
+        if (frm.doc.docstatus === 1) {
+            frm.add_custom_button(__('Receive Multiple Payments'), function() {
+                // Load the multi payment dialog
+                frappe.require("assets/shg/js/shg_payment_multi.js", function() {
+                    open_multi_payment_dialog();
+                });
+            }, __('Actions'));
+        }
     }
 });
