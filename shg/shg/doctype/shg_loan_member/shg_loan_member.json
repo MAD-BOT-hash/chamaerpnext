@@ -32,7 +32,7 @@
   {
    "fieldname": "allocated_amount",
    "fieldtype": "Currency",
-   "label": "Loan Amount",
+   "label": "Allocated Amount",
    "reqd": 1,
    "in_list_view": 1,
    "precision": 2
@@ -40,13 +40,14 @@
   {
    "fieldname": "eligibility_status",
    "fieldtype": "Select",
-   "label": "Eligibility",
+   "label": "Eligibility Status",
    "options": "Eligible\nNot Eligible",
-   "in_list_view": 1
+   "in_list_view": 1,
+   "read_only": 1
   },
   {
    "fieldname": "remarks",
-   "fieldtype": "Data",
+   "fieldtype": "Small Text",
    "label": "Remarks"
   }
  ],
@@ -68,6 +69,30 @@
    "read": 1,
    "report": 1,
    "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "SHG Admin",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "SHG Treasurer",
    "share": 1,
    "write": 1
   }
