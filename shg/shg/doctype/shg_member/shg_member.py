@@ -9,6 +9,70 @@ from frappe.utils import today, getdate, now
 import json
 
 class SHGMember(Document):
+    # -------------------------------
+    # Validation Helpers
+    # -------------------------------
+    def validate_required_fields(self):
+        if not self.member_name:
+            frappe.throw("Member Name is required.")
+        if not self.member_id:
+            frappe.throw("Member ID is required.")
+        if not self.phone_number:
+            frappe.throw("Phone number is required.")
+
+    def validate_phone_number(self):
+        """Normalize and validate Kenyan phone number format (07XXXXXXXX)."""
+        phone = self.phone_number.strip().replace(" ", "")
+
+        # Normalize various Kenyan formats
+        if phone.startswith("+254"):
+            phone = "0" + phone[4:]
+        elif phone.startswith("254"):
+            phone = "0" + phone[3:]
+
+        # Enforce format: 07XXXXXXXX
+        if not re.match(r"^07\d{8}$", phone):
+            frappe.throw("Phone number must be 10 digits starting with 07.")
+
+        # Save normalized phone
+        self.phone_number = phone
+
+    def validate_duplicates(self):
+        """Ensure phone number is unique per SHG."""
+        if self.phone_number:
+            existing = frappe.db.exists(
+                "SHG Member",
+                {"phone_number": self.phone_number, "name": ["!=", self.name]}
+            )
+            if existing:
+                frappe.throw(f"Phone number {self.phone_number} is already used by another member.")
+
+    def validate_email(self):
+        """Optional email validation."""
+        if self.email and not re.match(r"[^@]+@[^@]+\.[^@]+", self.email):
+            frappe.throw("Invalid email address.")
+
+    def validate_id_number(self):
+        """Validate ID number format"""
+        if self.id_number:
+            # Check if another member has the same ID number
+            existing = frappe.db.exists("SHG Member", {
+                "id_number": self.id_number,
+                "name": ["!=", self.name]
+            })
+            if existing:
+                frappe.throw(_("Another member already exists with ID number {0}").format(self.id_number))
+
+    def link_member_account(self):
+        """Attach member ledger account if it exists, else leave blank."""
+        if not self.company:
+            return  # skip if no company assigned yet
+        account_name = f"{self.member_id} - {self.company}"
+        if frappe.db.exists("Account", {"account_name": account_name, "company": self.company}):
+            self.member_account = account_name
+        else:
+            self.member_account = None
+
     def validate(self):
         """Main validation entrypoint."""
         self.validate_required_fields()
@@ -16,6 +80,8 @@ class SHGMember(Document):
         self.validate_duplicates()
         self.validate_email()
         self.link_member_account()
+
+
         
 
                 
