@@ -21,6 +21,7 @@
         "account_number",
         "customer",
         "party_type",
+        "company",
         "next_of_kin_section",
         "next_of_kin_name",
         "next_of_kin_phone",
@@ -138,6 +139,16 @@
             "options": "Customer\nSupplier\nEmployee\nSHG Member",
             "allow_on_submit": 1,
             "default": "SHG Member"
+        },
+        {
+            "fieldname": "company",
+            "label": "Company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1,
+            "default": "frappe.defaults.get_user_default(\"Company\")"
         },
         {
             "fieldname": "next_of_kin_section",
