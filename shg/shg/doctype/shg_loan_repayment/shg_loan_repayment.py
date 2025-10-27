@@ -128,6 +128,12 @@ class SHGLoanRepayment(Document):
         self.validate_gl_entries()
         self.update_member_totals()
         self.update_repayment_schedule()
+        
+        # Update loan summary after repayment submission
+        if self.loan:
+            frappe.logger().info(f"Updating loan summary for {self.loan}")
+            loan = frappe.get_doc("SHG Loan", self.loan)
+            loan.update_loan_summary()
 
     def validate_gl_entries(self):
         """Validate that GL entries were created properly"""
