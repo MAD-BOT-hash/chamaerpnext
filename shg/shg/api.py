@@ -120,3 +120,59 @@ def create_repayment(loan, member, amount_paid, posting_date=None, remarks=None)
 
     frappe.db.commit()
     return repayment.name
+
+
+@frappe.whitelist()
+def get_unpaid_invoices_by_member(member=None):
+    """Fetch unpaid invoices by member, or all if member not specified."""
+    filters = {"outstanding_amount": [">", 0], "docstatus": 1}
+    if member:
+        filters["member"] = member
+
+    invoices = frappe.get_all(
+        "Sales Invoice",
+        filters=filters,
+        fields=["name", "member", "member_name", "posting_date", "grand_total", "outstanding_amount"],
+        order_by="member, posting_date"
+    )
+    return invoices
+
+
+@frappe.whitelist()
+def process_multi_member_payment(invoices, mode_of_payment, posting_date=None):
+    """Process payments for multiple invoices (possibly from different members)."""
+    import json
+
+    if isinstance(invoices, str):
+        invoices = json.loads(invoices)
+
+    if not posting_date:
+        posting_date = frappe.utils.today()
+
+    created_entries = []
+    for inv_name in invoices:
+        invoice = frappe.get_doc("Sales Invoice", inv_name)
+        payment_entry = frappe.get_doc({
+            "doctype": "Payment Entry",
+            "payment_type": "Receive",
+            "party_type": "Customer",
+            "party": invoice.customer,
+            "company": invoice.company,
+            "posting_date": posting_date,
+            "mode_of_payment": mode_of_payment,
+            "paid_amount": invoice.outstanding_amount,
+            "received_amount": invoice.outstanding_amount,
+            "references": [{
+                "reference_doctype": "Sales Invoice",
+                "reference_name": inv_name,
+                "total_amount": invoice.grand_total,
+                "outstanding_amount": invoice.outstanding_amount,
+                "allocated_amount": invoice.outstanding_amount,
+            }],
+        })
+        payment_entry.insert(ignore_permissions=True)
+        payment_entry.submit()
+        created_entries.append(payment_entry.name)
+
+    frappe.db.commit()
+    return created_entries

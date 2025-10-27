@@ -7,6 +7,86 @@ frappe.ui.form.on("SHG Loan", {
                 __("Actions")
             );
         }
+        
+        // Add "Select Multiple Members" button for new loans
+        if (frm.doc.docstatus === 0) {
+            frm.add_custom_button(__('Select Multiple Members'), () => {
+                const d = new frappe.ui.Dialog({
+                    title: __('Select Members for Loan'),
+                    fields: [
+                        {
+                            label: 'Filter by Group',
+                            fieldname: 'group_filter',
+                            fieldtype: 'Select',
+                            options: [],
+                            onchange: function() {
+                                const group = d.get_value('group_filter');
+                                if (group) {
+                                    frappe.db.get_list('SHG Member', {
+                                        filters: { group: group, membership_status: 'Active' },
+                                        fields: ['name', 'member_name', 'total_contributions']
+                                    }).then(members => {
+                                        const member_list = members.map(m => ({
+                                            label: `${m.member_name} (${m.name})`,
+                                            value: m.name
+                                        }));
+                                        d.fields_dict.member_select.df.options = member_list;
+                                        d.fields_dict.member_select.refresh();
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            label: 'Select Members',
+                            fieldname: 'member_select',
+                            fieldtype: 'MultiCheck',
+                            options: []
+                        },
+                        {
+                            label: 'Distribute Amount Equally',
+                            fieldname: 'distribute_equally',
+                            fieldtype: 'Check',
+                            default: 1
+                        }
+                    ],
+                    primary_action_label: 'Add to Loan',
+                    primary_action(values) {
+                        const selected = values.member_select;
+                        if (!selected || selected.length === 0) {
+                            frappe.msgprint(__('Please select at least one member.'));
+                            return;
+                        }
+
+                        const per_member = flt(frm.doc.loan_amount) / selected.length;
+
+                        selected.forEach(member_id => {
+                            frappe.db.get_doc('SHG Member', member_id).then(m => {
+                                frm.add_child('loan_members', {
+                                    member: m.name,
+                                    member_name: m.member_name,
+                                    allocated_amount: values.distribute_equally ? per_member : 0
+                                });
+                                frm.refresh_field('loan_members');
+                            });
+                        });
+                        d.hide();
+                    }
+                });
+
+                // 🧠 Dynamically load distinct group names from SHG Member records
+                frappe.db.get_list('SHG Member', {
+                    fields: ['group'],
+                    filters: { membership_status: 'Active' },
+                    distinct: true
+                }).then(groups => {
+                    const group_names = groups.map(g => g.group).filter(g => !!g);
+                    d.fields_dict.group_filter.df.options = [''].concat(group_names);
+                    d.fields_dict.group_filter.refresh();
+                });
+
+                d.show();
+            }, 'Actions');
+        }
     },
 });
 
