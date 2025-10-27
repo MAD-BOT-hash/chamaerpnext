@@ -1,4 +1,14 @@
 frappe.ui.form.on("SHG Loan", {
+    validate(frm) {
+        if (frm.doc.is_group_loan) {
+            (frm.doc.loan_members || []).forEach(row => {
+                if (!row.member) {
+                    frappe.throw(__('All Loan Members must have a Member selected before saving.'));
+                }
+            });
+        }
+    },
+    
     refresh(frm) {
         if (frm.doc.docstatus === 1 && frm.doc.status !== "Paid") {
             frm.add_custom_button(

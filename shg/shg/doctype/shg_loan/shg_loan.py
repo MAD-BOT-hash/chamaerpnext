@@ -162,30 +162,46 @@ def after_insert_or_update(doc):
         return
 
     # Only for group loans
-    if not doc.is_group_loan:
+    if not getattr(doc, "is_group_loan", 0):
         return
 
     created = []
     for m in doc.loan_members:
-        # Skip if already exists
+        # Skip if missing member or already exists
+        if not m.member:
+            frappe.msgprint(f"⚠️ Skipping one row — missing member in Loan Members table.")
+            continue
+
         if frappe.db.exists("SHG Loan", {"parent_loan": doc.name, "member": m.member}):
             continue
 
+        # Safely fetch member name if not already filled
+        member_name = m.member_name
+        if not member_name:
+            member_name = frappe.db.get_value("SHG Member", m.member, "member_name")
+
+        # Create individual loan
         new_loan = frappe.new_doc("SHG Loan")
         new_loan.update({
             "loan_type": doc.loan_type,
-            "loan_amount": m.allocated_amount or doc.loan_amount,
+            "loan_amount": flt(m.allocated_amount) or flt(doc.loan_amount),
             "interest_rate": doc.interest_rate,
             "interest_type": doc.interest_type,
             "loan_period_months": doc.loan_period_months,
             "repayment_frequency": doc.repayment_frequency,
             "member": m.member,
-            "member_name": m.member_name,
+            "member_name": member_name or "",
             "repayment_start_date": doc.repayment_start_date,
             "status": "Applied",
             "parent_loan": doc.name,
             "is_group_loan": 0
         })
+
+        # Prevent insert if still missing member (safety net)
+        if not new_loan.member:
+            frappe.msgprint(f"⚠️ Skipped creating loan — missing member for child row.")
+            continue
+
         new_loan.insert(ignore_permissions=True)
         created.append(new_loan.name)
 
