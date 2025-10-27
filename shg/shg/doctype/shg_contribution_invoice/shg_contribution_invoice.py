@@ -117,7 +117,7 @@ class SHGContributionInvoice(Document):
                 frappe.throw("Company is not set for this transaction.")
 
         member_account = get_or_create_member_account(self.member, company)
-        income_account = frappe.db.get_value(
+        income_account = frappe.db.get_single_value("SHG Settings", "default_income_account") or frappe.db.get_value(
             "Account", {"account_type": "Income Account", "company": company, "is_group": 0}, "name"
         ) or frappe.throw("No Income Account found for this Company.")
 
