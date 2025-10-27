@@ -27,12 +27,16 @@ frappe.ui.form.on("SHG Loan", {
                                         fields: ['name', 'member_name', 'total_contributions']
                                     }).then(members => {
                                         const member_list = members.map(m => ({
-                                            label: `${m.member_name} (${m.name})`,
+                                            // 🧠 Enhancement: show contributions next to each member
+                                            label: `${m.member_name} (${m.name}) — KES ${format_currency(m.total_contributions || 0, 'KES')}`,
                                             value: m.name
                                         }));
                                         d.fields_dict.member_select.df.options = member_list;
                                         d.fields_dict.member_select.refresh();
                                     });
+                                } else {
+                                    d.fields_dict.member_select.df.options = [];
+                                    d.fields_dict.member_select.refresh();
                                 }
                             }
                         },
@@ -73,15 +77,22 @@ frappe.ui.form.on("SHG Loan", {
                     }
                 });
 
-                // 🧠 Dynamically load distinct group names from SHG Member records
-                frappe.db.get_list('SHG Member', {
-                    fields: ['group'],
-                    filters: { membership_status: 'Active' },
-                    distinct: true
-                }).then(groups => {
-                    const group_names = groups.map(g => g.group).filter(g => !!g);
-                    d.fields_dict.group_filter.df.options = [''].concat(group_names);
-                    d.fields_dict.group_filter.refresh();
+                // 🧩 Use a safe server-side method to fetch distinct groups
+                frappe.call({
+                    method: "frappe.client.get_list",
+                    args: {
+                        doctype: "SHG Member",
+                        fields: ["group"],
+                        filters: { membership_status: "Active" },
+                        distinct: true
+                    },
+                    callback: function(r) {
+                        if (r.message) {
+                            const group_names = r.message.map(g => g.group).filter(g => !!g);
+                            d.fields_dict.group_filter.df.options = [''].concat(group_names);
+                            d.fields_dict.group_filter.refresh();
+                        }
+                    }
                 });
 
                 d.show();

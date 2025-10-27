@@ -4,7 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import today, getdate
+from frappe.utils import today, getdate, now
 import json
 
 class SHGMember(Document):
@@ -293,6 +293,55 @@ class SHGMember(Document):
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), "handle_member_update_after_submit failed")
             frappe.throw(f"Failed to update related records: {str(e)}")
+
+@frappe.whitelist()
+def purge_member_data(member_id: str):
+    """Completely delete a member and all their linked transactions safely."""
+    if not frappe.has_permission("System Manager"):
+        frappe.throw(_("Only System Manager can perform this action."))
+
+    if not member_id:
+        frappe.throw(_("Member ID is required."))
+
+    member = frappe.get_doc("SHG Member", member_id)
+    frappe.msgprint(f"🔍 Starting full data purge for {member.member_name} ({member_id})")
+
+    # 1️⃣ Create a deletion log entry
+    frappe.get_doc({
+        "doctype": "Deletion Log",
+        "entity_type": "SHG Member",
+        "entity_name": member_id,
+        "reason": "Manual purge requested by System Manager",
+        "deleted_by": frappe.session.user,
+        "timestamp": now()
+    }).insert(ignore_permissions=True)
+
+    # 2️⃣ Delete related child and transactional records in correct order
+    def safe_delete(doctype, filters):
+        names = frappe.get_all(doctype, filters=filters, pluck="name")
+        for name in names:
+            try:
+                frappe.delete_doc(doctype, name, force=True, ignore_permissions=True, ignore_missing=True)
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), f"Failed deleting {doctype} {name}")
+
+    frappe.msgprint("🧾 Removing linked records...")
+
+    # Order matters: start from lowest dependencies upward
+    safe_delete("SHG Loan Repayment", {"member": member_id})
+    safe_delete("SHG Loan", {"member": member_id})
+    safe_delete("SHG Contribution", {"member": member_id})
+    safe_delete("SHG Contribution Invoice", {"member": member_id})
+    safe_delete("Payment Entry", {"party": member_id})
+    safe_delete("Journal Entry", {"reference_member": member_id})
+    safe_delete("GL Entry", {"party": member_id})
+
+    # 3️⃣ Finally, delete the member record itself
+    frappe.delete_doc("SHG Member", member_id, force=True, ignore_permissions=True)
+
+    frappe.db.commit()
+    frappe.msgprint(f"✅ Successfully purged all data for {member.member_name}")
+    return True
 
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()

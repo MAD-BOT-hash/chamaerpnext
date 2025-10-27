@@ -1,0 +1,83 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "DL-.#####",
+ "creation": "2025-10-27 15:30:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "entity_type",
+  "entity_name",
+  "reason",
+  "column_break_4",
+  "deleted_by",
+  "timestamp"
+ ],
+ "fields": [
+  {
+   "fieldname": "entity_type",
+   "fieldtype": "Data",
+   "label": "Entity Type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "entity_name",
+   "fieldtype": "Data",
+   "label": "Entity Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Text",
+   "label": "Reason"
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "deleted_by",
+   "fieldtype": "Link",
+   "label": "Deleted By",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "timestamp",
+   "fieldtype": "Datetime",
+   "label": "Timestamp",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-10-27 15:30:00",
+ "modified_by": "Administrator",
+ "module": "SHG",
+ "name": "Deletion Log",
+ "naming_rule": "By \"Autoname\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Administrator"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
