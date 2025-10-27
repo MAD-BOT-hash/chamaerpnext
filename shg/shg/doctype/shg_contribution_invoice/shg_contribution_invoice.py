@@ -112,7 +112,9 @@ class SHGContributionInvoice(Document):
     def create_sales_invoice(self):
         company = frappe.db.get_single_value("SHG Settings", "company") or frappe.defaults.get_user_default("Company")
         if not company:
-            company = frappe.db.get_single_value("Global Defaults", "default_company") or "Pioneer Friends Group"
+            company = frappe.db.get_single_value("Global Defaults", "default_company")
+            if not company:
+                frappe.throw("Company is not set for this transaction.")
 
         member_account = get_or_create_member_account(self.member, company)
         income_account = frappe.db.get_value(
