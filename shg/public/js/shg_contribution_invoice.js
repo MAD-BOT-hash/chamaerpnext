@@ -81,5 +81,28 @@ frappe.ui.form.on('SHG Contribution Invoice', {
                 });
             }, __('Actions'));
         }
+        
+        // Show button only for submitted invoices not yet posted
+        if (frm.doc.docstatus === 1 && !frm.doc.posted_to_contribution) {
+            frm.add_custom_button(__('Post to Contribution'), function() {
+                frappe.confirm(
+                    'Are you sure you want to post this invoice to SHG Contributions?',
+                    () => {
+                        frappe.call({
+                            method: "shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.post_to_contribution",
+                            args: { docname: frm.doc.name },
+                            freeze: true,
+                            freeze_message: __("Posting to SHG Contribution..."),
+                            callback: function(r) {
+                                if (!r.exc) {
+                                    frappe.msgprint(__('Successfully posted to SHG Contributions.'));
+                                    frm.reload_doc();
+                                }
+                            }
+                        });
+                    }
+                );
+            }).addClass('btn-primary');
+        }
     }
 });

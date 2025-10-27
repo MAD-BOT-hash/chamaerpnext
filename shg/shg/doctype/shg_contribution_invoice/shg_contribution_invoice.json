@@ -28,7 +28,8 @@
   "late_fee_amount",
   "payment_reference",
   "posted_to_gl",
-  "posted_on"
+  "posted_on",
+  "posted_to_contribution"
  ],
  "fields": [
   {
@@ -178,6 +179,12 @@
    "fieldtype": "Datetime",
    "label": "Posted On",
    "read_only": 1
+  },
+  {
+   "fieldname": "posted_to_contribution",
+   "label": "Posted to Contribution",
+   "fieldtype": "Check",
+   "default": 0
   }
  ],
  "is_submittable": 1,

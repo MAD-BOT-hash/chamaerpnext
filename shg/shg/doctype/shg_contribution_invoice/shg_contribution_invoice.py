@@ -604,3 +604,40 @@ def get_or_create_member_account(member_id, company):
         frappe.msgprint(f"✅ Created member account '{member_account_name}' under '{parent_account_name}'.")
 
     return member_account
+
+@frappe.whitelist()
+def post_to_contribution(docname):
+    """Posts the submitted contribution invoice to SHG Contribution table."""
+    doc = frappe.get_doc("SHG Contribution Invoice", docname)
+
+    if doc.docstatus != 1:
+        frappe.throw("Only submitted invoices can be posted to contributions.")
+
+    # Check if already posted
+    if getattr(doc, "posted_to_contribution", 0):
+        frappe.throw("This invoice has already been posted to SHG Contributions.")
+
+    # Ensure member account exists
+    member = frappe.get_doc("SHG Member", doc.member)
+    company = doc.company
+
+    # Get or create the member ledger account
+    from shg.shg.utils.account_utils import get_or_create_member_account
+    account = get_or_create_member_account(member, company)
+
+    # Create Contribution entry
+    contribution = frappe.new_doc("SHG Contribution")
+    contribution.member = member.name
+    contribution.company = company
+    contribution.amount = doc.amount or 0
+    contribution.posting_date = frappe.utils.nowdate()
+    contribution.reference_invoice = doc.name
+    contribution.contribution_type = "Invoice Payment"
+    contribution.insert(ignore_permissions=True)
+    contribution.submit()
+
+    # Mark invoice as posted
+    frappe.db.set_value("SHG Contribution Invoice", docname, "posted_to_contribution", 1)
+
+    frappe.db.commit()
+    return {"contribution": contribution.name}
