@@ -517,11 +517,16 @@ def create_linked_contribution(invoice_doc):
 
 def get_or_create_member_account(self, member_id, company):
     """Ensure member has a personal ledger account under SHG Members."""
+    # Get company abbreviation for proper account naming
+    company_abbr = frappe.db.get_value("Company", company, "abbr")
+    if not company_abbr:
+        frappe.throw(f"Company abbreviation not found for {company}")
+    
     parent_account = frappe.db.get_value(
-        "Account", {"account_name": f"SHG Members - {company}", "company": company, "is_group": 1}, "name"
+        "Account", {"account_name": f"SHG Members - {company_abbr}", "company": company, "is_group": 1}, "name"
     )
     if not parent_account:
-        frappe.throw(f"Parent account 'SHG Members - {company}' not found under Accounts Receivable.")
+        frappe.throw(f"Parent account 'SHG Members - {company_abbr}' not found under Accounts Receivable.")
 
     member_account = frappe.db.exists("Account", {"account_name": f"{member_id} - {company}", "company": company})
     if member_account:
