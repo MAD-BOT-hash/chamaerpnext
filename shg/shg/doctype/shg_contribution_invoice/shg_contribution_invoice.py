@@ -538,34 +538,69 @@ def mark_overdue_invoices():
 
 
 def get_or_create_member_account(member_id, company):
-    """Ensure the member has a personal ledger account under SHG Members."""
-    # Get company abbreviation for proper account naming
+    """
+    Ensure each SHG Member has a personal ledger account under 'SHG Members - [Company Abbr]'.
+    Auto-creates the parent and child accounts if missing.
+    """
+
+    # --- Get company abbreviation ---
     company_abbr = frappe.db.get_value("Company", company, "abbr")
     if not company_abbr:
         frappe.throw(f"Company abbreviation not found for {company}")
-    
+
+    # --- Get the Accounts Receivable parent ---
+    accounts_receivable = frappe.db.get_value(
+        "Account",
+        {"account_type": "Receivable", "is_group": 1, "company": company},
+        "name"
+    )
+    if not accounts_receivable:
+        frappe.throw(f"No 'Accounts Receivable' group account found for {company}.")
+
+    # --- Ensure SHG Members parent account exists ---
+    parent_account_name = f"SHG Members - {company_abbr}"
     parent_account = frappe.db.get_value(
         "Account",
-        {"account_name": f"SHG Members - {company_abbr}", "company": company, "is_group": 1},
+        {"account_name": parent_account_name, "company": company},
         "name"
     )
 
     if not parent_account:
-        frappe.throw(f"Parent account 'SHG Members - {company_abbr}' not found. Please create it under Accounts Receivable.")
+        # Create parent group account automatically
+        parent_doc = frappe.get_doc({
+            "doctype": "Account",
+            "account_name": parent_account_name,
+            "company": company,
+            "parent_account": accounts_receivable,
+            "is_group": 1,
+            "account_type": "Receivable",
+            "report_type": "Balance Sheet",
+            "root_type": "Asset"
+        })
+        parent_doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+        parent_account = parent_doc.name
+        frappe.msgprint(f"✅ Created parent account '{parent_account_name}' under Accounts Receivable.")
 
-    member_account = frappe.db.exists("Account", {"account_name": f"{member_id} - {company}", "company": company})
-    if member_account:
-        return member_account
+    # --- Check if the member already has an account ---
+    member_account_name = f"{member_id} - {company_abbr}"
+    member_account = frappe.db.exists("Account", {"account_name": member_account_name, "company": company})
 
-    # Auto-create member sub-account
-    acc = frappe.get_doc({
-        "doctype": "Account",
-        "account_name": f"{member_id} - {company}",
-        "parent_account": parent_account,
-        "is_group": 0,
-        "company": company,
-        "account_type": "Receivable"
-    })
-    acc.insert(ignore_permissions=True)
-    frappe.msgprint(f"Created ledger account for {member_id}")
-    return acc.name
+    # --- Create child account if not exists ---
+    if not member_account:
+        member_doc = frappe.get_doc({
+            "doctype": "Account",
+            "account_name": member_account_name,
+            "company": company,
+            "parent_account": parent_account,
+            "is_group": 0,
+            "account_type": "Receivable",
+            "report_type": "Balance Sheet",
+            "root_type": "Asset"
+        })
+        member_doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+        member_account = member_doc.name
+        frappe.msgprint(f"✅ Created member account '{member_account_name}' under '{parent_account_name}'.")
+
+    return member_account

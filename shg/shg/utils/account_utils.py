@@ -50,7 +50,8 @@ def get_or_create_account(account_name, company, parent_account=None, account_ty
 
 def get_or_create_member_account(member, company):
     """
-    Get or create a member's ledger account.
+    Ensure each SHG Member has a personal ledger account under 'SHG Members - [Company Abbr]'.
+    Auto-creates the parent and child accounts if missing.
     
     Args:
         member (SHGMember): The member document
@@ -61,41 +62,70 @@ def get_or_create_member_account(member, company):
     """
     # Get company abbreviation
     company_abbr = frappe.get_value("Company", company, "abbr")
+    if not company_abbr:
+        frappe.throw(f"Company abbreviation not found for {company}")
     
     # Ensure account number is set
     if not member.account_number:
         member.set_account_number()
         member.save()
     
-    # Try to get existing account using member's account number with both plain and suffixed names
-    account = frappe.db.get_value("Account", {"account_name": member.account_number, "company": company})
-    
-    if not account:
-        suffixed_name = f"{member.account_number} - {company_abbr}"
-        account = frappe.db.get_value("Account", {"account_name": suffixed_name, "company": company})
-    
-    # If account doesn't exist, create it
-    if not account:
-        try:
-            # Get or create parent account
-            parent_account = get_or_create_shg_parent_account(company)
-            
-            account_doc = frappe.get_doc({
-                "doctype": "Account",
-                "company": company,
-                "account_name": member.account_number,
-                "parent_account": parent_account,
-                "account_type": "Receivable",
-                "is_group": 0,
-                "root_type": "Asset"
-            })
-            account_doc.insert()
-            account = account_doc.name
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "SHG - Member Account Creation Failed")
-            frappe.throw(_(f"Failed to create member account: {str(e)}"))
-    
-    return account
+    # --- Get the Accounts Receivable parent ---
+    accounts_receivable = frappe.db.get_value(
+        "Account",
+        {"account_type": "Receivable", "is_group": 1, "company": company},
+        "name"
+    )
+    if not accounts_receivable:
+        frappe.throw(f"No 'Accounts Receivable' group account found for {company}.")
+
+    # --- Ensure SHG Members parent account exists ---
+    parent_account_name = f"SHG Members - {company_abbr}"
+    parent_account = frappe.db.get_value(
+        "Account",
+        {"account_name": parent_account_name, "company": company},
+        "name"
+    )
+
+    if not parent_account:
+        # Create parent group account automatically
+        parent_doc = frappe.get_doc({
+            "doctype": "Account",
+            "account_name": parent_account_name,
+            "company": company,
+            "parent_account": accounts_receivable,
+            "is_group": 1,
+            "account_type": "Receivable",
+            "report_type": "Balance Sheet",
+            "root_type": "Asset"
+        })
+        parent_doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+        parent_account = parent_doc.name
+        frappe.msgprint(f"✅ Created parent account '{parent_account_name}' under Accounts Receivable.")
+
+    # --- Check if the member already has an account ---
+    member_account_name = f"{member.account_number} - {company_abbr}"
+    member_account = frappe.db.exists("Account", {"account_name": member_account_name, "company": company})
+
+    # --- Create child account if not exists ---
+    if not member_account:
+        member_doc = frappe.get_doc({
+            "doctype": "Account",
+            "account_name": member_account_name,
+            "company": company,
+            "parent_account": parent_account,
+            "is_group": 0,
+            "account_type": "Receivable",
+            "report_type": "Balance Sheet",
+            "root_type": "Asset"
+        })
+        member_doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+        member_account = member_doc.name
+        frappe.msgprint(f"✅ Created member account '{member_account_name}' under '{parent_account_name}'.")
+
+    return member_account
 
 def get_or_create_shg_contributions_account(company):
     """
