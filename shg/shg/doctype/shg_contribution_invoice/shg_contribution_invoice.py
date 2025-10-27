@@ -619,7 +619,7 @@ def post_to_contribution(docname):
 
     # Ensure member account exists
     member = frappe.get_doc("SHG Member", doc.member)
-    company = doc.company
+    company = member.company
 
     # Get or create the member ledger account
     from shg.shg.utils.account_utils import get_or_create_member_account
