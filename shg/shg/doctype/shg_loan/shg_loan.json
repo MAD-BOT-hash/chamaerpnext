@@ -45,6 +45,7 @@
         "next_due_date",
         "total_repaid",
         "overdue_amount",
+        "parent_loan",
         "loan_members_section",
         "loan_members",
         "account_mapping_section",
@@ -313,6 +314,13 @@
             "precision": 2,
             "read_only": 1,
             "allow_on_submit": 1
+        },
+        {
+            "fieldname": "parent_loan",
+            "fieldtype": "Link",
+            "label": "Parent Loan",
+            "options": "SHG Loan",
+            "read_only": 1
         },
         {
             "fieldname": "loan_members_section",

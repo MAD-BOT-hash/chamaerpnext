@@ -27,7 +27,10 @@ doc_events = {
     },
     "SHG Loan": {
         "validate": "shg.shg.doctype.shg_loan.shg_loan.validate_loan",
-        "on_submit": "shg.shg.doctype.shg_loan.shg_loan.post_to_general_ledger"
+        "before_save": "shg.shg.doctype.shg_loan.shg_loan.before_save",
+        "on_submit": "shg.shg.doctype.shg_loan.shg_loan.post_to_general_ledger",
+        "after_insert": "shg.shg.doctype.shg_loan.shg_loan.after_insert",
+        "on_update_after_submit": "shg.shg.doctype.shg_loan.shg_loan.on_update_after_submit"
     },
     "SHG Loan Repayment": {
         "validate": "shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.validate_repayment",

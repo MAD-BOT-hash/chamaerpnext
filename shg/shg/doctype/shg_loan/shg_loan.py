@@ -116,6 +116,99 @@ def create_or_verify_member_account(member_id, company):
 
     frappe.db.commit()
 
+@frappe.whitelist()
+def generate_individual_loans(parent_loan):
+    parent = frappe.get_doc("SHG Loan", parent_loan)
+    created_loans = []
+
+    for m in parent.loan_members:
+        # Skip if already linked
+        existing = frappe.db.exists("SHG Loan", {"parent_loan": parent.name, "member": m.member})
+        if existing:
+            continue
+
+        new_loan = frappe.new_doc("SHG Loan")
+        new_loan.update({
+            "loan_type": parent.loan_type,
+            "loan_amount": m.allocated_amount or parent.loan_amount,
+            "interest_rate": parent.interest_rate,
+            "interest_type": parent.interest_type,
+            "loan_period_months": parent.loan_period_months,
+            "repayment_frequency": parent.repayment_frequency,
+            "member": m.member,
+            "member_name": m.member_name,
+            "repayment_start_date": parent.repayment_start_date,
+            "status": "Applied",
+            "parent_loan": parent.name,
+            "is_group_loan": 0  # Optional flag
+        })
+        new_loan.insert(ignore_permissions=True)
+        created_loans.append(new_loan.name)
+
+    frappe.db.commit()
+    return {"created": created_loans}
+
+
+def before_save(doc, method=None):
+    """Ensure total loan amount = sum of allocations before save"""
+    if getattr(doc, "is_group_loan", 0) and getattr(doc, "loan_members", None):
+        total_allocated = sum([flt(m.allocated_amount) for m in doc.loan_members])
+        doc.loan_amount = total_allocated or 0
+
+
+def after_insert_or_update(doc):
+    """Automatically create individual loans when a group loan is saved or submitted"""
+    if not getattr(doc, "loan_members", None):
+        return
+
+    # Only for group loans
+    if not doc.is_group_loan:
+        return
+
+    created = []
+    for m in doc.loan_members:
+        # Skip if already exists
+        if frappe.db.exists("SHG Loan", {"parent_loan": doc.name, "member": m.member}):
+            continue
+
+        new_loan = frappe.new_doc("SHG Loan")
+        new_loan.update({
+            "loan_type": doc.loan_type,
+            "loan_amount": m.allocated_amount or doc.loan_amount,
+            "interest_rate": doc.interest_rate,
+            "interest_type": doc.interest_type,
+            "loan_period_months": doc.loan_period_months,
+            "repayment_frequency": doc.repayment_frequency,
+            "member": m.member,
+            "member_name": m.member_name,
+            "repayment_start_date": doc.repayment_start_date,
+            "status": "Applied",
+            "parent_loan": doc.name,
+            "is_group_loan": 0
+        })
+        new_loan.insert(ignore_permissions=True)
+        created.append(new_loan.name)
+
+    if created:
+        frappe.msgprint(
+            f"✅ Created {len(created)} individual loan(s):<br>{', '.join(created)}",
+            alert=True
+        )
+        frappe.db.commit()
+
+
+def on_submit(doc, method=None):
+    before_save(doc)
+    after_insert_or_update(doc)
+
+def on_update_after_submit(doc, method=None):
+    before_save(doc)
+    after_insert_or_update(doc)
+
+def after_insert(doc, method=None):
+    before_save(doc)
+    after_insert_or_update(doc)
+
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
 def validate_loan(doc, method):
