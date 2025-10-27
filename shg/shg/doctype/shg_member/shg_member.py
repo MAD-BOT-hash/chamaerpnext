@@ -9,84 +9,95 @@ from frappe.utils import today, getdate, now
 import json
 
 class SHGMember(Document):
-    # -------------------------------
+    def validate(self):
+        """Run all member validations before save."""
+        self.validate_required_fields()
+        self.validate_id_number()
+        self.validate_phone_number()
+        self.validate_email()
+        self.validate_duplicates()
+        self.link_member_account()
+
+    # ----------------------------------------
     # Validation Helpers
-    # -------------------------------
+    # ----------------------------------------
     def validate_required_fields(self):
+        """Ensure key fields are not empty."""
         if not self.member_name:
             frappe.throw("Member Name is required.")
         if not self.member_id:
             frappe.throw("Member ID is required.")
         if not self.phone_number:
             frappe.throw("Phone number is required.")
+        if not self.company:
+            frappe.throw("Company is required.")
+
+    def validate_id_number(self):
+        """Ensure ID Number is valid and unique (Kenyan standard: 6–8 digits)."""
+        if not self.id_number:
+            frappe.throw("National ID number is required.")
+
+        if not re.match(r"^\d{6,8}$", str(self.id_number)):
+            frappe.throw("Invalid ID Number format. Must be 6–8 digits.")
+
+        # Ensure unique across all SHG Members
+        existing = frappe.db.exists(
+            "SHG Member",
+            {"id_number": self.id_number, "name": ["!=", self.name]}
+        )
+        if existing:
+            frappe.throw(f"ID Number {self.id_number} is already used by another member.")
 
     def validate_phone_number(self):
-        """Normalize and validate Kenyan phone number format (07XXXXXXXX)."""
+        """Normalize and validate Kenyan phone number (07XXXXXXXX)."""
         phone = self.phone_number.strip().replace(" ", "")
 
-        # Normalize various Kenyan formats
+        # Normalize variants
         if phone.startswith("+254"):
             phone = "0" + phone[4:]
         elif phone.startswith("254"):
             phone = "0" + phone[3:]
 
-        # Enforce format: 07XXXXXXXX
+        # Must be 10 digits starting with 07
         if not re.match(r"^07\d{8}$", phone):
             frappe.throw("Phone number must be 10 digits starting with 07.")
 
-        # Save normalized phone
         self.phone_number = phone
 
-    def validate_duplicates(self):
-        """Ensure phone number is unique per SHG."""
-        if self.phone_number:
-            existing = frappe.db.exists(
-                "SHG Member",
-                {"phone_number": self.phone_number, "name": ["!=", self.name]}
-            )
-            if existing:
-                frappe.throw(f"Phone number {self.phone_number} is already used by another member.")
-
     def validate_email(self):
-        """Optional email validation."""
+        """Basic email validation."""
         if self.email and not re.match(r"[^@]+@[^@]+\.[^@]+", self.email):
             frappe.throw("Invalid email address.")
 
-    def validate_id_number(self):
-        """Validate ID number format"""
+    def validate_duplicates(self):
+        """Ensure no duplicate phone numbers or ID numbers."""
+        if self.phone_number:
+            existing_phone = frappe.db.exists(
+                "SHG Member",
+                {"phone_number": self.phone_number, "name": ["!=", self.name]}
+            )
+            if existing_phone:
+                frappe.throw(f"Phone number {self.phone_number} already exists for another member.")
+
         if self.id_number:
-            # Check if another member has the same ID number
-            existing = frappe.db.exists("SHG Member", {
-                "id_number": self.id_number,
-                "name": ["!=", self.name]
-            })
-            if existing:
-                frappe.throw(_("Another member already exists with ID number {0}").format(self.id_number))
+            existing_id = frappe.db.exists(
+                "SHG Member",
+                {"id_number": self.id_number, "name": ["!=", self.name]}
+            )
+            if existing_id:
+                frappe.throw(f"ID Number {self.id_number} already exists for another member.")
 
     def link_member_account(self):
-        """Attach member ledger account if it exists, else leave blank."""
+        """Attach member ledger account if exists, else None."""
         if not self.company:
-            return  # skip if no company assigned yet
+            return
+
         account_name = f"{self.member_id} - {self.company}"
         if frappe.db.exists("Account", {"account_name": account_name, "company": self.company}):
             self.member_account = account_name
         else:
             self.member_account = None
 
-    def validate(self):
-        """Main validation entrypoint."""
-        self.validate_required_fields()
-        self.validate_phone_number()
-        self.validate_duplicates()
-        self.validate_email()
-        self.link_member_account()
-
-
-        
-
-                
-
-                
     def set_account_number(self):
         """Set account number if not already set"""
         if not self.account_number:
