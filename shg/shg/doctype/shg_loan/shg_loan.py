@@ -260,24 +260,29 @@ class SHGLoan(Document):
             frappe.throw(_("Duplicate accounts found in account mapping"))
             
     def update_loan_summary(self):
-        """Update loan summary fields"""
-        # Calculate total repaid
+        """Update loan summary fields safely for submitted loans."""
         total_repaid = frappe.db.sql("""
             SELECT SUM(total_paid)
             FROM `tabSHG Loan Repayment`
             WHERE loan = %s AND docstatus = 1
         """, self.name)[0][0] or 0
-        
-        self.total_repaid = total_repaid
-        self.balance_amount = max(0, self.loan_amount - self.total_repaid)
-        
-        # Calculate overdue amount
-        if self.next_due_date and getdate(self.next_due_date) < getdate() and self.balance_amount > 0:
-            self.overdue_amount = self.balance_amount
-        else:
-            self.overdue_amount = 0
-            
-        # Update member summary
+
+        balance = max(0, self.loan_amount - total_repaid)
+
+        # Safely update values without triggering validation restrictions
+        frappe.db.set_value("SHG Loan", self.name, {
+            "total_repaid": round(total_repaid, 2),
+            "balance_amount": round(balance, 2)
+        })
+
+        # Optional: update overdue logic
+        overdue = 0
+        if self.next_due_date and getdate(self.next_due_date) < getdate() and balance > 0:
+            overdue = balance
+
+        frappe.db.set_value("SHG Loan", self.name, "overdue_amount", round(overdue, 2))
+
+        # Optional: update member summary safely
         if self.member:
             member = frappe.get_doc("SHG Member", self.member)
             member.update_financial_summary()
