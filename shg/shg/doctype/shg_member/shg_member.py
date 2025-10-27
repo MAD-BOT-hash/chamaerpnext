@@ -415,7 +415,16 @@ def purge_member_data(member_id: str):
 def handle_member_update_after_submit(doc, method=None):
     """
     Triggered when a submitted SHG Member document is edited.
-    Updates all linked doctypes (Loans, Contributions, etc.)
-    with the new member info.
+    Ensures all linked doctypes (Loans, Contributions, etc.)
+    reflect updated member info.
     """
-    doc.handle_member_update_after_submit()
+    try:
+        # Call the built-in class method safely if it exists
+        if hasattr(doc, "on_update_after_submit"):
+            doc.on_update_after_submit()
+        else:
+            frappe.log_error("SHGMember missing on_update_after_submit()", "SHG Hook Error")
+            frappe.throw("Internal error: Missing update handler on SHG Member.")
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "handle_member_update_after_submit failed")
+        frappe.throw(f"Error updating linked member records: {str(e)}")
