@@ -18,13 +18,18 @@ class SHGContributionInvoice(Document):
         if self.amount:
             self.amount = round(flt(self.amount), 2)
         
-        # Ensure due_date is not before invoice_date
-        if self.due_date and self.invoice_date:
-            invoice_date = getdate(self.invoice_date)
-            due_date = getdate(self.due_date)
-            
-            if due_date < invoice_date:
-                frappe.throw(_("Due Date cannot be before Invoice Date"))
+        # Check if historical backdated invoices are allowed
+        allow_historical = frappe.db.get_single_value("SHG Settings", "allow_historical_backdated_invoices") or 0
+        
+        # Skip date validation for backdated invoices if allowed
+        if not allow_historical:
+            # Ensure due_date is not before invoice_date
+            if self.due_date and self.invoice_date:
+                invoice_date = getdate(self.invoice_date)
+                due_date = getdate(self.due_date)
+                
+                if due_date < invoice_date:
+                    frappe.throw(_("Due Date cannot be before Invoice Date"))
                 
     def validate_rate(self):
         """Validate rate field and set default to amount if not provided"""
@@ -75,8 +80,15 @@ class SHGContributionInvoice(Document):
             
     def set_description(self):
         """Set default description if not provided"""
-        # Use supplier_invoice_date if available, otherwise fall back to invoice_date
-        date_to_use = self.supplier_invoice_date or self.invoice_date
+        # Check if historical backdated invoices are allowed
+        allow_historical = frappe.db.get_single_value("SHG Settings", "allow_historical_backdated_invoices") or 0
+        
+        # Use supplier_invoice_date if available and historical invoices are allowed, otherwise fall back to invoice_date
+        if allow_historical and self.supplier_invoice_date:
+            date_to_use = self.supplier_invoice_date
+        else:
+            date_to_use = self.invoice_date
+            
         if not self.description and date_to_use:
             month_year = formatdate(date_to_use, "MMMM yyyy")
             self.description = f"Contribution invoice for {month_year}"
@@ -288,7 +300,7 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
             allow_historical = frappe.db.get_single_value("SHG Settings", "allow_historical_backdated_invoices") or 0
             
             # Get invoice date - use supplier_invoice_date logic
-            # Use supplier_invoice_date as both posting_date and due_date to prevent ERPNext validation errors
+            # If historical backdated invoices are allowed, skip date validation and always use the supplier invoice date
             # Fallback to invoice_date, then to today's date if missing
             supplier_inv_date = None
             if supplier_invoice_date:
@@ -309,7 +321,8 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
             due_date = add_days(inv_date, int(default_credit_period))
             
             # For backdated invoices, set due_date same as invoice_date to prevent ERPNext validation errors
-            if supplier_invoice_date or (invoice_date and getdate(invoice_date) != getdate(today())):
+            # If historical backdated invoices are allowed, always use the invoice date for due date
+            if allow_historical or supplier_invoice_date or (invoice_date and getdate(invoice_date) != getdate(today())):
                 due_date = inv_date
             
             # Safely handle numeric fields with flt() to prevent NoneType multiplication
