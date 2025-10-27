@@ -137,12 +137,21 @@ class SHGContributionInvoice(Document):
         qty = self.qty or 1
         rate = self.rate or self.amount or 0
 
+        # Use invoice_date as the reference date for all date fields
+        invoice_date = getdate(self.invoice_date or today())
+        due_date = getdate(self.due_date or invoice_date)
+
+        # Ensure due_date is not earlier than invoice_date
+        if due_date < invoice_date:
+            due_date = invoice_date
+
         invoice = frappe.new_doc("Sales Invoice")
         invoice.company = company
         invoice.customer = self.member_name
-        invoice.posting_date = self.invoice_date or nowdate()
-        invoice.due_date = self.invoice_date or nowdate()
+        invoice.posting_date = invoice_date
+        invoice.due_date = due_date
         invoice.debit_to = member_account
+        invoice.supplier_invoice_date = invoice_date
         invoice.append("items", {
             "item_name": "SHG Contribution",
             "qty": qty,
@@ -253,14 +262,17 @@ def create_contribution_from_invoice(doc, method=None):
         # Get default payment method from settings or default to Mpesa
         default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
 
+        # Use invoice_date as the reference date
+        invoice_date = getdate(doc.invoice_date or today())
+        
         # Create new SHG Contribution
         contribution = frappe.get_doc({
             "doctype": "SHG Contribution",
             "member": doc.member,                 # Link field
             "member_name": doc.member_name,
             "contribution_type": doc.contribution_type,
-            "contribution_date": doc.invoice_date or nowdate(),
-            "posting_date": doc.invoice_date or nowdate(),
+            "contribution_date": invoice_date,
+            "posting_date": invoice_date,
             "amount": flt(doc.amount or 0),
             "expected_amount": flt(doc.amount or 0),
             "payment_method": payment_method or default_payment_method,
@@ -339,6 +351,14 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
                     safe_rate = flt(safe_amount)
                     safe_qty = flt(1)
             
+            # Use invoice_date as the reference date
+            invoice_date = getdate(inv_date)
+            due_date_val = getdate(due_date)
+            
+            # Ensure due_date is not earlier than invoice_date
+            if due_date_val < invoice_date:
+                due_date_val = invoice_date
+            
             # Create SHG Contribution Invoice
             invoice = frappe.get_doc({
                 "doctype": "SHG Contribution Invoice",
@@ -349,9 +369,9 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
                 "rate": safe_rate,
                 "amount": safe_amount,
                 "payment_method": default_payment_method,
-                "invoice_date": inv_date,
-                "due_date": due_date,
-                "supplier_invoice_date": supplier_invoice_date or inv_date,  # Store the supplier invoice date
+                "invoice_date": invoice_date,
+                "due_date": due_date_val,
+                "supplier_invoice_date": supplier_invoice_date or invoice_date,  # Store the supplier invoice date
                 "status": "Draft"
             })
             invoice.insert(ignore_permissions=True)
@@ -370,7 +390,6 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
         frappe.log_error(frappe.get_traceback(), "Generate Multiple Contribution Invoices Failed")
         frappe.throw(str(e))
 
-
 def create_linked_contribution(invoice_doc):
     """
     Create a draft SHG Contribution linked to the invoice
@@ -384,14 +403,17 @@ def create_linked_contribution(invoice_doc):
         safe_rate = flt(invoice_doc.rate or invoice_doc.amount or 0)
         safe_amount = flt(invoice_doc.amount or 0)
         
+        # Use invoice_date as the reference date
+        invoice_date = getdate(invoice_doc.invoice_date or today())
+        
         # Create new SHG Contribution in draft status
         contribution = frappe.get_doc({
             "doctype": "SHG Contribution",
             "member": invoice_doc.member,
             "member_name": invoice_doc.member_name,
             "contribution_type": invoice_doc.contribution_type,
-            "contribution_date": invoice_doc.invoice_date or nowdate(),
-            "posting_date": invoice_doc.invoice_date or nowdate(),
+            "contribution_date": invoice_date,
+            "posting_date": invoice_date,
             "qty": safe_qty,
             "rate": safe_rate,
             "amount": safe_amount,
