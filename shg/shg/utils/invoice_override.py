@@ -1,18 +1,28 @@
 import frappe
-from frappe.utils import getdate, today
+from frappe.model.document import Document
 
-def allow_backdated_invoices(doc, method=None):
+def allow_backdated_invoices():
     """
-    Allow backdated invoices by skipping date validation when the setting is enabled.
-    This function is called via doc_events hook before_validate for all doctypes.
+    Removes ERPNext validation that prevents due_date < posting_date,
+    allowing SHG or historical back-entries.
+    This should be called via hooks or monkey-patching.
     """
-    # Check if this is an SHG Contribution Invoice
-    if doc.doctype == "SHG Contribution Invoice":
-        # Check if historical backdated invoices are allowed
-        allow_historical = frappe.db.get_single_value("SHG Settings", "allow_historical_backdated_invoices") or 0
-        
-        # If historical backdated invoices are allowed, skip date validation
-        if allow_historical:
-            # For backdated invoices, set due_date same as invoice_date to prevent ERPNext validation errors
-            if doc.supplier_invoice_date or (doc.invoice_date and getdate(doc.invoice_date) != getdate(today())):
-                doc.due_date = doc.invoice_date
+    from erpnext.accounts.doctype.sales_invoice.sales_invoice import SalesInvoice
+
+    def custom_validate_due_date(self):
+        """
+        Override default validate_due_date to allow historical invoices.
+        """
+        if not self.due_date:
+            self.due_date = self.posting_date
+
+        # Skip the 'due date < posting date' check entirely
+        # Just log a warning if it's reversed for audit purposes.
+        if self.due_date < self.posting_date:
+            frappe.logger().info(
+                f"[SHG Override] Allowed backdated invoice: {self.name} "
+                f"due_date={self.due_date}, posting_date={self.posting_date}"
+            )
+
+    # Patch ERPNext core method
+    SalesInvoice.validate_due_date = custom_validate_due_date

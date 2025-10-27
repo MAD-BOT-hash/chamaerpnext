@@ -11,9 +11,6 @@ app_license = "MIT"
 
 # Document Events
 doc_events = {
-    "*": {
-        "before_validate": "shg.shg.utils.invoice_override.allow_backdated_invoices"
-    },
     "SHG Member": {
         "validate": "shg.install.validate_member",
         "on_submit": "shg.install.create_member_ledger",
@@ -73,6 +70,9 @@ scheduler_events = {
 
 # Installation
 after_install = "shg.install.after_install"
+
+# Boot session
+on_session_creation = "shg.shg.utils.invoice_override.allow_backdated_invoices"
 
 # DocType JS
 doctype_js = {
