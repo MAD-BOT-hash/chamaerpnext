@@ -219,16 +219,20 @@ def create_shg_accounts(company):
             if not ar_parent:
                 ar_parent = frappe.db.get_value("Account", {"account_name": f"Accounts Receivable - {company_abbr}", "company": company}, "name")
             
-            parent_account = frappe.get_doc({
-                "doctype": "Account",
-                "company": company,
-                "account_name": "SHG Members",
-                "parent_account": ar_parent,
-                "account_type": "Receivable",
-                "is_group": 1,
-                "root_type": "Asset"
-            })
-            parent_account.insert()
+            if ar_parent:
+                parent_account = frappe.get_doc({
+                    "doctype": "Account",
+                    "company": company,
+                    "account_name": "SHG Members",
+                    "parent_account": ar_parent,
+                    "account_type": "Receivable",
+                    "is_group": 1,
+                    "root_type": "Asset"
+                })
+                parent_account.insert()
+                frappe.db.commit()
+            else:
+                frappe.log_error(f"No Accounts Receivable parent account found for company {company}")
         except Exception:
             frappe.log_error(frappe.get_traceback(), "SHG Install - Parent Account Creation Failed")
 
@@ -283,6 +287,7 @@ def create_shg_accounts(company):
                     "account_type": acc.get("account_type")
                 })
                 account.insert()
+                frappe.db.commit()
             except Exception:
                 frappe.log_error(frappe.get_traceback(), f"SHG Install - Account Creation Failed: {acc['account_name']}")
 
