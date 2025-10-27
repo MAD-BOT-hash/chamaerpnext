@@ -98,7 +98,46 @@ frappe.ui.form.on("SHG Loan", {
                 d.show();
             }, 'Actions');
         }
-    },
+        
+        // Add "Get Active Members" button to the loan_members grid
+        // Optional: disable Add Members until repayment_start_date is set
+        frm.fields_dict.loan_members.grid.add_custom_button(__('Get Active Members'), () => {
+            if (!frm.doc.repayment_start_date) {
+                frappe.msgprint(__('Please set the Repayment Start Date first.'));
+                return;
+            }
+
+            // If your loan has a group field, include it in the filter
+            const filters = { membership_status: 'Active' };
+            if (frm.doc.group) filters.group = frm.doc.group;
+
+            frappe.db.get_list('SHG Member', {
+                filters: filters,
+                fields: ['name', 'member_name', 'total_contributions']
+            }).then(members => {
+                if (!members.length) {
+                    frappe.msgprint(__('No active members found.'));
+                    return;
+                }
+
+                members.forEach(m => {
+                    // Avoid duplicates
+                    const exists = frm.doc.loan_members.some(row => row.member === m.name);
+                    if (!exists) {
+                        frm.add_child('loan_members', {
+                            member: m.name,
+                            member_name: `${m.member_name} — KES ${format_currency(m.total_contributions || 0, 'KES')}`,
+                            // Optional: set initial allocation or zero
+                            allocated_amount: 0
+                        });
+                    }
+                });
+
+                frm.refresh_field('loan_members');
+                frappe.msgprint(__(`${members.length} active members loaded.`));
+            });
+        });
+    }
 });
 
 function open_repayment_dialog(frm) {
