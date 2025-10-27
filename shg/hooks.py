@@ -46,6 +46,9 @@ doc_events = {
             "shg.shg.utils.member_account_mapping.set_member_credit_account"
         ],
         "on_submit": "shg.shg.hooks.payment_entry.payment_entry_on_submit"
+    },
+    "Sales Invoice": {
+        "before_validate": "shg.shg.utils.invoice_override.allow_backdated_invoices"
     }
 }
 
@@ -70,9 +73,6 @@ scheduler_events = {
 
 # Installation
 after_install = "shg.install.after_install"
-
-# Boot session
-on_session_creation = "shg.shg.utils.invoice_override.allow_backdated_invoices"
 
 # DocType JS
 doctype_js = {
