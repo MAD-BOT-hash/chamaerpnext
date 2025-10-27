@@ -260,32 +260,34 @@ class SHGLoan(Document):
             frappe.throw(_("Duplicate accounts found in account mapping"))
             
     def update_loan_summary(self):
-        """Update loan summary fields safely for submitted loans."""
+        """Update loan summary safely even after submission."""
+        # Calculate total repaid from repayment records
         total_repaid = frappe.db.sql("""
             SELECT SUM(total_paid)
             FROM `tabSHG Loan Repayment`
             WHERE loan = %s AND docstatus = 1
         """, self.name)[0][0] or 0
 
+        # Compute balance and overdue
         balance = max(0, self.loan_amount - total_repaid)
-
-        # Safely update values without triggering validation restrictions
-        frappe.db.set_value("SHG Loan", self.name, {
-            "total_repaid": round(total_repaid, 2),
-            "balance_amount": round(balance, 2)
-        })
-
-        # Optional: update overdue logic
         overdue = 0
         if self.next_due_date and getdate(self.next_due_date) < getdate() and balance > 0:
             overdue = balance
 
-        frappe.db.set_value("SHG Loan", self.name, "overdue_amount", round(overdue, 2))
+        # --- Safe update (bypasses after-submit restriction) ---
+        frappe.db.set_value("SHG Loan", self.name, {
+            "total_repaid": round(total_repaid, 2),
+            "balance_amount": round(balance, 2),
+            "overdue_amount": round(overdue, 2)
+        })
 
-        # Optional: update member summary safely
+        # --- Optional: Sync member summary ---
         if self.member:
-            member = frappe.get_doc("SHG Member", self.member)
-            member.update_financial_summary()
+            try:
+                member = frappe.get_doc("SHG Member", self.member)
+                member.update_financial_summary()
+            except Exception as e:
+                frappe.log_error(f"Failed to update member summary: {e}", "SHG Loan Update")
 
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
