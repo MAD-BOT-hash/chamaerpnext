@@ -1,75 +1,23 @@
 # Copyright (c) 2025, Your Company and contributors
 # For license information, please see license.txt
 
+import re
 import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import today, getdate, now
 import json
-import re
 
 class SHGMember(Document):
     def validate(self):
-        """Validate and normalize SHG Member details before saving."""
-
-        # --- Validate Member Name ---
-        if not self.member_name:
-            frappe.throw("Member Name is required.")
-
-        # --- Normalize and Validate Phone Number ---
-        if self.phone_number:
-            phone = self.phone_number.strip().replace(" ", "")
-            
-            # Normalize Kenyan formats automatically
-            if phone.startswith("+254"):
-                phone = "0" + phone[4:]
-            elif phone.startswith("254"):
-                phone = "0" + phone[3:]
-
-            # Final format check (must be 10 digits and start with 07)
-            if not re.match(r"^07\d{8}$", phone):
-                frappe.throw("Invalid phone number. Must be 10 digits and start with 07.")
-            
-            # Save normalized version back to document
-            self.phone_number = phone
-        else:
-            frappe.throw("Phone number is required.")
-
-        # --- Optional: Ensure unique phone number ---
-        existing = frappe.db.exists(
-            "SHG Member",
-            {"phone_number": self.phone_number, "name": ["!=", self.name]}
-        )
-        if existing:
-            frappe.throw(f"Phone number {self.phone_number} is already used by another member.")
-
-        # --- Validate Member ID / Naming ---
-        if not self.member_id:
-            frappe.throw("Member ID is required.")
+        """Main validation entrypoint."""
+        self.validate_required_fields()
+        self.validate_phone_number()
+        self.validate_duplicates()
+        self.validate_email()
+        self.link_member_account()
         
-        # --- Optional: Basic email check ---
-        if self.email and not re.match(r"[^@]+@[^@]+\.[^@]+", self.email):
-            frappe.throw("Invalid email address.")
 
-        # --- Validate Member Account linkage if required ---
-        if frappe.db.exists("Account", {"account_name": f"{self.member_id} - {self.company}"}):
-            self.member_account = f"{self.member_id} - {self.company}"
-        else:
-            self.member_account = None  # Leave null until account auto-created
-
-        # --- Info log for traceability ---
-        frappe.logger().info(f"[SHGMember] Validated member {self.member_id} - {self.member_name}")
-        
-    def validate_id_number(self):
-        """Validate ID number format"""
-        if self.id_number:
-            # Check if another member has the same ID number
-            existing = frappe.db.exists("SHG Member", {
-                "id_number": self.id_number,
-                "name": ["!=", self.name]
-            })
-            if existing:
-                frappe.throw(_("Another member already exists with ID number {0}").format(self.id_number))
                 
 
                 
