@@ -21,6 +21,16 @@ class SHGContribution(Document):
         if self.unpaid_amount:
             self.unpaid_amount = round(flt(self.unpaid_amount), 2)
         
+    def before_validate(self):
+        """Ensure company is populated from SHG Settings."""
+        from shg.shg.utils.company_utils import get_default_company
+        if not getattr(self, "company", None):
+            default_company = get_default_company()
+            if default_company:
+                self.company = default_company
+            else:
+                frappe.throw("Please set Default Company in SHG Settings before continuing.")
+
     def validate_amount(self):
         """Validate contribution amount"""
         # Safely convert to float to prevent NoneType errors

@@ -13,6 +13,16 @@ class SHGPaymentEntry(Document):
         self.calculate_total_amount()
         self.fetch_member_account_number()
         
+    def before_validate(self):
+        """Ensure company is populated from SHG Settings."""
+        from shg.shg.utils.company_utils import get_default_company
+        if not getattr(self, "company", None):
+            default_company = get_default_company()
+            if default_company:
+                self.company = default_company
+            else:
+                frappe.throw("Please set Default Company in SHG Settings before continuing.")
+
     def fetch_member_account_number(self):
         """Fetch account number from member document"""
         if self.member and not self.account_number:

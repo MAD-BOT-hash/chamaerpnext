@@ -14,6 +14,16 @@ class SHGMeetingFine(Document):
         if self.fine_amount:
             self.fine_amount = round(float(self.fine_amount), 2)
         
+    def before_validate(self):
+        """Ensure company is populated from SHG Settings."""
+        from shg.shg.utils.company_utils import get_default_company
+        if not getattr(self, "company", None):
+            default_company = get_default_company()
+            if default_company:
+                self.company = default_company
+            else:
+                frappe.throw("Please set Default Company in SHG Settings before continuing.")
+
     def validate_fine_reason(self):
         """Validate that fine_reason is one of the allowed options"""
         allowed_reasons = ["Late Arrival", "Absentee", "Uniform Violation", "Noise Disturbance", "Other"]

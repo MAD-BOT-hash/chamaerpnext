@@ -31,6 +31,16 @@ class SHGContributionInvoice(Document):
                 if due_date < invoice_date:
                     frappe.throw(_("Due Date cannot be before Invoice Date"))
                 
+    def before_validate(self):
+        """Ensure company is populated from SHG Settings."""
+        from shg.shg.utils.company_utils import get_default_company
+        if not getattr(self, "company", None):
+            default_company = get_default_company()
+            if default_company:
+                self.company = default_company
+            else:
+                frappe.throw("Please set Default Company in SHG Settings before continuing.")
+
     def validate_rate(self):
         """Validate rate field and set default to amount if not provided"""
         # If rate is not set, default it to the amount field

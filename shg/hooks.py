@@ -19,18 +19,21 @@ doc_events = {
     },
     "SHG Contribution": {
         "validate": "shg.shg.doctype.shg_contribution.shg_contribution.validate_contribution",
-        "on_submit": "shg.shg.doctype.shg_contribution.shg_contribution.post_to_general_ledger"
+        "on_submit": "shg.shg.doctype.shg_contribution.shg_contribution.post_to_general_ledger",
+        "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     },
     "SHG Contribution Invoice": {
         "validate": "shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.validate_contribution_invoice",
-        "on_submit": "shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.create_contribution_from_invoice"
+        "on_submit": "shg.shg.doctype.shg_contribution_invoice.shg_contribution_invoice.create_contribution_from_invoice",
+        "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     },
     "SHG Loan": {
         "validate": "shg.shg.doctype.shg_loan.shg_loan.validate_loan",
         "before_save": "shg.shg.doctype.shg_loan.shg_loan.before_save",
         "on_submit": "shg.shg.doctype.shg_loan.shg_loan.post_to_general_ledger",
         "after_insert": "shg.shg.doctype.shg_loan.shg_loan.after_insert",
-        "on_update_after_submit": "shg.shg.doctype.shg_loan.shg_loan.on_update_after_submit"
+        "on_update_after_submit": "shg.shg.doctype.shg_loan.shg_loan.on_update_after_submit",
+        "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     },
     "SHG Loan Repayment": {
         "validate": "shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.validate_repayment",
@@ -38,14 +41,16 @@ doc_events = {
     },
     "SHG Meeting Fine": {
         "validate": "shg.shg.doctype.shg_meeting_fine.shg_meeting_fine.validate_fine",
-        "on_submit": "shg.shg.doctype.shg_meeting_fine.shg_meeting_fine.post_to_general_ledger"
+        "on_submit": "shg.shg.doctype.shg_meeting_fine.shg_meeting_fine.post_to_general_ledger",
+        "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     },
     "Payment Entry": {
         "validate": [
             "shg.shg.hooks.payment_entry.payment_entry_validate",
             "shg.shg.utils.member_account_mapping.set_member_credit_account"
         ],
-        "on_submit": "shg.shg.hooks.payment_entry.payment_entry_on_submit"
+        "on_submit": "shg.shg.hooks.payment_entry.payment_entry_on_submit",
+        "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     },
     "Sales Invoice": {
         "before_validate": "shg.shg.utils.invoice_override.allow_backdated_invoices"
