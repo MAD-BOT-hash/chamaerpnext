@@ -12,7 +12,9 @@
   "outstanding_amount",
   "amount",
   "column_break_4",
-  "description"
+  "description",
+  "reference_doctype",
+  "reference_name"
  ],
  "fields": [
   {
@@ -20,7 +22,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Invoice Type",
-   "options": "SHG Contribution Invoice",
+   "options": "SHG Contribution Invoice\nSHG Meeting Fine",
    "reqd": 1
   },
   {
@@ -29,7 +31,7 @@
    "in_list_view": 1,
    "label": "Invoice",
    "options": "SHG Contribution Invoice",
-   "reqd": 1
+   "reqd": 0
   },
   {
    "fieldname": "invoice_date",
@@ -61,6 +63,18 @@
    "fieldtype": "Small Text",
    "label": "Description",
    "read_only": 1
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference Type",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Name",
+   "options": "reference_doctype"
   }
  ],
  "istable": 1,

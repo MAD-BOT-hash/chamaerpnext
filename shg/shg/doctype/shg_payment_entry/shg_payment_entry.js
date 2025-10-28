@@ -61,6 +61,11 @@ frappe.ui.form.on('SHG Payment Entry', {
                     }
                 });
             });
+            
+            // Add button for fine payment
+            frm.add_custom_button(__('Receive Fine Payment'), function() {
+                open_fine_payment_dialog(frm);
+            }, __("Actions"));
         }
     },
     
@@ -137,5 +142,93 @@ frappe.ui.form.on('SHG Payment Entry Detail', {
                 }
             });
         }
+    },
+    
+    invoice_type: function(frm, cdt, cdn) {
+        var row = frappe.get_doc(cdt, cdn);
+        // Clear fields when invoice type changes
+        frappe.model.set_value(cdt, cdn, 'invoice', '');
+        frappe.model.set_value(cdt, cdn, 'reference_name', '');
+        frappe.model.set_value(cdt, cdn, 'invoice_date', '');
+        frappe.model.set_value(cdt, cdn, 'outstanding_amount', 0);
+        frappe.model.set_value(cdt, cdn, 'description', '');
     }
 });
+
+function open_fine_payment_dialog(frm) {
+    if (!frm.doc.member) {
+        frappe.msgprint("Please select a Member first.");
+        return;
+    }
+
+    frappe.call({
+        method: "shg.shg.doctype.shg_payment_entry.shg_payment_entry.get_unpaid_fines",
+        args: { member: frm.doc.member },
+        callback: function(r) {
+            if (!r.message || r.message.length === 0) {
+                frappe.msgprint("No unpaid fines found for this member.");
+                return;
+            }
+
+            let fines = r.message;
+            let options_html = fines.map(f => `
+                <tr>
+                    <td><input type="checkbox" class="fine-check" data-name="${f.name}" data-amount="${f.fine_amount}"></td>
+                    <td>${f.name}</td>
+                    <td>${f.meeting_date || ''}</td>
+                    <td>${f.fine_reason || ''}</td>
+                    <td>${f.fine_amount || 0}</td>
+                    <td>${f.fine_description || ''}</td>
+                </tr>
+            `).join("");
+
+            let dialog = new frappe.ui.Dialog({
+                title: "Select Fines to Pay",
+                fields: [
+                    {
+                        fieldname: "html",
+                        fieldtype: "HTML",
+                        options: `
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Select</th><th>Fine ID</th><th>Date</th><th>Type</th><th>Amount</th><th>Remarks</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${options_html}</tbody>
+                            </table>
+                        `
+                    }
+                ],
+                primary_action_label: "Add to Payment",
+                primary_action(values) {
+                    let selected = [];
+                    $(".fine-check:checked").each(function() {
+                        selected.push({
+                            invoice_type: "SHG Meeting Fine",
+                            reference_doctype: "SHG Meeting Fine",
+                            reference_name: $(this).data("name"),
+                            amount: parseFloat($(this).data("amount")),
+                            outstanding_amount: parseFloat($(this).data("amount"))
+                        });
+                    });
+
+                    if (selected.length === 0) {
+                        frappe.msgprint("No fines selected.");
+                        return;
+                    }
+
+                    selected.forEach(s => {
+                        let row = frm.add_child("payment_entries", s);
+                    });
+
+                    frm.refresh_field("payment_entries");
+                    frm.trigger("calculate_total");
+                    dialog.hide();
+                }
+            });
+
+            dialog.show();
+        }
+    });
+}

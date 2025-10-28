@@ -78,6 +78,10 @@ class SHGPaymentEntry(Document):
                         # Update invoice status
                         update_invoice_status(entry.invoice, entry.amount)
                 
+                elif entry.invoice_type == "SHG Meeting Fine":
+                    # Handle fine payment
+                    self.process_fine_payment(entry)
+                
             # Link created Payment Entries to this SHG Payment Entry
             if created_payment_entries:
                 self.db_set("created_payment_entries", ", ".join(created_payment_entries))
@@ -95,6 +99,80 @@ class SHGPaymentEntry(Document):
             frappe.log_error(frappe.get_traceback(), "SHG Payment Entry Processing Failed")
             frappe.throw(_("Failed to process payment: {0}").format(str(e)))
             
+    def process_fine_payment(self, entry):
+        """Process payment for a meeting fine"""
+        try:
+            # Get the SHG Meeting Fine
+            fine = frappe.get_doc("SHG Meeting Fine", entry.reference_name)
+            
+            # Mark fine as paid
+            fine.status = "Paid"
+            fine.paid_date = self.payment_date
+            fine.flags.ignore_validate_update_after_submit = True
+            fine.save()
+            
+            # Post to GL
+            self.post_fine_to_general_ledger(entry, fine)
+            
+            frappe.msgprint(f"Fine {fine.name} marked as Paid")
+            
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), f"SHG Fine Payment Processing Failed for {entry.reference_name}")
+            frappe.throw(_("Failed to process fine payment: {0}").format(str(e)))
+            
+    def post_fine_to_general_ledger(self, entry, fine):
+        """Post fine payment to general ledger"""
+        try:
+            company = self.company or frappe.db.get_single_value("SHG Settings", "company") or frappe.defaults.get_user_default("Company")
+            if not company:
+                frappe.throw(_("Company not set for this transaction"))
+                
+            # Get member account
+            member_account = fine.get_member_account()
+            
+            # Get fine income account
+            fine_account = fine.get_fine_account(company)
+            
+            # Create Journal Entry for the fine payment
+            je = frappe.new_doc("Journal Entry")
+            je.voucher_type = "Journal Entry"
+            je.posting_date = self.payment_date
+            je.company = company
+            je.remark = f"Payment for Meeting Fine {fine.name}"
+            
+            # Debit: Fine Income Account
+            je.append("accounts", {
+                "account": fine_account,
+                "debit_in_account_currency": entry.amount,
+                "credit_in_account_currency": 0,
+                "party_type": "Customer",
+                "party": fine.get_member_customer(),
+                "reference_type": "SHG Meeting Fine",
+                "reference_name": fine.name
+            })
+            
+            # Credit: Member Account
+            je.append("accounts", {
+                "account": member_account,
+                "debit_in_account_currency": 0,
+                "credit_in_account_currency": entry.amount,
+                "party_type": "Customer",
+                "party": fine.get_member_customer(),
+                "reference_type": "SHG Meeting Fine",
+                "reference_name": fine.name
+            })
+            
+            je.flags.ignore_mandatory = True
+            je.insert(ignore_permissions=True)
+            je.submit()
+            
+            # Link the journal entry to the fine
+            fine.db_set("journal_entry", je.name)
+            
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), f"SHG Fine GL Posting Failed for {entry.reference_name}")
+            frappe.throw(_("Failed to post fine to GL: {0}").format(str(e)))
+
     def update_member_summary(self):
         """Update member financial summary with proper ERPNext v15 logic"""
         member = frappe.get_doc("SHG Member", self.member)
@@ -112,3 +190,18 @@ class SHGPaymentEntry(Document):
         
         # Recalculate member's financial summary to ensure consistency
         member.update_financial_summary()
+
+# ----------------------
+# API endpoint for dialog
+# ----------------------
+
+@frappe.whitelist()
+def get_unpaid_fines(member):
+    """Fetch all unpaid SHG Meeting Fines for a member."""
+    fines = frappe.get_all(
+        "SHG Meeting Fine",
+        filters={"member": member, "status": ["!=", "Paid"]},
+        fields=["name", "meeting_date", "fine_reason", "fine_amount", "fine_description"],
+        order_by="meeting_date desc",
+    )
+    return fines

@@ -1,6 +1,7 @@
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt, today
+from frappe.utils import flt, today, add_months, getdate
+from frappe.utils.data import date_diff
 
 class SHGLoan(Document):
     def validate(self):
@@ -37,6 +38,9 @@ class SHGLoan(Document):
         """When the loan is submitted, mark as 'Disbursed' and create member account if needed."""
         self.status = "Disbursed"
 
+        # Generate repayment schedule
+        self.generate_repayment_schedule()
+
         # Create member account under SHG Members - <abbr>
         create_or_verify_member_account(self.member, self.company)
 
@@ -62,6 +66,9 @@ class SHGLoan(Document):
         self.balance_amount = new_balance
         self.last_repayment_date = today()
         self.status = "Paid" if new_balance == 0 else "Partially Paid"
+        
+        # Update repayment schedule
+        self.update_repayment_schedule(amount_paid)
 
         self.save(ignore_permissions=True)
         frappe.db.commit()
@@ -70,6 +77,161 @@ class SHGLoan(Document):
             "Edit",
             f"Repayment of {amount_paid} applied. Remaining balance: {new_balance}"
         )
+        
+    def update_repayment_schedule(self, amount_paid):
+        """Update repayment schedule with payment information."""
+        if not self.repayment_schedule:
+            return
+            
+        remaining_amount = flt(amount_paid)
+        
+        # Update schedule entries in order
+        for schedule_entry in self.repayment_schedule:
+            if remaining_amount <= 0:
+                break
+                
+            # Calculate how much of the payment applies to this installment
+            amount_for_this_installment = min(remaining_amount, schedule_entry.unpaid_balance)
+            
+            # Update the schedule entry
+            schedule_entry.amount_paid = flt(schedule_entry.amount_paid or 0) + amount_for_this_installment
+            schedule_entry.unpaid_balance = flt(schedule_entry.total_payment) - flt(schedule_entry.amount_paid)
+            
+            # Update status based on payment
+            if schedule_entry.unpaid_balance <= 0:
+                schedule_entry.status = "Paid"
+            else:
+                schedule_entry.status = "Partially Paid"
+                
+            remaining_amount -= amount_for_this_installment
+            
+            # Update next due date to the next pending installment
+            if schedule_entry.status == "Paid" and schedule_entry.due_date == self.next_due_date:
+                # Find the next pending installment
+                next_due = None
+                for next_entry in self.repayment_schedule:
+                    if next_entry.status == "Pending" or next_entry.status == "Partially Paid":
+                        next_due = next_entry.due_date
+                        break
+                self.next_due_date = next_due
+
+    def generate_repayment_schedule(self):
+        """Generate repayment schedule based on loan terms."""
+        # Clear existing schedule
+        self.repayment_schedule = []
+        
+        if not self.loan_amount or not self.loan_period_months or not self.repayment_frequency:
+            return
+            
+        # Calculate repayment dates
+        start_date = getdate(self.repayment_start_date or self.disbursement_date)
+        if not start_date:
+            frappe.throw("Repayment start date is required to generate schedule")
+            
+        # Calculate interest and payments
+        if self.interest_type == "Flat Rate":
+            self._generate_flat_rate_schedule(start_date)
+        else:
+            self._generate_reducing_balance_schedule(start_date)
+            
+        # Set next due date to first installment
+        if self.repayment_schedule:
+            self.next_due_date = self.repayment_schedule[0].due_date
+
+    def _generate_flat_rate_schedule(self, start_date):
+        """Generate repayment schedule for flat rate interest."""
+        # Flat rate: interest calculated on original principal for entire loan period
+        total_interest = self.loan_amount * (self.interest_rate / 100) * (self.loan_period_months / 12)
+        total_payable = self.loan_amount + total_interest
+        monthly_payment = total_payable / self.loan_period_months
+        monthly_interest = total_interest / self.loan_period_months
+        monthly_principal = self.loan_amount / self.loan_period_months
+        
+        running_balance = self.loan_amount
+        
+        for i in range(self.loan_period_months):
+            # Calculate payment date based on frequency
+            if self.repayment_frequency == "Monthly":
+                payment_date = add_months(start_date, i)
+            elif self.repayment_frequency == "Bi-Monthly":
+                payment_date = add_months(start_date, i * 2)
+            elif self.repayment_frequency == "Weekly":
+                payment_date = add_months(start_date, int(i / 4))
+            else:
+                payment_date = add_months(start_date, i)  # Default to monthly
+                
+            # Create schedule entry
+            schedule_entry = self.append("repayment_schedule", {
+                "installment_no": i + 1,
+                "payment_date": payment_date,
+                "due_date": payment_date,
+                "principal_amount": monthly_principal,
+                "interest_amount": monthly_interest,
+                "total_payment": monthly_payment,
+                "total_due": monthly_payment,
+                "amount_paid": 0,
+                "unpaid_balance": monthly_payment,
+                "balance_amount": running_balance,
+                "status": "Pending"
+            })
+            
+            running_balance -= monthly_principal
+
+    def _generate_reducing_balance_schedule(self, start_date):
+        """Generate repayment schedule for reducing balance interest."""
+        # Reducing balance: interest calculated on outstanding principal
+        monthly_rate = (self.interest_rate / 100) / 12
+        
+        # Calculate monthly payment using annuity formula
+        if monthly_rate > 0:
+            monthly_payment = self.loan_amount * monthly_rate * ((1 + monthly_rate) ** self.loan_period_months) / (((1 + monthly_rate) ** self.loan_period_months) - 1)
+        else:
+            monthly_payment = self.loan_amount / self.loan_period_months
+            
+        running_balance = self.loan_amount
+        total_interest = 0
+        
+        for i in range(self.loan_period_months):
+            # Calculate payment date based on frequency
+            if self.repayment_frequency == "Monthly":
+                payment_date = add_months(start_date, i)
+            elif self.repayment_frequency == "Bi-Monthly":
+                payment_date = add_months(start_date, i * 2)
+            elif self.repayment_frequency == "Weekly":
+                payment_date = add_months(start_date, int(i / 4))
+            else:
+                payment_date = add_months(start_date, i)  # Default to monthly
+                
+            # Calculate interest for this period
+            interest_payment = running_balance * monthly_rate
+            principal_payment = monthly_payment - interest_payment
+            
+            # Ensure we don't overpay in the last installment
+            if i == self.loan_period_months - 1:
+                principal_payment = running_balance
+                monthly_payment = principal_payment + interest_payment
+                
+            # Create schedule entry
+            schedule_entry = self.append("repayment_schedule", {
+                "installment_no": i + 1,
+                "payment_date": payment_date,
+                "due_date": payment_date,
+                "principal_amount": principal_payment,
+                "interest_amount": interest_payment,
+                "total_payment": monthly_payment,
+                "total_due": monthly_payment,
+                "amount_paid": 0,
+                "unpaid_balance": monthly_payment,
+                "balance_amount": running_balance,
+                "status": "Pending"
+            })
+            
+            running_balance -= principal_payment
+            total_interest += interest_payment
+            
+            # Break if balance is fully paid
+            if running_balance <= 0:
+                break
 
 
 def create_or_verify_member_account(member_id, company):
