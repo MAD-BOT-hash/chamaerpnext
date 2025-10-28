@@ -1,4 +1,11 @@
 frappe.ui.form.on("SHG Loan", {
+    setup: function(frm) {
+        frm.set_query("group", function() {
+            return {
+                filters: { status: "Active" },
+            };
+        });
+    },
     validate(frm) {
         if (frm.doc.is_group_loan) {
             (frm.doc.loan_members || []).forEach(row => {
@@ -24,32 +31,6 @@ frappe.ui.form.on("SHG Loan", {
                 const d = new frappe.ui.Dialog({
                     title: __('Select Members for Loan'),
                     fields: [
-                        {
-                            label: 'Filter by Group',
-                            fieldname: 'group_filter',
-                            fieldtype: 'Select',
-                            options: [],
-                            onchange: function() {
-                                const group = d.get_value('group_filter');
-                                if (group) {
-                                    frappe.db.get_list('SHG Member', {
-                                        filters: { group: group, membership_status: 'Active' },
-                                        fields: ['name', 'member_name', 'total_contributions']
-                                    }).then(members => {
-                                        const member_list = members.map(m => ({
-                                            // 🧠 Enhancement: show contributions next to each member
-                                            label: `${m.member_name} (${m.name}) — KES ${format_currency(m.total_contributions || 0, 'KES')}`,
-                                            value: m.name
-                                        }));
-                                        d.fields_dict.member_select.df.options = member_list;
-                                        d.fields_dict.member_select.refresh();
-                                    });
-                                } else {
-                                    d.fields_dict.member_select.df.options = [];
-                                    d.fields_dict.member_select.refresh();
-                                }
-                            }
-                        },
                         {
                             label: 'Select Members',
                             fieldname: 'member_select',
@@ -87,25 +68,20 @@ frappe.ui.form.on("SHG Loan", {
                     }
                 });
 
-                // 🧩 Use a safe server-side method to fetch distinct groups
-                frappe.call({
-                    method: "frappe.client.get_list",
-                    args: {
-                        doctype: "SHG Member",
-                        fields: ["group"],
-                        filters: { membership_status: "Active" },
-                        distinct: true
-                    },
-                    callback: function(r) {
-                        if (r.message) {
-                            const group_names = r.message.map(g => g.group).filter(g => !!g);
-                            d.fields_dict.group_filter.df.options = [''].concat(group_names);
-                            d.fields_dict.group_filter.refresh();
-                        }
-                    }
+                // Fetch all active members
+                frappe.db.get_list('SHG Member', {
+                    filters: { membership_status: 'Active' },
+                    fields: ['name', 'member_name', 'total_contributions']
+                }).then(members => {
+                    const member_list = members.map(m => ({
+                        // 🧠 Enhancement: show contributions next to each member
+                        label: `${m.member_name} (${m.name}) — KES ${format_currency(m.total_contributions || 0, 'KES')}`,
+                        value: m.name
+                    }));
+                    d.fields_dict.member_select.df.options = member_list;
+                    d.fields_dict.member_select.refresh();
+                    d.show();
                 });
-
-                d.show();
             }, 'Actions');
         }
         
@@ -117,9 +93,8 @@ frappe.ui.form.on("SHG Loan", {
                 return;
             }
 
-            // If your loan has a group field, include it in the filter
+            // Filter for active members only
             const filters = { membership_status: 'Active' };
-            if (frm.doc.group) filters.group = frm.doc.group;
 
             frappe.db.get_list('SHG Member', {
                 filters: filters,

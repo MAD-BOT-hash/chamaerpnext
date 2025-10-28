@@ -115,7 +115,21 @@ frappe.ui.form.on('SHG Loan', {
                         d.hide();
                     }
                 });
-                d.show();
+                
+                // Fetch all active members
+                frappe.db.get_list('SHG Member', {
+                    filters: { membership_status: 'Active' },
+                    fields: ['name', 'member_name', 'total_contributions']
+                }).then(members => {
+                    const member_list = members.map(m => ({
+                        label: `${m.member_name} (${m.name})`,
+                        value: m.name
+                    }));
+
+                    d.fields_dict.member_select.df.options = member_list;
+                    d.fields_dict.member_select.refresh();
+                    d.show();
+                });
             }, 'Actions');
         }
         

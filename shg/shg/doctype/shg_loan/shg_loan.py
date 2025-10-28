@@ -1,238 +1,140 @@
 import frappe
+from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, today, add_months, getdate
-from frappe.utils.data import date_diff
+from frappe.utils import today, add_months, flt, now_datetime
 
 class SHGLoan(Document):
+
     def validate(self):
-        """Basic sanity checks before submission."""
+        """Validate core loan data before saving."""
         if not self.member:
-            frappe.throw("Please select a Member for this loan.")
-
+            frappe.throw(_("Member is required."))
         if not self.loan_amount or self.loan_amount <= 0:
-            frappe.throw("Loan Amount must be greater than zero.")
+            frappe.throw(_("Loan Amount must be greater than zero."))
+        if not self.interest_rate:
+            frappe.throw(_("Interest Rate is required."))
+        if not self.repayment_period:
+            frappe.throw(_("Repayment period (in months) is required."))
 
-        # Initialize balance if not set
-        if not self.balance_amount:
-            self.balance_amount = self.loan_amount
-
-        # Auto-set disbursement date if not provided
-        if not self.disbursement_date:
-            self.disbursement_date = today()
-
-        # Ensure loan status consistency
-        if not self.status:
-            self.status = "Draft"
-
-    def before_validate(self):
-        """Ensure company is populated from SHG Settings."""
-        from shg.shg.utils.company_utils import get_default_company
-        if not getattr(self, "company", None):
-            default_company = get_default_company()
-            if default_company:
-                self.company = default_company
-            else:
-                frappe.throw("Please set Default Company in SHG Settings before continuing.")
+        # Auto-fetch company if missing
+        if not self.company:
+            self.company = frappe.db.get_single_value("SHG Settings", "default_company")
 
     def on_submit(self):
-        """When the loan is submitted, mark as 'Disbursed' and create member account if needed."""
-        self.status = "Disbursed"
+        """Handle loan submission."""
+        self.post_to_ledger()
+        self.create_repayment_schedule()
+        frappe.msgprint(_("Loan successfully posted to ledger and repayment schedule created."))
 
-        # Generate repayment schedule
-        self.generate_repayment_schedule()
+    # --------------------------------------------------
+    # LEDGER POSTING
+    # --------------------------------------------------
+    def post_to_ledger(self):
+        """Create GL Entries for the loan disbursement."""
+        # Check if already posted
+        if self.posted_to_gl:
+            return
+            
+        company = self.company or frappe.db.get_single_value("SHG Settings", "default_company")
+        if not company:
+            frappe.throw(_("Please set Default Company in SHG Settings."))
 
-        # Create member account under SHG Members - <abbr>
-        create_or_verify_member_account(self.member, self.company)
+        # Validate necessary accounts from SHG Settings
+        settings = frappe.get_single("SHG Settings")
+        loan_account = settings.default_loan_account
+        receivable_account = settings.member_receivable_account
 
-        # Set initial balance
-        if not self.balance_amount:
-            self.balance_amount = self.loan_amount
+        if not loan_account or not receivable_account:
+            frappe.throw(_("Please set Default Loan and Receivable Accounts in SHG Settings."))
 
-        frappe.msgprint(f"Loan {self.name} disbursed successfully.")
+        # Prepare GL entries
+        gl_entries = [
+            # Debit: Member Receivable Account (Loan Given)
+            {
+                "account": receivable_account,
+                "party_type": "Customer",
+                "party": self.member,
+                "debit": self.loan_amount,
+                "credit": 0,
+                "voucher_type": "SHG Loan",
+                "voucher_no": self.name,
+                "company": company,
+                "posting_date": self.disbursement_date or today(),
+                "remarks": f"Loan disbursement for {self.member}"
+            },
+            # Credit: Loan Account (Cash/Bank or Loan Pool)
+            {
+                "account": loan_account,
+                "debit": 0,
+                "credit": self.loan_amount,
+                "voucher_type": "SHG Loan",
+                "voucher_no": self.name,
+                "company": company,
+                "posting_date": self.disbursement_date or today(),
+                "remarks": f"Loan disbursement for {self.member}"
+            }
+        ]
 
-    def on_cancel(self):
-        """Revert to draft-like state on cancellation."""
-        self.status = "Cancelled"
-        frappe.msgprint(f"Loan {self.name} cancelled.")
+        # Insert into GL Entry
+        for entry in gl_entries:
+            gl = frappe.new_doc("GL Entry")
+            for k, v in entry.items():
+                setattr(gl, k, v)
+            gl.flags.ignore_permissions = True
+            gl.insert()
 
-    def update_balance(self, amount_paid):
-        """Safe helper for repayment updates."""
-        self.flags.ignore_validate_update_after_submit = True
-
-        new_balance = flt(self.balance_amount or 0) - flt(amount_paid or 0)
-        if new_balance < 0:
-            frappe.throw("Repayment exceeds remaining balance.")
-
-        self.balance_amount = new_balance
-        self.last_repayment_date = today()
-        self.status = "Paid" if new_balance == 0 else "Partially Paid"
+        # Mark as posted
+        self.db_set("posted_to_gl", 1)
+        self.db_set("posted_on", now_datetime())
         
-        # Update repayment schedule
-        self.update_repayment_schedule(amount_paid)
-
-        self.save(ignore_permissions=True)
         frappe.db.commit()
+        frappe.msgprint(_("GL Entries created for Loan {0}").format(self.name))
 
-        self.add_comment(
-            "Edit",
-            f"Repayment of {amount_paid} applied. Remaining balance: {new_balance}"
-        )
-        
-    def update_repayment_schedule(self, amount_paid):
-        """Update repayment schedule with payment information."""
-        if not self.repayment_schedule:
-            return
-            
-        remaining_amount = flt(amount_paid)
-        
-        # Update schedule entries in order
-        for schedule_entry in self.repayment_schedule:
-            if remaining_amount <= 0:
-                break
-                
-            # Calculate how much of the payment applies to this installment
-            amount_for_this_installment = min(remaining_amount, schedule_entry.unpaid_balance)
-            
-            # Update the schedule entry
-            schedule_entry.amount_paid = flt(schedule_entry.amount_paid or 0) + amount_for_this_installment
-            schedule_entry.unpaid_balance = flt(schedule_entry.total_payment) - flt(schedule_entry.amount_paid)
-            
-            # Update status based on payment
-            if schedule_entry.unpaid_balance <= 0:
-                schedule_entry.status = "Paid"
-            else:
-                schedule_entry.status = "Partially Paid"
-                
-            remaining_amount -= amount_for_this_installment
-            
-            # Update next due date to the next pending installment
-            if schedule_entry.status == "Paid" and schedule_entry.due_date == self.next_due_date:
-                # Find the next pending installment
-                next_due = None
-                for next_entry in self.repayment_schedule:
-                    if next_entry.status == "Pending" or next_entry.status == "Partially Paid":
-                        next_due = next_entry.due_date
-                        break
-                self.next_due_date = next_due
-
-    def generate_repayment_schedule(self):
-        """Generate repayment schedule based on loan terms."""
-        # Clear existing schedule
-        self.repayment_schedule = []
-        
-        if not self.loan_amount or not self.loan_period_months or not self.repayment_frequency:
-            return
-            
-        # Calculate repayment dates
-        start_date = getdate(self.repayment_start_date or self.disbursement_date)
-        if not start_date:
-            frappe.throw("Repayment start date is required to generate schedule")
-            
-        # Calculate interest and payments
-        if self.interest_type == "Flat Rate":
-            self._generate_flat_rate_schedule(start_date)
-        else:
-            self._generate_reducing_balance_schedule(start_date)
-            
-        # Set next due date to first installment
+    # --------------------------------------------------
+    # AUTOMATIC REPAYMENT SCHEDULE
+    # --------------------------------------------------
+    def create_repayment_schedule(self):
+        """Auto-generate EMI repayment schedule after disbursement."""
+        # Check if schedule already exists
         if self.repayment_schedule:
-            self.next_due_date = self.repayment_schedule[0].due_date
+            frappe.msgprint(_("Repayment schedule already exists for this loan."))
+            return
 
-    def _generate_flat_rate_schedule(self, start_date):
-        """Generate repayment schedule for flat rate interest."""
-        # Flat rate: interest calculated on original principal for entire loan period
-        total_interest = self.loan_amount * (self.interest_rate / 100) * (self.loan_period_months / 12)
-        total_payable = self.loan_amount + total_interest
-        monthly_payment = total_payable / self.loan_period_months
-        monthly_interest = total_interest / self.loan_period_months
-        monthly_principal = self.loan_amount / self.loan_period_months
-        
-        running_balance = self.loan_amount
-        
-        for i in range(self.loan_period_months):
-            # Calculate payment date based on frequency
-            if self.repayment_frequency == "Monthly":
-                payment_date = add_months(start_date, i)
-            elif self.repayment_frequency == "Bi-Monthly":
-                payment_date = add_months(start_date, i * 2)
-            elif self.repayment_frequency == "Weekly":
-                payment_date = add_months(start_date, int(i / 4))
-            else:
-                payment_date = add_months(start_date, i)  # Default to monthly
-                
-            # Create schedule entry
-            schedule_entry = self.append("repayment_schedule", {
-                "installment_no": i + 1,
-                "payment_date": payment_date,
-                "due_date": payment_date,
-                "principal_amount": monthly_principal,
-                "interest_amount": monthly_interest,
-                "total_payment": monthly_payment,
-                "total_due": monthly_payment,
-                "amount_paid": 0,
-                "unpaid_balance": monthly_payment,
-                "balance_amount": running_balance,
-                "status": "Pending"
-            })
-            
-            running_balance -= monthly_principal
+        # Compute monthly interest rate
+        monthly_interest_rate = flt(self.interest_rate) / 100 / 12
+        principal = flt(self.loan_amount)
+        months = int(self.repayment_period)
 
-    def _generate_reducing_balance_schedule(self, start_date):
-        """Generate repayment schedule for reducing balance interest."""
-        # Reducing balance: interest calculated on outstanding principal
-        monthly_rate = (self.interest_rate / 100) / 12
-        
-        # Calculate monthly payment using annuity formula
-        if monthly_rate > 0:
-            monthly_payment = self.loan_amount * monthly_rate * ((1 + monthly_rate) ** self.loan_period_months) / (((1 + monthly_rate) ** self.loan_period_months) - 1)
+        # Calculate EMI using standard formula
+        if monthly_interest_rate > 0:
+            emi = principal * monthly_interest_rate * ((1 + monthly_interest_rate) ** months) / (((1 + monthly_interest_rate) ** months) - 1)
         else:
-            monthly_payment = self.loan_amount / self.loan_period_months
-            
-        running_balance = self.loan_amount
-        total_interest = 0
-        
-        for i in range(self.loan_period_months):
-            # Calculate payment date based on frequency
-            if self.repayment_frequency == "Monthly":
-                payment_date = add_months(start_date, i)
-            elif self.repayment_frequency == "Bi-Monthly":
-                payment_date = add_months(start_date, i * 2)
-            elif self.repayment_frequency == "Weekly":
-                payment_date = add_months(start_date, int(i / 4))
-            else:
-                payment_date = add_months(start_date, i)  # Default to monthly
-                
-            # Calculate interest for this period
-            interest_payment = running_balance * monthly_rate
-            principal_payment = monthly_payment - interest_payment
-            
-            # Ensure we don't overpay in the last installment
-            if i == self.loan_period_months - 1:
-                principal_payment = running_balance
-                monthly_payment = principal_payment + interest_payment
-                
-            # Create schedule entry
-            schedule_entry = self.append("repayment_schedule", {
-                "installment_no": i + 1,
-                "payment_date": payment_date,
+            emi = principal / months
+
+        outstanding = principal
+        payment_date = self.first_repayment_date or add_months(self.disbursement_date or today(), 1)
+
+        for i in range(1, months + 1):
+            interest_component = outstanding * monthly_interest_rate
+            principal_component = emi - interest_component
+            outstanding -= principal_component
+
+            # Add to child table
+            self.append("repayment_schedule", {
+                "installment_no": i,
                 "due_date": payment_date,
-                "principal_amount": principal_payment,
-                "interest_amount": interest_payment,
-                "total_payment": monthly_payment,
-                "total_due": monthly_payment,
+                "principal_amount": round(principal_component, 2),
+                "interest_amount": round(interest_component, 2),
+                "total_payment": round(emi, 2),
+                "total_due": round(emi, 2),
                 "amount_paid": 0,
-                "unpaid_balance": monthly_payment,
-                "balance_amount": running_balance,
+                "unpaid_balance": round(emi, 2),
+                "balance_amount": round(outstanding, 2),
                 "status": "Pending"
             })
-            
-            running_balance -= principal_payment
-            total_interest += interest_payment
-            
-            # Break if balance is fully paid
-            if running_balance <= 0:
-                break
+            payment_date = add_months(payment_date, 1)
 
+        frappe.msgprint(_("Repayment schedule generated with {0} installments.").format(months))
 
 def create_or_verify_member_account(member_id, company):
     """Ensure the member has a personal ledger account under SHG Members - <abbr>."""
