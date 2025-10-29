@@ -298,145 +298,166 @@ class SHGLoan(Document):
     # --------------------------
     # LEDGER POSTING
     # --------------------------
-    def get_member_loan_account(self, member_id, company):
+    def post_to_ledger_if_needed(self):
         """
-        Ensure a per-member receivable account exists under
-        'SHG Loans receivable - <abbr>' for that company.
-        Returns the leaf account name to use in Journal Entries.
+        Post the loan disbursement to the General Ledger (Journal Entry)
+        with full validation, auto-creation of member accounts, and
+        fallback handling for missing customers or loan source accounts.
+        Idempotent: runs once per loan.
         """
+
+        # --- 1️⃣ Skip if already posted ---
+        if getattr(self, "posted_to_gl", 0):
+            frappe.msgprint(f"GL already posted for {self.name} ({self.journal_entry})", alert=True)
+            return
+
+        # --- 2️⃣ Resolve company ---
+        company = getattr(self, "company", None) or frappe.db.get_single_value("SHG Settings", "company")
+        if not company:
+            frappe.throw(_("Company not set on loan or in SHG Settings."))
 
         company_abbr = frappe.db.get_value("Company", company, "abbr")
         if not company_abbr:
-            frappe.throw(f"Company abbreviation not found for {company}")
+            frappe.throw(_("Company abbreviation not found for {0}.").format(company))
 
-        parent_group_name = f"SHG Loans receivable - {company_abbr}"
-
-        # 1. Ensure parent group account exists and is_group = 1
-        parent_account = frappe.db.exists("Account", parent_group_name)
-        if not parent_account:
-            # parent doesn't exist -> create it as group under Accounts Receivable
-            ar_parent = frappe.db.exists("Account", f"Accounts Receivable - {company_abbr}")
-            if not ar_parent:
-                frappe.throw(
-                    f"Accounts Receivable - {company_abbr} not found for {company}. "
-                    f"Create that first in Chart of Accounts."
-                )
-
-            parent_doc = frappe.get_doc({
-                "doctype": "Account",
-                "account_name": "SHG Loans receivable",
-                "name": parent_group_name,  # force the exact name
-                "parent_account": f"Accounts Receivable - {company_abbr}",
-                "company": company,
-                "is_group": 1,
-                "root_type": "Asset",
-                "account_type": "Receivable",
-            })
-            parent_doc.insert(ignore_permissions=True)
-            parent_account = parent_doc.name
-        else:
-            # make sure it's a group
-            is_group = frappe.db.get_value("Account", parent_group_name, "is_group")
-            if not is_group:
-                frappe.throw(
-                    f"{parent_group_name} exists but is not marked as a Group account. "
-                    f"Please edit it in Chart of Accounts and set 'Is Group = Yes'."
-                )
-
-        # 2. Ensure leaf account for the specific member exists
-        # We'll name it "MEMBERCODE - <abbr>" or "MEMBERCODE - <company>"
-        # Prefer a stable code: use member_id or their customer code.
-        member_code = member_id
-        member_label = frappe.db.get_value("SHG Member", member_id, "member_name") or member_id
-        leaf_account_name = f"{member_code} - {company_abbr}"
-
-        leaf_exists = frappe.db.exists("Account", leaf_account_name)
-        if not leaf_exists:
-            leaf_doc = frappe.get_doc({
-                "doctype": "Account",
-                "account_name": leaf_account_name.replace(f" - {company_abbr}", ""),
-                "name": leaf_account_name,
-                "parent_account": parent_group_name,
-                "company": company,
-                "is_group": 0,
-                "root_type": "Asset",
-                "account_type": "Receivable",
-                "report_type": "Balance Sheet",
-            })
-            leaf_doc.insert(ignore_permissions=True)
-            leaf_exists = leaf_doc.name
-
-        frappe.db.commit()
-        return leaf_exists
-
-    def post_to_ledger_if_needed(self):
-        """
-        Create GL entries for the disbursed loan if not already posted.
-        Your original method was post_to_ledger() with manual GL Entry rows.
-        We keep the same accounting logic, but make it idempotent and safer.
-        """
-
-        if getattr(self, "posted_to_gl", 0):
-            return
-
-        # Add company source fallback
-        if not self.company:
-            settings_company = frappe.db.get_single_value("SHG Settings", "default_company")
-            if not settings_company:
-                frappe.throw("Default Company is missing in SHG Settings.")
-            self.company = settings_company
-
-        # Make sure per-member receivable account exists / get it
-        member_account = self.get_member_loan_account(self.member, self.company)
-
-        # Get customer linked to this SHG Member (Party on JE lines)
-        customer = frappe.db.get_value("SHG Member", self.member, "customer")
-        if not customer:
-            # fallback: use SHG Member ID directly as customer/party
-            customer = self.member
-        
-        # Get loan source account from settings
+        # --- 3️⃣ Resolve SHG Settings defaults ---
         settings = frappe.get_single("SHG Settings")
-        loan_source_account = settings.default_loan_account
 
+        loan_source_account = getattr(settings, "default_loan_account", None)
         if not loan_source_account:
-            frappe.throw(_("Please set Default Loan Account in SHG Settings."))
+            frappe.throw(_("Please set 'Default Loan Account' in SHG Settings (e.g. Cash or Bank)."))
 
-        posting_date = self.disbursement_date or today()
+        # --- 4️⃣ Helper to ensure parent/group account exists ---
+        def ensure_parent_loan_account():
+            parent_name = f"SHG Loans receivable - {company_abbr}"
+            parent_exists = frappe.db.exists("Account", parent_name)
+            if not parent_exists:
+                ar_parent = frappe.db.exists("Account", f"Accounts Receivable - {company_abbr}")
+                if not ar_parent:
+                    frappe.throw(
+                        _(f"Accounts Receivable - {company_abbr} not found for {company}. "
+                          f"Please create it in Chart of Accounts.")
+                    )
+                parent_doc = frappe.get_doc({
+                    "doctype": "Account",
+                    "account_name": "SHG Loans receivable",
+                    "name": parent_name,
+                    "parent_account": f"Accounts Receivable - {company_abbr}",
+                    "company": company,
+                    "is_group": 1,
+                    "account_type": "Receivable",
+                    "root_type": "Asset",
+                }).insert(ignore_permissions=True)
+                frappe.db.commit()
+            else:
+                # ensure marked as group
+                is_group = frappe.db.get_value("Account", parent_name, "is_group")
+                if not is_group:
+                    frappe.db.set_value("Account", parent_name, "is_group", 1)
+                    frappe.db.commit()
+            return parent_name
 
-        # Create Journal Entry like you already do
+        # --- 5️⃣ Helper to ensure per-member receivable account exists ---
+        def ensure_member_account(member_id):
+            if not member_id:
+                frappe.throw(_("Loan Member is missing. Cannot post to GL."))
+
+            parent_name = ensure_parent_loan_account()
+            account_name = f"{member_id} - {company_abbr}"
+
+            acc_exists = frappe.db.exists("Account", account_name)
+            if not acc_exists:
+                member_name = frappe.db.get_value("SHG Member", member_id, "member_name") or member_id
+                acc_doc = frappe.get_doc({
+                    "doctype": "Account",
+                    "account_name": member_name,
+                    "name": account_name,
+                    "parent_account": parent_name,
+                    "company": company,
+                    "is_group": 0,
+                    "account_type": "Receivable",
+                    "root_type": "Asset",
+                }).insert(ignore_permissions=True)
+                frappe.db.commit()
+                return acc_doc.name
+            return account_name
+
+        # --- 6️⃣ Determine loan type ---
+        is_group_loan = bool(self.get("loan_members"))
+
+        # --- 7️⃣ Build Journal Entry ---
+        posting_date = self.disbursement_date or frappe.utils.today()
+
         je = frappe.new_doc("Journal Entry")
         je.voucher_type = "Journal Entry"
-        je.company = self.company
+        je.company = company
         je.posting_date = posting_date
-        je.remark = f"Loan disbursement for {self.member}"
+        je.user_remark = f"Loan disbursement for {self.name}"
 
-        # Debit: member receivable (we gave them money)
-        je.append("accounts", {
-            "account": member_account,
-            "party_type": "Customer",
-            "party": customer,
-            "debit_in_account_currency": self.loan_amount,
-            "credit_in_account_currency": 0,
-            "company": self.company,
-            "is_advance": "No"
-        })
+        # --- 8️⃣ Post debit lines for loan receivable(s) ---
+        if is_group_loan:
+            allocations = self.get("loan_members", [])
+            if not allocations:
+                frappe.throw(_("No Loan Members found for group loan."))
 
-        # Credit: loan source pool / cash
+            for row in allocations:
+                if not row.member or not flt(row.allocated_amount):
+                    continue
+
+                member_account = ensure_member_account(row.member)
+                customer = frappe.db.get_value("SHG Member", row.member, "customer") or row.member
+
+                je.append("accounts", {
+                    "account": member_account,
+                    "party_type": "Customer",
+                    "party": customer,
+                    "debit_in_account_currency": flt(row.allocated_amount),
+                    "credit_in_account_currency": 0,
+                    "company": company,
+                })
+
+        else:
+            # Individual loan
+            member_account = ensure_member_account(self.member)
+            customer = frappe.db.get_value("SHG Member", self.member, "customer") or self.member
+
+            je.append("accounts", {
+                "account": member_account,
+                "party_type": "Customer",
+                "party": customer,
+                "debit_in_account_currency": flt(self.loan_amount),
+                "credit_in_account_currency": 0,
+                "company": company,
+            })
+
+        # --- 9️⃣ Add credit line (Loan Source / Cash) ---
+        total_disbursed = flt(self.loan_amount)
+        if is_group_loan:
+            total_disbursed = sum(flt(r.allocated_amount) for r in self.get("loan_members", []))
+
         je.append("accounts", {
             "account": loan_source_account,
             "debit_in_account_currency": 0,
-            "credit_in_account_currency": self.loan_amount,
-            "company": self.company
+            "credit_in_account_currency": total_disbursed,
+            "company": company,
         })
 
-        je.insert(ignore_permissions=True)
-        je.submit()
+        # --- 🔟 Insert + submit the JE ---
+        try:
+            je.insert(ignore_permissions=True)
+            je.submit()
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "SHG Loan JE Posting Error")
+            frappe.throw(_("Failed to post Journal Entry: {0}").format(e))
 
+        # --- 11️⃣ Update Loan status and link ---
         self.db_set("journal_entry", je.name)
         self.db_set("posted_to_gl", 1)
-        self.db_set("posted_on", now_datetime())
+        self.db_set("posted_on", frappe.utils.now_datetime())
+        self.db_set("status", "Disbursed")
         frappe.db.commit()
+
+        frappe.msgprint(_(f"✅ Loan {self.name} successfully posted to GL as Journal Entry {je.name}."))
 
     def post_to_ledger(self):
         """
