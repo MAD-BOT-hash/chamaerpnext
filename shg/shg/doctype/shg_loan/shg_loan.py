@@ -759,69 +759,78 @@ def before_save(doc, method=None):
 
 
 def after_insert_or_update(doc):
-    """Automatically create individual loans when a group loan is saved or submitted"""
-    if not getattr(doc, "loan_members", None):
-        return
-
-    # Determine if this is a group loan based on presence of loan_members
+    """
+    Automatically handle post-creation logic for both group and individual loans:
+      - For group loans: auto-create individual member loans.
+      - For individual loans: auto-generate repayment schedule immediately.
+    """
     is_group_loan = bool(doc.get("loan_members"))
 
-    # Only for group loans
-    if not is_group_loan:
-        return
+    if is_group_loan:
+        created = []
+        for m in doc.get("loan_members", []):
+            if not m.member:
+                frappe.msgprint(f"⚠️ Skipping a row with no member.")
+                continue
 
-    created = []
-    for m in doc.loan_members:
-        # Skip if missing member or already exists
-        if not m.member:
-            frappe.msgprint(f"⚠️ Skipping one row — missing member in Loan Members table.")
-            continue
+            # Skip if already created
+            if frappe.db.exists("SHG Loan", {"parent_loan": doc.name, "member": m.member}):
+                continue
 
-        if frappe.db.exists("SHG Loan", {"parent_loan": doc.name, "member": m.member}):
-            continue
+            new_loan = frappe.new_doc("SHG Loan")
+            new_loan.update({
+                "loan_type": doc.loan_type,
+                "loan_amount": flt(m.allocated_amount) or 0,
+                "interest_rate": doc.interest_rate,
+                "interest_type": doc.interest_type,
+                "loan_period_months": doc.loan_period_months,
+                "repayment_frequency": doc.repayment_frequency,
+                "member": m.member,
+                "member_name": m.member_name or frappe.db.get_value("SHG Member", m.member, "member_name"),
+                "company": doc.company or frappe.db.get_single_value("SHG Settings", "company"),
+                "repayment_start_date": doc.repayment_start_date or frappe.utils.today(),
+                "status": "Applied",
+                "parent_loan": doc.name,
+                "is_group_loan": 0
+            })
+            new_loan.insert(ignore_permissions=True)
+            created.append(new_loan.name)
 
-        # Safely fetch member name if not already filled
-        member_name = m.member_name
-        if not member_name:
-            member_name = frappe.db.get_value("SHG Member", m.member, "member_name")
-
-        # Create individual loan
-        new_loan = frappe.new_doc("SHG Loan")
-        new_loan.update({
-            "loan_type": doc.loan_type,
-            "loan_amount": flt(m.allocated_amount) or flt(doc.loan_amount),
-            "interest_rate": doc.interest_rate,
-            "interest_type": doc.interest_type,
-            "loan_period_months": doc.loan_period_months,
-            "repayment_frequency": doc.repayment_frequency,
-            "member": m.member,
-            "member_name": member_name or "",
-            "company": getattr(doc, 'company', None) or frappe.db.get_single_value("SHG Settings", "company"),
-            "repayment_start_date": doc.repayment_start_date,
-            "status": "Applied",
-            "parent_loan": doc.name,
-            "is_group_loan": 0
-        })
-
-        # Prevent insert if still missing member (safety net)
-        if not new_loan.member:
-            frappe.msgprint(f"⚠️ Skipped creating loan — missing member for child row.")
-            continue
-
-        new_loan.insert(ignore_permissions=True)
-        created.append(new_loan.name)
-
-    if created:
-        frappe.msgprint(
-            f"✅ Created {len(created)} individual loan(s):<br>{', '.join(created)}",
-            alert=True
-        )
-        frappe.db.commit()
+        if created:
+            frappe.msgprint(
+                f"✅ Created {len(created)} individual loan(s): {', '.join(created)}",
+                alert=True
+            )
+            frappe.db.commit()
+    else:
+        # Auto-generate repayment schedule for individual loans
+        if not doc.get("repayment_schedule"):
+            doc.create_repayment_schedule_if_needed()
+            frappe.msgprint("✅ Repayment Schedule auto-generated for this loan.", alert=True)
 
 
 def on_submit(doc, method=None):
-    before_save(doc)
-    after_insert_or_update(doc)
+    """
+    On submit:
+      - For group loans: block submission (handled via members).
+      - For individual loans: mark as Disbursed, post to GL, and generate repayment schedule.
+    """
+    is_group_loan = bool(doc.get("loan_members"))
+
+    if is_group_loan:
+        frappe.throw(_("Group Loan cannot be submitted directly. Generate individual loans first."))
+
+    # Post to ledger if not done
+    doc.post_to_ledger_if_needed()
+
+    # Always create repayment schedule if missing
+    if not doc.get("repayment_schedule"):
+        doc.create_repayment_schedule_if_needed()
+
+    doc.db_set("status", "Disbursed")
+    doc.db_set("disbursed_on", frappe.utils.now_datetime())
+
+    frappe.msgprint(_("✅ Loan {0} disbursed and repayment schedule generated.").format(doc.name))
 
 
 def on_update_after_submit(doc, method=None):
