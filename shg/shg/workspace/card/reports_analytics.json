@@ -52,7 +52,7 @@
     {
      "label": "Loan Repayment Schedule",
      "type": "Report",
-     "name": "Loan Repayment Schedule",
+     "name": "Loan_Repayment_Schedule",
      "is_query_report": 1
     }
    ]
