@@ -315,7 +315,7 @@ class SHGLoan(Document):
         # Get accounts from SHG Settings
         settings = frappe.get_single("SHG Settings")
         loan_source_account = settings.default_loan_account
-        receivable_account = settings.member_receivable_account
+        receivable_account = settings.default_receivable_account
 
         if not loan_source_account or not receivable_account:
             frappe.throw(_("Please set Default Loan and Receivable Accounts in SHG Settings."))
@@ -523,7 +523,7 @@ class SHGLoan(Document):
         pe.party = member.customer
 
         # Set accounts
-        pe.paid_from = settings.member_receivable_account
+        pe.paid_from = settings.default_receivable_account
         pe.paid_to = settings.default_bank_account or settings.default_cash_account
 
         # Add reference to this loan
