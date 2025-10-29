@@ -298,6 +298,77 @@ class SHGLoan(Document):
     # --------------------------
     # LEDGER POSTING
     # --------------------------
+    def get_member_loan_account(self, member_id, company):
+        """
+        Ensure a per-member receivable account exists under
+        'SHG Loans receivable - <abbr>' for that company.
+        Returns the leaf account name to use in Journal Entries.
+        """
+
+        company_abbr = frappe.db.get_value("Company", company, "abbr")
+        if not company_abbr:
+            frappe.throw(f"Company abbreviation not found for {company}")
+
+        parent_group_name = f"SHG Loans receivable - {company_abbr}"
+
+        # 1. Ensure parent group account exists and is_group = 1
+        parent_account = frappe.db.exists("Account", parent_group_name)
+        if not parent_account:
+            # parent doesn't exist -> create it as group under Accounts Receivable
+            ar_parent = frappe.db.exists("Account", f"Accounts Receivable - {company_abbr}")
+            if not ar_parent:
+                frappe.throw(
+                    f"Accounts Receivable - {company_abbr} not found for {company}. "
+                    f"Create that first in Chart of Accounts."
+                )
+
+            parent_doc = frappe.get_doc({
+                "doctype": "Account",
+                "account_name": "SHG Loans receivable",
+                "name": parent_group_name,  # force the exact name
+                "parent_account": f"Accounts Receivable - {company_abbr}",
+                "company": company,
+                "is_group": 1,
+                "root_type": "Asset",
+                "account_type": "Receivable",
+            })
+            parent_doc.insert(ignore_permissions=True)
+            parent_account = parent_doc.name
+        else:
+            # make sure it's a group
+            is_group = frappe.db.get_value("Account", parent_group_name, "is_group")
+            if not is_group:
+                frappe.throw(
+                    f"{parent_group_name} exists but is not marked as a Group account. "
+                    f"Please edit it in Chart of Accounts and set 'Is Group = Yes'."
+                )
+
+        # 2. Ensure leaf account for the specific member exists
+        # We'll name it "MEMBERCODE - <abbr>" or "MEMBERCODE - <company>"
+        # Prefer a stable code: use member_id or their customer code.
+        member_code = member_id
+        member_label = frappe.db.get_value("SHG Member", member_id, "member_name") or member_id
+        leaf_account_name = f"{member_code} - {company_abbr}"
+
+        leaf_exists = frappe.db.exists("Account", leaf_account_name)
+        if not leaf_exists:
+            leaf_doc = frappe.get_doc({
+                "doctype": "Account",
+                "account_name": leaf_account_name.replace(f" - {company_abbr}", ""),
+                "name": leaf_account_name,
+                "parent_account": parent_group_name,
+                "company": company,
+                "is_group": 0,
+                "root_type": "Asset",
+                "account_type": "Receivable",
+                "report_type": "Balance Sheet",
+            })
+            leaf_doc.insert(ignore_permissions=True)
+            leaf_exists = leaf_doc.name
+
+        frappe.db.commit()
+        return leaf_exists
+
     def post_to_ledger_if_needed(self):
         """
         Create GL entries for the disbursed loan if not already posted.
@@ -315,12 +386,14 @@ class SHGLoan(Document):
                 frappe.throw("Default Company is missing in SHG Settings.")
             self.company = settings_company
 
-        # Get member account using the new helper
-        from shg.shg.utils.account_utils import get_account
-        member_account = get_account(self.company, "loans_receivable", self.member)
-        
-        # Get customer for the member
+        # Make sure per-member receivable account exists / get it
+        member_account = self.get_member_loan_account(self.member, self.company)
+
+        # Get customer linked to this SHG Member (Party on JE lines)
         customer = frappe.db.get_value("SHG Member", self.member, "customer")
+        if not customer:
+            # fallback: use SHG Member ID directly as customer/party
+            customer = self.member
         
         # Get loan source account from settings
         settings = frappe.get_single("SHG Settings")
@@ -566,6 +639,7 @@ class SHGLoan(Document):
             self.db_set("status", "Paid")
         elif self.balance_amount < flt(self.loan_amount):
             self.db_set("status", "Partially Paid")
+
 
 def create_or_verify_member_account(member_id, company):
     """Ensure the member has a personal ledger account under SHG Members - <abbr>."""
