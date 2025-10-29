@@ -83,10 +83,56 @@ class SHGMeetingFine(Document):
         """
         Create a Payment Entry for this meeting fine.
         """
-        from shg.shg.utils.gl_utils import create_meeting_fine_payment_entry, update_document_with_payment_entry
-        payment_entry = create_meeting_fine_payment_entry(self)
-        update_document_with_payment_entry(self, payment_entry)
+        # Add company source fallback
+        if not self.company:
+            settings_company = frappe.db.get_single_value("SHG Settings", "default_company")
+            if not settings_company:
+                frappe.throw("Default Company is missing in SHG Settings.")
+            self.company = settings_company
+
+        # Use the new account helper
+        from shg.shg.utils.account_utils import get_account
+        member_account = get_account(self.company, "fines", self.member)
         
+        # Get customer for the member
+        customer = frappe.db.get_value("SHG Member", self.member, "customer")
+        
+        # Get fine income account
+        income_account = get_account(self.company, "fines")
+        
+        # Create journal entry with proper accounts
+        je = frappe.new_doc("Journal Entry")
+        je.voucher_type = "Journal Entry"
+        je.company = self.company
+        je.posting_date = self.paid_date or today()
+        je.remark = f"Meeting fine from {self.member}"
+
+        # Debit: member receivable
+        je.append("accounts", {
+            "account": member_account,
+            "party_type": "Customer",
+            "party": customer,
+            "debit_in_account_currency": self.fine_amount,
+            "credit_in_account_currency": 0,
+            "company": self.company
+        })
+
+        # Credit: fines income account
+        je.append("accounts", {
+            "account": income_account,
+            "debit_in_account_currency": 0,
+            "credit_in_account_currency": self.fine_amount,
+            "company": self.company
+        })
+
+        je.insert(ignore_permissions=True)
+        je.submit()
+        
+        # Update document with journal entry reference
+        self.db_set("journal_entry", je.name)
+        self.db_set("posted_to_gl", 1)
+        frappe.db.commit()
+
     def get_fine_account(self, company):
         """Get fine income account, create if not exists"""
         from shg.shg.utils.account_utils import get_or_create_shg_penalty_income_account

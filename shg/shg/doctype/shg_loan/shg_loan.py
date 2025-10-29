@@ -308,55 +308,59 @@ class SHGLoan(Document):
         if getattr(self, "posted_to_gl", 0):
             return
 
-        company = getattr(self, 'company', None) or frappe.db.get_single_value("SHG Settings", "company")
-        if not company:
-            frappe.throw(_("Please set Default Company in SHG Settings."))
+        # Add company source fallback
+        if not self.company:
+            settings_company = frappe.db.get_single_value("SHG Settings", "default_company")
+            if not settings_company:
+                frappe.throw("Default Company is missing in SHG Settings.")
+            self.company = settings_company
 
-        # Get accounts from SHG Settings
+        # Get member account using the new helper
+        from shg.shg.utils.account_utils import get_account
+        member_account = get_account(self.company, "loans_receivable", self.member)
+        
+        # Get customer for the member
+        customer = frappe.db.get_value("SHG Member", self.member, "customer")
+        
+        # Get loan source account from settings
         settings = frappe.get_single("SHG Settings")
         loan_source_account = settings.default_loan_account
-        receivable_account = settings.default_receivable_account
 
-        if not loan_source_account or not receivable_account:
-            frappe.throw(_("Please set Default Loan and Receivable Accounts in SHG Settings."))
+        if not loan_source_account:
+            frappe.throw(_("Please set Default Loan Account in SHG Settings."))
 
         posting_date = self.disbursement_date or today()
 
-        # Create two GL Entry docs like you already do
-        entries = [
-            # Debit: member receivable (we gave them money)
-            dict(
-                account=receivable_account,
-                party_type="Customer",
-                party=self.member,
-                debit=self.loan_amount,
-                credit=0,
-                voucher_type="SHG Loan",
-                voucher_no=self.name,
-                company=company,
-                posting_date=posting_date,
-                remarks=f"Loan disbursement for {self.member}",
-            ),
-            # Credit: loan source pool / cash
-            dict(
-                account=loan_source_account,
-                debit=0,
-                credit=self.loan_amount,
-                voucher_type="SHG Loan",
-                voucher_no=self.name,
-                company=company,
-                posting_date=posting_date,
-                remarks=f"Loan disbursement for {self.member}",
-            ),
-        ]
+        # Create Journal Entry like you already do
+        je = frappe.new_doc("Journal Entry")
+        je.voucher_type = "Journal Entry"
+        je.company = self.company
+        je.posting_date = posting_date
+        je.remark = f"Loan disbursement for {self.member}"
 
-        for e in entries:
-            gl = frappe.new_doc("GL Entry")
-            for k, v in e.items():
-                setattr(gl, k, v)
-            gl.flags.ignore_permissions = True
-            gl.insert()
+        # Debit: member receivable (we gave them money)
+        je.append("accounts", {
+            "account": member_account,
+            "party_type": "Customer",
+            "party": customer,
+            "debit_in_account_currency": self.loan_amount,
+            "credit_in_account_currency": 0,
+            "company": self.company,
+            "is_advance": "No"
+        })
 
+        # Credit: loan source pool / cash
+        je.append("accounts", {
+            "account": loan_source_account,
+            "debit_in_account_currency": 0,
+            "credit_in_account_currency": self.loan_amount,
+            "company": self.company
+        })
+
+        je.insert(ignore_permissions=True)
+        je.submit()
+
+        self.db_set("journal_entry", je.name)
         self.db_set("posted_to_gl", 1)
         self.db_set("posted_on", now_datetime())
         frappe.db.commit()

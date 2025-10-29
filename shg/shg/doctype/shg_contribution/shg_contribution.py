@@ -158,6 +158,13 @@ class SHGContribution(Document):
         
     def post_to_ledger(self):
         """Post this contribution to GL using correct member ledger accounts."""
+        # Add company source fallback
+        if not self.company:
+            settings_company = frappe.db.get_single_value("SHG Settings", "default_company")
+            if not settings_company:
+                frappe.throw("Default Company is missing in SHG Settings.")
+            self.company = settings_company
+
         # Get the contribution posting method from settings
         settings = frappe.get_single("SHG Settings")
         posting_method = settings.contribution_posting_method or "Journal Entry"
@@ -170,9 +177,45 @@ class SHGContribution(Document):
         else:
             # Create a Journal Entry for this contribution (default)
             from shg.shg.utils.gl_utils import create_contribution_journal_entry, update_document_with_journal_entry
-            journal_entry = create_contribution_journal_entry(self)
-            update_document_with_journal_entry(self, journal_entry)
-        
+            
+            # Use the new account helper
+            from shg.shg.utils.account_utils import get_account
+            member_account = get_account(self.company, "contributions", self.member)
+            
+            # Get customer for the member
+            customer = frappe.db.get_value("SHG Member", self.member, "customer")
+            
+            # Create journal entry with proper accounts
+            je = frappe.new_doc("Journal Entry")
+            je.voucher_type = "Journal Entry"
+            je.company = self.company
+            je.posting_date = self.contribution_date or today()
+            je.remark = f"Contribution from {self.member}"
+
+            # Debit: member receivable
+            je.append("accounts", {
+                "account": member_account,
+                "party_type": "Customer",
+                "party": customer,
+                "debit_in_account_currency": self.amount,
+                "credit_in_account_currency": 0,
+                "company": self.company
+            })
+
+            # Credit: contributions income account
+            income_account = get_account(self.company, "contributions")
+            je.append("accounts", {
+                "account": income_account,
+                "debit_in_account_currency": 0,
+                "credit_in_account_currency": self.amount,
+                "company": self.company
+            })
+
+            je.insert(ignore_permissions=True)
+            je.submit()
+            
+            update_document_with_journal_entry(self, je)
+
     def cancel_journal_entry(self):
         """Cancel the associated journal entry or payment entry"""
         if self.journal_entry:
