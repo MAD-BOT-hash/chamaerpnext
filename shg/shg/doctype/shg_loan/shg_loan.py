@@ -61,6 +61,58 @@ class SHGLoan(Document):
         if self.total_payable:
             self.total_payable = round(float(self.total_payable), 2)
 
+        # Check if loan terms have changed and update repayment schedule if needed
+        if self.docstatus == 0:  # Only for draft documents
+            self._check_and_update_repayment_schedule()
+
+    def _check_and_update_repayment_schedule(self):
+        """
+        Check if loan terms have changed and update repayment schedule accordingly.
+        Only applies to draft loans that already have a repayment schedule.
+        """
+        if not self.get("repayment_schedule"):
+            return
+
+        # Check if any key loan parameters have changed
+        dirty_fields = getattr(self, "_dirty_fields", set())
+        key_fields = {"loan_amount", "interest_rate", "loan_period_months", "interest_type", "repayment_start_date"}
+        
+        if dirty_fields.intersection(key_fields):
+            # Save old values for audit log
+            old_values = {
+                "loan_amount": self.get_doc_before_save().loan_amount if self.get_doc_before_save() else self.loan_amount,
+                "interest_rate": self.get_doc_before_save().interest_rate if self.get_doc_before_save() else self.interest_rate,
+                "loan_period_months": self.get_doc_before_save().loan_period_months if self.get_doc_before_save() else self.loan_period_months,
+                "interest_type": self.get_doc_before_save().interest_type if self.get_doc_before_save() else self.interest_type,
+                "repayment_start_date": self.get_doc_before_save().repayment_start_date if self.get_doc_before_save() else self.repayment_start_date
+            }
+            
+            # Update the repayment schedule
+            self.update_repayment_schedule()
+            
+            # Add detailed audit log
+            self.add_comment("Edit", f"Repayment schedule updated due to loan term changes. "
+                          f"Loan Amount: {old_values['loan_amount']} → {self.loan_amount}, "
+                          f"Interest Rate: {old_values['interest_rate']}% → {self.interest_rate}%, "
+                          f"Period: {old_values['loan_period_months']} → {self.loan_period_months} months, "
+                          f"Interest Type: {old_values['interest_type']} → {self.interest_type}")
+
+    def on_update(self):
+        """
+        Called when document is updated.
+        """
+        # For submitted documents, if key fields change, we need to handle repayment schedule updates
+        if self.docstatus == 1:
+            self._handle_submitted_loan_updates()
+
+    def _handle_submitted_loan_updates(self):
+        """
+        Handle updates to submitted loans that might affect the repayment schedule.
+        """
+        # This would be called if allow_on_submit fields are updated
+        # For now, we'll just ensure the repayment schedule is consistent
+        pass
+
     def on_submit(self):
         """
         On submit we treat this as 'DISBURSED' for individual loans.
@@ -320,8 +372,8 @@ class SHGLoan(Document):
     # --------------------------
     def create_repayment_schedule_if_needed(self):
         """
-        Generate EMI-style repayment schedule once, after disbursement.
-        Uses logic similar to your create_repayment_schedule().
+        Generate repayment schedule once, after disbursement.
+        Supports both flat interest and reducing balance calculation methods.
         """
         if self.get("repayment_schedule"):
             # already has rows
@@ -331,6 +383,57 @@ class SHGLoan(Document):
         months = int(self.loan_period_months)
         start_date = self.repayment_start_date or add_months(self.disbursement_date or today(), 1)
 
+        # Get interest calculation method
+        interest_type = getattr(self, "interest_type", "Reducing Balance") or "Reducing Balance"
+
+        if interest_type == "Flat Rate":
+            self._generate_flat_rate_schedule(principal, months, start_date)
+        else:
+            self._generate_reducing_balance_schedule(principal, months, start_date)
+
+        frappe.msgprint(_("Repayment schedule generated with {0} installments.").format(months))
+
+    def _generate_flat_rate_schedule(self, principal, months, start_date):
+        """
+        Generate repayment schedule using flat interest rate method.
+        """
+        annual_interest_rate = flt(self.interest_rate)
+        total_interest = principal * (annual_interest_rate / 100) * (months / 12)
+        total_payable = principal + total_interest
+        monthly_installment = total_payable / months if months > 0 else 0
+
+        # Principal component is fixed for flat rate
+        principal_component = principal / months if months > 0 else 0
+        interest_component = monthly_installment - principal_component
+
+        outstanding = principal
+        pay_date = start_date
+
+        for i in range(1, months + 1):
+            # For flat rate, principal and interest components are fixed
+            self.append("repayment_schedule", {
+                "installment_no": i,
+                "due_date": pay_date,
+                "principal_amount": round(principal_component, 2),
+                "interest_amount": round(interest_component, 2),
+                "total_payment": round(monthly_installment, 2),
+                "total_due": round(monthly_installment, 2),
+                "amount_paid": 0,
+                "unpaid_balance": round(monthly_installment, 2),
+                "balance_amount": round(outstanding - principal_component, 2),
+                "status": "Pending"
+            })
+
+            outstanding -= principal_component
+            pay_date = add_months(pay_date, 1)
+
+        # Update the balance_amount field on the parent loan
+        self.db_set("balance_amount", round(principal, 2))
+
+    def _generate_reducing_balance_schedule(self, principal, months, start_date):
+        """
+        Generate repayment schedule using reducing balance method (EMI).
+        """
         # monthly flat interest rate
         monthly_interest_rate = flt(self.interest_rate) / 100.0 / 12.0
 
@@ -356,7 +459,7 @@ class SHGLoan(Document):
                 "principal_amount": round(principal_component, 2),
                 "interest_amount": round(interest_component, 2),
                 "total_payment": round(emi, 2),
-                "total_due": round(emi, 2),            # aligns with SHGLoanRepaymentSchedule.total_due
+                "total_due": round(emi, 2),
                 "amount_paid": 0,
                 "unpaid_balance": round(emi, 2),
                 "balance_amount": round(outstanding, 2),
@@ -366,15 +469,27 @@ class SHGLoan(Document):
             pay_date = add_months(pay_date, 1)
 
         # Update the balance_amount field on the parent loan
-        self.db_set("balance_amount", round(outstanding, 2))
-
-        frappe.msgprint(_("Repayment schedule generated with {0} installments.").format(months))
+        self.db_set("balance_amount", round(principal, 2))
 
     def create_repayment_schedule(self):
         """
         Backward compatibility method - calls the new idempotent version.
         """
         self.create_repayment_schedule_if_needed()
+
+    def update_repayment_schedule(self):
+        """
+        Update repayment schedule when loan terms are changed.
+        This method should be called when loan parameters are modified.
+        """
+        # Clear existing schedule
+        self.repayment_schedule = []
+        
+        # Regenerate schedule with new terms
+        self.create_repayment_schedule_if_needed()
+        
+        # Add audit log
+        self.add_comment("Edit", "Repayment schedule updated due to loan term changes")
 
     # --------------------------
     # PAYMENT ENTRY CREATION

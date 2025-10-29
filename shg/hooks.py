@@ -129,5 +129,6 @@ whitelisted_methods = [
 
 # Patches
 patches = [
-    "shg.patches.add_actual_payment_fields.execute"
+    "shg.patches.add_actual_payment_fields.execute",
+    "shg.patches.update_repayment_schedule_fields.execute"
 ]
