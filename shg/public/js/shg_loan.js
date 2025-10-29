@@ -37,7 +37,7 @@ frappe.ui.form.on('SHG Loan', {
                     frappe.route_options = {
                         "loan": frm.doc.name
                     };
-                    frappe.set_route("query-report", "Loan_Repayment_Schedule");
+                    frappe.set_route("query-report", "Loan Repayment Schedule");
                 });
             }
             

@@ -3,7 +3,7 @@
  "docstatus": 0,
  "doctype": "Workspace Card",
  "idx": 0,
- "label": "Reports & Analytics",
+ "label": "Loan Repayment Schedule",
  "modified": "2025-09-29 12:00:00",
  "module": "SHG",
  "name": "Reports & Analytics",
@@ -52,7 +52,7 @@
     {
      "label": "Loan Repayment Schedule",
      "type": "Report",
-     "name": "Loan_Repayment_Schedule",
+     "name": "Loan Repayment Schedule",
      "is_query_report": 1
     }
    ]

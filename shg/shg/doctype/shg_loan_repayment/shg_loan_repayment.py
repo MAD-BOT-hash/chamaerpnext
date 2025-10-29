@@ -62,3 +62,17 @@ class SHGLoanRepayment(Document):
         )
 
         frappe.msgprint(f"⚠️ Loan {loan_doc.name} balance restored after cancellation.")
+
+
+# --- Hook functions ---
+# These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
+def validate_repayment(doc, method):
+    """Hook function called from hooks.py"""
+    doc.validate()
+
+
+def post_to_general_ledger(doc, method):
+    """Hook function called from hooks.py"""
+    if doc.docstatus == 1:
+        # The actual posting to ledger is handled in the on_submit method
+        pass
