@@ -45,7 +45,7 @@ class SHGLoan(Document):
             frappe.throw(_("Loan Period (Months) is required."))
 
         # Auto-fetch company from SHG Settings if not set
-        if not self.company:
+        if not getattr(self, 'company', None):
             self.company = frappe.db.get_single_value("SHG Settings", "default_company")
 
         # If this is a group loan, force total = sum of allocations
@@ -240,7 +240,7 @@ class SHGLoan(Document):
                 "repayment_frequency": getattr(self, "repayment_frequency", "Monthly"),
                 "member": m.member,
                 "member_name": m.member_name,
-                "company": self.company,
+                "company": getattr(self, 'company', None) or frappe.db.get_single_value("SHG Settings", "default_company"),
                 "repayment_start_date": self.repayment_start_date or today(),
                 "status": "Approved",
                 "parent_loan": self.name,
@@ -308,7 +308,7 @@ class SHGLoan(Document):
         if getattr(self, "posted_to_gl", 0):
             return
 
-        company = self.company or frappe.db.get_single_value("SHG Settings", "default_company")
+        company = getattr(self, 'company', None) or frappe.db.get_single_value("SHG Settings", "default_company")
         if not company:
             frappe.throw(_("Please set Default Company in SHG Settings."))
 
@@ -503,7 +503,7 @@ class SHGLoan(Document):
 
         # Get settings
         settings = frappe.get_single("SHG Settings")
-        company = self.company or frappe.db.get_single_value("SHG Settings", "default_company")
+        company = getattr(self, 'company', None) or frappe.db.get_single_value("SHG Settings", "default_company")
 
         if not company:
             frappe.throw(_("Please set Default Company in SHG Settings."))
@@ -697,7 +697,7 @@ def after_insert_or_update(doc):
             "repayment_frequency": doc.repayment_frequency,
             "member": m.member,
             "member_name": member_name or "",
-            "company": doc.company,
+            "company": getattr(doc, 'company', None) or frappe.db.get_single_value("SHG Settings", "default_company"),
             "repayment_start_date": doc.repayment_start_date,
             "status": "Applied",
             "parent_loan": doc.name,
