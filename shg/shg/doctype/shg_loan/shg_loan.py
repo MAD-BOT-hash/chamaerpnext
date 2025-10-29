@@ -324,18 +324,76 @@ class SHGLoan(Document):
         self.create_repayment_schedule_if_needed()
 
     # --------------------------
-    # OUTSTANDING & STATUS HELPERS
+    # PAYMENT ENTRY CREATION
     # --------------------------
-    def update_outstanding_balance_preview(self):
+    def _create_loan_payment_entry(self, repayment_schedule_item, payment_amount):
         """
-        Compute outstanding balance based on schedule rows.
-        Could be extended to consider actual repayments.
+        Create a Payment Entry for a loan repayment.
+        This method is called by SHGLoanRepaymentSchedule.mark_as_paid().
         """
-        # For now, we'll just use the loan amount as a preview
-        # In a more advanced implementation, this would calculate based on actual repayments
-        if not self.balance_amount and self.loan_amount:
-            self.balance_amount = flt(self.loan_amount)
+        from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 
+        # Get settings
+        settings = frappe.get_single("SHG Settings")
+        company = self.company or frappe.db.get_single_value("SHG Settings", "default_company")
+
+        if not company:
+            frappe.throw(_("Please set Default Company in SHG Settings."))
+
+        # Create payment entry
+        pe = frappe.new_doc("Payment Entry")
+        pe.payment_type = "Receive"
+        pe.company = company
+        pe.posting_date = frappe.utils.today()
+        pe.paid_amount = payment_amount
+        pe.received_amount = payment_amount
+        pe.allocate_payment_amount = 1
+
+        # Set party details
+        member = frappe.get_doc("SHG Member", self.member)
+        pe.party_type = "Customer"
+        pe.party = member.customer
+
+        # Set accounts
+        pe.paid_from = settings.member_receivable_account
+        pe.paid_to = settings.default_bank_account or settings.default_cash_account
+
+        # Add reference to this loan
+        pe.append("references", {
+            "reference_doctype": "SHG Loan",
+            "reference_name": self.name,
+            "total_amount": self.loan_amount,
+            "outstanding_amount": self.balance_amount,
+            "allocated_amount": payment_amount
+        })
+
+        pe.insert(ignore_permissions=True)
+        pe.submit()
+
+        # Link the payment entry to the repayment schedule item
+        repayment_schedule_item.db_set("payment_entry", pe.name)
+
+        return pe
+
+    # --------------------------
+    # OUTSTANDING BALANCE MANAGEMENT
+    # --------------------------
+    def recalculate_outstanding_after_payment(self):
+        """
+        Recalculate the outstanding balance on the loan after a payment is made.
+        """
+        total_paid = 0
+        for schedule_item in self.get("repayment_schedule", []):
+            total_paid += flt(schedule_item.amount_paid)
+
+        self.balance_amount = flt(self.loan_amount) - total_paid
+        self.db_set("balance_amount", self.balance_amount)
+
+        # Update loan status based on balance
+        if self.balance_amount <= 0:
+            self.db_set("status", "Paid")
+        elif self.balance_amount < flt(self.loan_amount):
+            self.db_set("status", "Partially Paid")
 
 def create_or_verify_member_account(member_id, company):
     """Ensure the member has a personal ledger account under SHG Members - <abbr>."""

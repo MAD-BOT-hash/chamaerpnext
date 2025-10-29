@@ -126,3 +126,8 @@ whitelisted_methods = [
     "shg.shg.utils.payment_utils.receive_multiple_payments",
     "shg.api.create_payment_entry_from_invoice"
 ]
+
+# Patches
+patches = [
+    "shg.patches.add_actual_payment_fields.execute"
+]
