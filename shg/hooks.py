@@ -9,6 +9,19 @@ app_color = "green"
 app_email = "support@shgsolutions.co.ke"
 app_license = "MIT"
 
+# Reports
+report_config = {
+    "Loan Repayment Schedule": {
+        "doctype": "SHG Loan",
+        "label": "Loan Repayment Schedule",
+        "is_query_report": True,
+        "module": "SHG",
+        "name": "Loan Repayment Schedule",
+        "report_type": "Script Report",
+        "ref_doctype": "SHG Loan"
+    }
+}
+
 # Document Events
 doc_events = {
     "SHG Member": {

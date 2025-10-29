@@ -17,6 +17,19 @@ frappe.ui.form.on("SHG Loan", {
     },
     
     refresh(frm) {
+        if (frm.doc.docstatus === 1) {
+            frm.add_custom_button(
+                __("View Repayment Schedule"),
+                () => {
+                    frappe.route_options = {
+                        "loan": frm.doc.name
+                    };
+                    frappe.set_route("query-report", "Loan Repayment Schedule");
+                },
+                __("View")
+            );
+        }
+        
         if (frm.doc.docstatus === 1 && frm.doc.status !== "Paid") {
             frm.add_custom_button(
                 __("Make Repayment"),
