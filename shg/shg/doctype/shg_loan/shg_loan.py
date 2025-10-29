@@ -55,6 +55,12 @@ class SHGLoan(Document):
         # Check eligibility for each member (group loan) or the single loan member
         self.run_eligibility_checks()
 
+        # Ensure monetary values are rounded to 2 decimal places
+        if self.monthly_installment:
+            self.monthly_installment = round(float(self.monthly_installment), 2)
+        if self.total_payable:
+            self.total_payable = round(float(self.total_payable), 2)
+
     def on_submit(self):
         """
         On submit we treat this as 'DISBURSED' for individual loans.
@@ -78,6 +84,53 @@ class SHGLoan(Document):
         self.db_set("disbursed_on", now_datetime())
 
         frappe.msgprint(_("Loan {0} successfully disbursed, GL posted and repayment schedule created.").format(self.name))
+
+    # --------------------------
+    # REPAYMENT CALCULATION
+    # --------------------------
+    @frappe.whitelist()
+    def calculate_repayment_details(self):
+        """
+        Calculate monthly installment and total payable amount based on loan parameters.
+        This method is called from the frontend via JavaScript.
+        """
+        if not self.loan_amount or not self.interest_rate or not self.loan_period_months:
+            return {
+                "monthly_installment": 0,
+                "total_payable": 0
+            }
+
+        principal = flt(self.loan_amount)
+        months = int(self.loan_period_months)
+        annual_interest_rate = flt(self.interest_rate)
+
+        # Calculate based on interest type
+        interest_type = getattr(self, "interest_type", "Flat Rate") or "Flat Rate"
+
+        if interest_type == "Flat Rate":
+            # Flat rate calculation
+            total_interest = principal * (annual_interest_rate / 100) * (months / 12)
+            total_payable = principal + total_interest
+            monthly_installment = total_payable / months if months > 0 else 0
+        else:
+            # Reducing balance calculation (EMI)
+            monthly_interest_rate = annual_interest_rate / 100 / 12
+            if monthly_interest_rate > 0:
+                monthly_installment = principal * monthly_interest_rate * ((1 + monthly_interest_rate) ** months) / (
+                    ((1 + monthly_interest_rate) ** months) - 1
+                )
+            else:
+                monthly_installment = principal / months if months > 0 else 0
+            total_payable = monthly_installment * months
+
+        # Ensure monetary values are rounded to 2 decimal places
+        monthly_installment = round(float(monthly_installment), 2)
+        total_payable = round(float(total_payable), 2)
+
+        return {
+            "monthly_installment": monthly_installment,
+            "total_payable": total_payable
+        }
 
     # --------------------------
     # GROUP LOAN LOGIC
