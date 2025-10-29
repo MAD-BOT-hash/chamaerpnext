@@ -204,6 +204,21 @@ class SHGLoan(Document):
         self.db_set("status", "Disbursed")
         frappe.msgprint(f"✅ Loan {self.name} posted as {je.name}")
 
+    def on_submit(self):
+        """Post to ledger and create schedule on submit."""
+        self.post_to_ledger_if_needed()
+        self.create_repayment_schedule_if_needed()
+        self.db_set("status", "Disbursed")
+        self.db_set("disbursed_on", now_datetime())
+        frappe.msgprint(_(f"Loan {self.name} successfully disbursed and schedule created."))
+
+    def before_save(self):
+        """Ensure total loan amount = sum of allocations before save."""
+        is_group_loan = bool(self.get("loan_members"))
+        if is_group_loan and getattr(self, "loan_members", None):
+            total = sum(flt(r.allocated_amount) for r in self.loan_members)
+            self.loan_amount = total or 0
+
     # ---------------------------------------------------
     # REPAYMENT SCHEDULE
     # ---------------------------------------------------
@@ -248,6 +263,31 @@ class SHGLoan(Document):
             date = add_months(date, 1)
         self.db_set("balance_amount", round(principal, 2))
 
+
+# -------------------------------
+# HOOKS
+# -------------------------------
+def validate_loan(doc, method):
+    doc.validate()
+
+def post_to_general_ledger(doc, method):
+    if doc.docstatus == 1 and not doc.get("posted_to_gl"):
+        doc.post_to_ledger_if_needed()
+
+def before_save(doc, method=None):
+    """Ensure total loan amount = sum of allocations before save."""
+    is_group_loan = bool(doc.get("loan_members"))
+    if is_group_loan and getattr(doc, "loan_members", None):
+        total = sum(flt(r.allocated_amount) for r in doc.loan_members)
+        doc.loan_amount = total or 0
+
+def after_insert_or_update(doc):
+    """Auto actions after saving loan."""
+    if doc.get("loan_members"):
+        doc.generate_individual_member_loans()
+    else:
+        doc.create_repayment_schedule_if_needed()
+
     def _generate_reducing_balance_schedule(self, principal, months, start):
         r = flt(self.interest_rate) / 100.0 / 12.0
         emi = principal * r * ((1 + r) ** months) / (((1 + r) ** months) - 1) if r else principal / months
@@ -269,27 +309,3 @@ class SHGLoan(Document):
             })
             date = add_months(date, 1)
         self.db_set("balance_amount", round(principal, 2))
-# -------------------------------
-# HOOKS
-# -------------------------------
-def validate_loan(doc, method):
-    doc.validate()
-
-def post_to_general_ledger(doc, method):
-    if doc.docstatus == 1 and not doc.get("posted_to_gl"):
-        doc.post_to_ledger_if_needed()
-
-def after_insert_or_update(doc):
-    """Auto actions after saving loan."""
-    if doc.get("loan_members"):
-        doc.generate_individual_member_loans()
-    else:
-        doc.create_repayment_schedule_if_needed()
-
-def on_submit(doc, method=None):
-    """Post to ledger and create schedule on submit."""
-    doc.post_to_ledger_if_needed()
-    doc.create_repayment_schedule_if_needed()
-    doc.db_set("status", "Disbursed")
-    doc.db_set("disbursed_on", now_datetime())
-    frappe.msgprint(_(f"Loan {doc.name} successfully disbursed and schedule created."))
