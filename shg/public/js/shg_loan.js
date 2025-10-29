@@ -12,8 +12,8 @@ frappe.ui.form.on('SHG Loan', {
             if (frm.doc.status === 'Approved') {
                 frm.add_custom_button(__('Disburse Loan'), function() {
                     frappe.call({
-                        method: 'shg.shg.doctype.shg_loan.shg_loan.disburse_loan',
-                        args: { docname: frm.doc.name },
+                        method: 'frappe.client.submit',
+                        args: { doctype: "SHG Loan", name: frm.doc.name },
                         callback: function(r) {
                             if (!r.exc) {
                                 frm.reload_doc();
