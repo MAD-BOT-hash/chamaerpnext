@@ -49,6 +49,18 @@ class SHGLoan(Document):
         if self.total_payable:
             self.total_payable = round(flt(self.total_payable), 2)
 
+        # Generate repayment schedule if not present
+        self.create_repayment_schedule_if_needed()
+
+    def on_submit(self):
+        """Generate repayment schedule on submit if not already present."""
+        self.create_repayment_schedule_if_needed()
+        self.post_to_ledger_if_needed()
+        self.db_set("status", "Disbursed")
+        self.db_set("disbursed_on", now_datetime())
+
+        frappe.msgprint(_(f"Loan {self.name} successfully disbursed, GL posted and repayment schedule created."))
+
     # --------------------------
     # GROUP LOGIC
     # --------------------------
@@ -257,8 +269,8 @@ class SHGLoan(Document):
             self.append("repayment_schedule", {
                 "installment_no": i,
                 "due_date": pay_date,
-                "principal_amount": round(principal_component, 2),
-                "interest_amount": round(interest_component, 2),
+                "principal_component": round(principal_component, 2),
+                "interest_component": round(interest_component, 2),
                 "total_payment": round(monthly_install, 2),
                 "loan_balance": round(outstanding, 2),
                 "status": "Pending"
@@ -279,8 +291,8 @@ class SHGLoan(Document):
             self.append("repayment_schedule", {
                 "installment_no": i,
                 "due_date": pay_date,
-                "principal_amount": round(principal_part, 2),
-                "interest_amount": round(interest, 2),
+                "principal_component": round(principal_part, 2),
+                "interest_component": round(interest, 2),
                 "total_payment": round(emi, 2),
                 "loan_balance": round(outstanding, 2),
                 "status": "Pending"
@@ -516,11 +528,6 @@ def after_insert_or_update(doc):
             alert=True
         )
         frappe.db.commit()
-
-
-def on_submit(doc, method=None):
-    before_save(doc)
-    after_insert_or_update(doc)
 
 
 def on_update_after_submit(doc, method=None):
