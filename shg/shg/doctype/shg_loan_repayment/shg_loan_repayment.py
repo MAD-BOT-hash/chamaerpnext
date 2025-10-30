@@ -10,21 +10,21 @@ class SHGLoanRepayment(Document):
         if not self.loan:
             frappe.throw("Please select a Loan to apply this repayment to.")
 
-        if not self.amount_paid or flt(self.amount_paid) <= 0:
+        if not self.total_paid or flt(self.total_paid) <= 0:
             frappe.throw("Repayment amount must be greater than zero.")
 
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
         if loan_doc.docstatus != 1:
             frappe.throw(f"Loan {loan_doc.name} must be submitted before repayment.")
 
-        if flt(self.amount_paid) > flt(loan_doc.balance_amount):
+        if flt(self.total_paid) > flt(loan_doc.balance_amount):
             frappe.throw(
-                f"Repayment ({self.amount_paid}) exceeds remaining balance ({loan_doc.balance_amount})."
+                f"Repayment ({self.total_paid}) exceeds remaining balance ({loan_doc.balance_amount})."
             )
 
     def on_submit(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
-        paid_amount = flt(self.amount_paid or 0)
+        paid_amount = flt(self.total_paid or 0)
 
         loan_doc.flags.ignore_validate_update_after_submit = True
         loan_doc.balance_amount = flt(loan_doc.balance_amount or 0) - paid_amount
@@ -48,7 +48,7 @@ class SHGLoanRepayment(Document):
 
     def on_cancel(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
-        paid_amount = flt(self.amount_paid or 0)
+        paid_amount = flt(self.total_paid or 0)
 
         loan_doc.flags.ignore_validate_update_after_submit = True
         loan_doc.balance_amount = flt(loan_doc.balance_amount or 0) + paid_amount
@@ -72,7 +72,7 @@ class SHGLoanRepayment(Document):
         Calculate principal, interest, and penalty breakdown for the repayment.
         This method is called from the frontend via JavaScript.
         """
-        if not self.loan or not self.amount_paid:
+        if not self.loan or not self.total_paid:
             return {
                 "principal_amount": 0,
                 "interest_amount": 0,
@@ -82,7 +82,7 @@ class SHGLoanRepayment(Document):
 
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
         outstanding_balance = flt(loan_doc.balance_amount)
-        amount_paid = flt(self.amount_paid)
+        amount_paid = flt(self.total_paid)
 
         # Get settings for penalty calculation
         settings = frappe.get_single("SHG Settings")
