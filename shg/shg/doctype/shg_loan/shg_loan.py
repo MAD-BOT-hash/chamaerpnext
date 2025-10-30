@@ -33,6 +33,46 @@ class SHGLoan(Document):
         self.run_eligibility_checks()
 
     # ---------------------------------------------------
+    # CALCULATION METHODS
+    # ---------------------------------------------------
+    @frappe.whitelist()
+    def calculate_repayment_details(self):
+        """Calculate monthly installment and total payable amount.
+        
+        This method is called from the frontend JavaScript to dynamically
+        calculate repayment details when loan parameters change.
+        """
+        if not all([self.loan_amount, self.interest_rate, self.loan_period_months]):
+            return {
+                "monthly_installment": 0,
+                "total_payable": 0
+            }
+
+        principal = flt(self.loan_amount)
+        months = int(self.loan_period_months)
+        interest_type = getattr(self, "interest_type", "Reducing Balance")
+
+        if interest_type == "Flat Rate":
+            # Flat rate calculation
+            rate = flt(self.interest_rate)
+            total_interest = principal * (rate / 100) * (months / 12)
+            total = principal + total_interest
+            monthly = total / months if months > 0 else 0
+        else:
+            # Reducing balance calculation (EMI)
+            r = flt(self.interest_rate) / 100.0 / 12.0
+            if r > 0:
+                monthly = principal * r * ((1 + r) ** months) / (((1 + r) ** months) - 1) if ((1 + r) ** months) - 1 > 0 else principal / months
+            else:
+                monthly = principal / months if months > 0 else 0
+            total = monthly * months
+
+        return {
+            "monthly_installment": round(monthly, 2),
+            "total_payable": round(total, 2)
+        }
+
+    # ---------------------------------------------------
     # GROUP LOAN LOGIC
     # ---------------------------------------------------
     def sync_group_allocations_total(self):
@@ -269,65 +309,6 @@ class SHGLoan(Document):
             })
             date = add_months(date, 1)
         self.db_set("balance_amount", round(principal, 2))
-
-    @frappe.whitelist()
-    def get_member_loan_statement(self):
-        """
-        Generate a loan statement for a member.
-        Returns loan details and repayment schedule.
-        """
-        statement = {
-            "loan_details": {
-                "loan_id": self.name,
-                "member_name": self.member_name,
-                "loan_amount": self.loan_amount,
-                "interest_rate": self.interest_rate,
-                "interest_type": self.interest_type,
-                "loan_period_months": self.loan_period_months,
-                "disbursement_date": self.disbursement_date,
-                "status": self.status,
-                "balance_amount": self.balance_amount,
-                "total_repaid": self.total_repaid
-            },
-            "repayment_schedule": [],
-            "summary": {
-                "total_due": 0,
-                "total_paid": 0,
-                "outstanding_balance": 0,
-                "overdue_count": 0
-            }
-        }
-        
-        # Add repayment schedule details
-        total_due = 0
-        total_paid = 0
-        overdue_count = 0
-        
-        for row in self.get("repayment_schedule", []):
-            installment = {
-                "installment_no": row.installment_no,
-                "due_date": row.due_date,
-                "total_due": row.total_due,
-                "amount_paid": row.amount_paid,
-                "unpaid_balance": row.unpaid_balance,
-                "status": row.status
-            }
-            statement["repayment_schedule"].append(installment)
-            
-            total_due += flt(row.total_due)
-            total_paid += flt(row.amount_paid)
-            
-            if row.status == "Overdue":
-                overdue_count += 1
-        
-        # Update summary
-        statement["summary"]["total_due"] = total_due
-        statement["summary"]["total_paid"] = total_paid
-        statement["summary"]["outstanding_balance"] = total_due - total_paid
-        statement["summary"]["overdue_count"] = overdue_count
-        
-        return statement
-
 # -------------------------------
 # HOOKS
 # -------------------------------
