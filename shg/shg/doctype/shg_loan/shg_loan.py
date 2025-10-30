@@ -331,14 +331,14 @@ class SHGLoan(Document):
 # -------------------------------
 # HOOKS
 # -------------------------------
-def validate_loan(doc, method):
+def validate_loan(doc, method=None):
     doc.validate()
 
-def post_to_general_ledger(doc, method):
+def post_to_general_ledger(doc, method=None):
     if doc.docstatus == 1 and not doc.get("posted_to_gl"):
         doc.post_to_ledger_if_needed()
 
-def after_insert_or_update(doc):
+def after_insert_or_update(doc, method=None):
     """Auto actions after saving loan."""
     if doc.get("loan_members"):
         doc.generate_individual_member_loans()
@@ -352,26 +352,3 @@ def on_submit(doc, method=None):
     doc.db_set("status", "Disbursed")
     doc.db_set("disbursed_on", now_datetime())
     frappe.msgprint(_(f"Loan {doc.name} successfully disbursed and schedule created."))
-
-
-# ---------------------------------------------------------
-# ERPNext 15 Hook Compatibility — before_save handler
-# ---------------------------------------------------------
-def before_save(doc, method=None):
-    """
-    ERPNext 15 lifecycle hook:
-    Runs before saving SHG Loan.
-    Ensures group loan totals sync correctly and prevents AttributeError.
-    """
-    # If this is a group loan, sync total = sum of all allocations
-    is_group_loan = bool(doc.get("loan_members"))
-    if is_group_loan and getattr(doc, "loan_members", None):
-        total_allocated = sum(flt(m.allocated_amount or 0) for m in doc.loan_members)
-        doc.loan_amount = total_allocated or 0
-
-    # Optional: recompute interest/repayment terms for draft loans
-    if doc.docstatus == 0 and not doc.get("repayment_schedule"):
-        try:
-            doc.create_repayment_schedule_if_needed()
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "before_save schedule generation")
