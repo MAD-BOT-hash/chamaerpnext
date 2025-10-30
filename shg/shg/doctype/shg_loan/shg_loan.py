@@ -204,13 +204,6 @@ class SHGLoan(Document):
         self.db_set("status", "Disbursed")
         frappe.msgprint(f"✅ Loan {self.name} posted as {je.name}")
 
-    def before_save(self):
-        """Ensure total loan amount = sum of allocations before save."""
-        is_group_loan = bool(self.get("loan_members"))
-        if is_group_loan and getattr(self, "loan_members", None):
-            total = sum(flt(r.allocated_amount) for r in self.loan_members)
-            self.loan_amount = total or 0
-
     # ---------------------------------------------------
     # REPAYMENT SCHEDULE
     # ---------------------------------------------------
@@ -285,6 +278,17 @@ def validate_loan(doc, method):
 def post_to_general_ledger(doc, method):
     if doc.docstatus == 1 and not doc.get("posted_to_gl"):
         doc.post_to_ledger_if_needed()
+
+def before_save(doc, method=None):
+    """
+    Hook placeholder to sync group loan allocations before save.
+    Prevents AttributeError if called from hooks.py.
+    """
+    # Only needed for group loans to ensure total = sum of allocations
+    is_group_loan = bool(doc.get("loan_members"))
+    if is_group_loan and getattr(doc, "loan_members", None):
+        total_allocated = sum(flt(m.allocated_amount) for m in doc.loan_members)
+        doc.loan_amount = total_allocated or 0
 
 def after_insert_or_update(doc):
     """Auto actions after saving loan."""
