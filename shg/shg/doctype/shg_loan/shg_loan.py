@@ -273,22 +273,13 @@ class SHGLoan(Document):
 # HOOKS
 # -------------------------------
 def validate_loan(doc, method):
+    """Hook function to validate loan documents."""
     doc.validate()
 
 def post_to_general_ledger(doc, method):
+    """Hook function to post loan to general ledger."""
     if doc.docstatus == 1 and not doc.get("posted_to_gl"):
         doc.post_to_ledger_if_needed()
-
-def before_save(doc, method=None):
-    """
-    Hook placeholder to sync group loan allocations before save.
-    Prevents AttributeError if called from hooks.py.
-    """
-    # Only needed for group loans to ensure total = sum of allocations
-    is_group_loan = bool(doc.get("loan_members"))
-    if is_group_loan and getattr(doc, "loan_members", None):
-        total_allocated = sum(flt(m.allocated_amount) for m in doc.loan_members)
-        doc.loan_amount = total_allocated or 0
 
 def after_insert_or_update(doc):
     """Auto actions after saving loan."""
