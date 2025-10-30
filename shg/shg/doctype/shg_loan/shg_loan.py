@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import today, add_months, flt, now_datetime
+from frappe.utils import today, add_months, flt, now_datetime, getdate, nowdate
 
 class SHGLoan(Document):
     """SHG Loan controller with automatic ledger and repayment schedule posting."""
@@ -328,17 +328,44 @@ class SHGLoan(Document):
         
         return statement
 
+    @frappe.whitelist()
+    def mark_all_due_as_paid(self):
+        """Mark all due installments as paid"""
+        if not self.get("repayment_schedule"):
+            return
+            
+        today_date = getdate(nowdate())
+        updated_count = 0
+        
+        for row in self.get("repayment_schedule"):
+            # Check if the installment is due (not paid and due date is today or past)
+            due_date = getdate(row.due_date) if row.due_date else today_date
+            if row.status in ["Pending", "Overdue"] and due_date <= today_date and flt(row.unpaid_balance) > 0:
+                # Mark as paid using the existing method
+                try:
+                    schedule_doc = frappe.get_doc("SHG Loan Repayment Schedule", row.name)
+                    schedule_doc.mark_as_paid(row.unpaid_balance)
+                    updated_count += 1
+                except Exception as e:
+                    frappe.log_error(frappe.get_traceback(), f"Failed to mark installment {row.name} as paid")
+                    
+        if updated_count > 0:
+            frappe.msgprint(_(f"✅ {updated_count} installments marked as paid."))
+            self.reload()
+        else:
+            frappe.msgprint(_("No due installments found to mark as paid."))
+
 # -------------------------------
 # HOOKS
 # -------------------------------
-def validate_loan(doc, method=None):
+def validate_loan(doc, method):
     doc.validate()
 
-def post_to_general_ledger(doc, method=None):
+def post_to_general_ledger(doc, method):
     if doc.docstatus == 1 and not doc.get("posted_to_gl"):
         doc.post_to_ledger_if_needed()
 
-def after_insert_or_update(doc, method=None):
+def after_insert_or_update(doc):
     """Auto actions after saving loan."""
     if doc.get("loan_members"):
         doc.generate_individual_member_loans()

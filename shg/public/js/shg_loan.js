@@ -39,6 +39,30 @@ frappe.ui.form.on('SHG Loan', {
                     };
                     frappe.set_route("query-report", "Loan Repayment Schedule");
                 });
+                
+                // On refresh: if submitted & schedule exists, show quick actions
+                if (frm.doc.repayment_schedule && frm.doc.repayment_schedule.length > 0) {
+                    frm.add_custom_button(__('Mark all due as paid today'), function() {
+                        frappe.confirm(
+                            'Are you sure you want to mark all due installments as paid?',
+                            function() {
+                                // Call server-side method to mark all due installments as paid
+                                frappe.call({
+                                    method: 'shg.shg.doctype.shg_loan.shg_loan.mark_all_due_as_paid',
+                                    args: {
+                                        loan_name: frm.doc.name
+                                    },
+                                    callback: function(r) {
+                                        if (!r.exc) {
+                                            frm.reload_doc();
+                                            frappe.msgprint(__('All due installments marked as paid'));
+                                        }
+                                    }
+                                });
+                            }
+                        );
+                    }, __('Quick Actions'));
+                }
             }
             
             // Print loan agreement
@@ -131,6 +155,15 @@ frappe.ui.form.on('SHG Loan', {
                     d.show();
                 });
             }, 'Actions');
+        }
+        
+        // If group loan (has members): show banner "Submit the individual loans, not this container"
+        if (frm.doc.loan_members && frm.doc.loan_members.length > 0) {
+            frm.dashboard.add_comment(
+                __("This is a group loan container. Please submit the individual member loans, not this container."),
+                "yellow",
+                true
+            );
         }
         
         // Add dashboard indicators
@@ -303,5 +336,54 @@ frappe.ui.form.on('SHG Loan', {
         if (frm.doc.status === 'Disbursed' && !frm.doc.disbursement_date) {
             frm.set_value('disbursement_date', frappe.datetime.get_today());
         }
+    }
+});
+
+// Add custom buttons to the Repayment Schedule grid
+frappe.ui.form.on('SHG Loan Repayment Schedule', {
+    refresh: function(frm, cdt, cdn) {
+        // Add Mark as Paid and Reverse Payment buttons to each row
+        frm.fields_dict.repayment_schedule.grid.add_custom_button(__('Mark as Paid'), function() {
+            let row = frm.fields_dict.repayment_schedule.grid.get_selected_children();
+            if (row.length > 0) {
+                let d = row[0];
+                frappe.call({
+                    method: 'shg.shg.doctype.shg_loan_repayment_schedule.shg_loan_repayment_schedule.mark_as_paid',
+                    args: {
+                        docname: d.name,
+                        payment_amount: d.unpaid_balance
+                    },
+                    callback: function(r) {
+                        if (!r.exc) {
+                            frm.reload_doc();
+                            frappe.msgprint(__('Installment marked as paid'));
+                        }
+                    }
+                });
+            } else {
+                frappe.msgprint(__('Please select a row first'));
+            }
+        });
+        
+        frm.fields_dict.repayment_schedule.grid.add_custom_button(__('Reverse Payment'), function() {
+            let row = frm.fields_dict.repayment_schedule.grid.get_selected_children();
+            if (row.length > 0) {
+                let d = row[0];
+                frappe.call({
+                    method: 'shg.shg.doctype.shg_loan_repayment_schedule.shg_loan_repayment_schedule.reverse_payment',
+                    args: {
+                        docname: d.name
+                    },
+                    callback: function(r) {
+                        if (!r.exc) {
+                            frm.reload_doc();
+                            frappe.msgprint(__('Payment reversed'));
+                        }
+                    }
+                });
+            } else {
+                frappe.msgprint(__('Please select a row first'));
+            }
+        });
     }
 });

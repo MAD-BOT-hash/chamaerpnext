@@ -24,22 +24,50 @@ class SHGLoanRepayment(Document):
 
     def on_submit(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
-        paid_amount = flt(self.total_paid or 0)
-
-        loan_doc.flags.ignore_validate_update_after_submit = True
-        loan_doc.balance_amount = flt(loan_doc.balance_amount or 0) - paid_amount
+        remaining_amount = flt(self.total_paid or 0)
+        
+        # If the loan has schedule rows, auto-allocate self.total_paid oldest-first across schedules
+        if loan_doc.get("repayment_schedule"):
+            # Sort schedule rows by due date (oldest first)
+            schedule_rows = sorted(loan_doc.get("repayment_schedule"), key=lambda x: x.due_date)
+            
+            for row in schedule_rows:
+                if remaining_amount <= 0:
+                    break
+                    
+                if flt(row.unpaid_balance) > 0:
+                    # Allocate amount to this row
+                    alloc = min(flt(row.unpaid_balance), remaining_amount)
+                    row.amount_paid = flt(row.amount_paid or 0) + alloc
+                    row.unpaid_balance = flt(row.unpaid_balance) - alloc
+                    remaining_amount -= alloc
+                    
+                    # Update status
+                    if row.unpaid_balance <= 0:
+                        row.status = "Paid"
+                    else:
+                        row.status = "Partially Paid"
+                        
+                    # Save the updated row
+                    row.db_update()
+            
+            # Recalculate loan outstanding after payment
+            loan_doc.recalculate_outstanding_after_payment()
+        else:
+            # Fallback to simple balance logic
+            loan_doc.flags.ignore_validate_update_after_submit = True
+            loan_doc.balance_amount = flt(loan_doc.balance_amount or 0) - flt(self.total_paid or 0)
+            loan_doc.status = (
+                "Paid" if loan_doc.balance_amount == 0 else "Partially Paid"
+            )
 
         loan_doc.last_repayment_date = self.posting_date
-        loan_doc.status = (
-            "Paid" if loan_doc.balance_amount == 0 else "Partially Paid"
-        )
-
         loan_doc.save(ignore_permissions=True)
         frappe.db.commit()
 
         loan_doc.add_comment(
             "Edit",
-            f"Repayment {self.name} applied ({paid_amount}). Remaining balance: {loan_doc.balance_amount}",
+            f"Repayment {self.name} applied ({self.total_paid}). Remaining balance: {loan_doc.balance_amount}",
         )
 
         frappe.msgprint(
@@ -48,11 +76,35 @@ class SHGLoanRepayment(Document):
 
     def on_cancel(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
-        paid_amount = flt(self.total_paid or 0)
-
-        loan_doc.flags.ignore_validate_update_after_submit = True
-        loan_doc.balance_amount = flt(loan_doc.balance_amount or 0) + paid_amount
-        loan_doc.status = "Disbursed"
+        
+        # If the loan has schedule rows, reverse the allocations
+        if loan_doc.get("repayment_schedule"):
+            # Find schedule rows that were affected by this repayment
+            # This is a simplified approach - in a real implementation, you might want to track
+            # which repayment affected which schedule rows
+            for row in loan_doc.get("repayment_schedule"):
+                if row.payment_entry and frappe.db.exists("Payment Entry", row.payment_entry):
+                    pe = frappe.get_doc("Payment Entry", row.payment_entry)
+                    if pe.reference_no == self.name:
+                        # Reverse this payment
+                        row.amount_paid = flt(row.amount_paid or 0) - flt(pe.paid_amount or 0)
+                        row.unpaid_balance = flt(row.total_due) - flt(row.amount_paid or 0)
+                        if row.unpaid_balance <= 0:
+                            row.status = "Paid"
+                        elif row.amount_paid > 0:
+                            row.status = "Partially Paid"
+                        else:
+                            row.status = "Pending"
+                        row.db_update()
+            
+            # Recalculate loan outstanding after payment reversal
+            loan_doc.recalculate_outstanding_after_payment()
+        else:
+            # Fallback to simple balance logic
+            loan_doc.flags.ignore_validate_update_after_submit = True
+            loan_doc.balance_amount = flt(loan_doc.balance_amount or 0) + flt(self.total_paid or 0)
+            loan_doc.status = "Disbursed"
+            
         loan_doc.save(ignore_permissions=True)
         frappe.db.commit()
 

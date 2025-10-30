@@ -9,3 +9,5 @@ shg.shg.patches.patch_create_shg_members_account
 shg.shg.patches.patch_fix_account_references
 shg.shg.patches.patch_validate_shg_members_account
 shg.shg.patches.add_phone_field_to_related_doctypes
+shg.patches.migrate_repayment_schedule_field_names
+shg.patches.verify_hook_signatures
