@@ -269,6 +269,65 @@ class SHGLoan(Document):
             })
             date = add_months(date, 1)
         self.db_set("balance_amount", round(principal, 2))
+
+    @frappe.whitelist()
+    def get_member_loan_statement(self):
+        """
+        Generate a loan statement for a member.
+        Returns loan details and repayment schedule.
+        """
+        statement = {
+            "loan_details": {
+                "loan_id": self.name,
+                "member_name": self.member_name,
+                "loan_amount": self.loan_amount,
+                "interest_rate": self.interest_rate,
+                "interest_type": self.interest_type,
+                "loan_period_months": self.loan_period_months,
+                "disbursement_date": self.disbursement_date,
+                "status": self.status,
+                "balance_amount": self.balance_amount,
+                "total_repaid": self.total_repaid
+            },
+            "repayment_schedule": [],
+            "summary": {
+                "total_due": 0,
+                "total_paid": 0,
+                "outstanding_balance": 0,
+                "overdue_count": 0
+            }
+        }
+        
+        # Add repayment schedule details
+        total_due = 0
+        total_paid = 0
+        overdue_count = 0
+        
+        for row in self.get("repayment_schedule", []):
+            installment = {
+                "installment_no": row.installment_no,
+                "due_date": row.due_date,
+                "total_due": row.total_due,
+                "amount_paid": row.amount_paid,
+                "unpaid_balance": row.unpaid_balance,
+                "status": row.status
+            }
+            statement["repayment_schedule"].append(installment)
+            
+            total_due += flt(row.total_due)
+            total_paid += flt(row.amount_paid)
+            
+            if row.status == "Overdue":
+                overdue_count += 1
+        
+        # Update summary
+        statement["summary"]["total_due"] = total_due
+        statement["summary"]["total_paid"] = total_paid
+        statement["summary"]["outstanding_balance"] = total_due - total_paid
+        statement["summary"]["overdue_count"] = overdue_count
+        
+        return statement
+
 # -------------------------------
 # HOOKS
 # -------------------------------
@@ -278,17 +337,6 @@ def validate_loan(doc, method):
 def post_to_general_ledger(doc, method):
     if doc.docstatus == 1 and not doc.get("posted_to_gl"):
         doc.post_to_ledger_if_needed()
-
-def before_save(doc, method=None):
-    """
-    Hook placeholder to sync group loan allocations before save.
-    Prevents AttributeError if called from hooks.py.
-    """
-    # Only needed for group loans to ensure total = sum of allocations
-    is_group_loan = bool(doc.get("loan_members"))
-    if is_group_loan and getattr(doc, "loan_members", None):
-        total_allocated = sum(flt(m.allocated_amount) for m in doc.loan_members)
-        doc.loan_amount = total_allocated or 0
 
 def after_insert_or_update(doc):
     """Auto actions after saving loan."""

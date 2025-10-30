@@ -5,7 +5,7 @@ import re
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import today, getdate, now
+from frappe.utils import today, getdate, now, flt
 import json
 
 class SHGMember(Document):
@@ -216,6 +216,67 @@ class SHGMember(Document):
             FROM `tabSHG Loan` 
             WHERE member = %s AND status = 'Disbursed'
         """, self.name)[0][0]
+
+    @frappe.whitelist()
+    def get_member_contribution_statement(self):
+        """
+        Generate a contribution statement for a member.
+        Returns contribution details and summary.
+        """
+        statement = {
+            "member_details": {
+                "member_name": self.member_name,
+                "member_id": self.member_id,
+                "account_number": self.account_number,
+                "phone_number": self.phone_number
+            },
+            "contributions": [],
+            "summary": {
+                "total_contributions": 0,
+                "total_paid": 0,
+                "total_unpaid": 0,
+                "contribution_types": {}
+            }
+        }
+        
+        # Get contribution entries
+        contributions = frappe.get_all("SHG Contribution", 
+            filters={"member": self.name, "docstatus": 1},
+            fields=["name", "posting_date", "contribution_type", "amount", "paid_amount", "unpaid_amount", "status"],
+            order_by="posting_date DESC")
+        
+        total_contributions = 0
+        total_paid = 0
+        total_unpaid = 0
+        contribution_types = {}
+        
+        for contrib in contributions:
+            statement["contributions"].append({
+                "date": contrib.posting_date,
+                "type": contrib.contribution_type,
+                "amount": contrib.amount,
+                "paid": contrib.paid_amount,
+                "unpaid": contrib.unpaid_amount,
+                "status": contrib.status
+            })
+            
+            total_contributions += flt(contrib.amount)
+            total_paid += flt(contrib.paid_amount)
+            total_unpaid += flt(contrib.unpaid_amount)
+            
+            # Track contribution types
+            if contrib.contribution_type in contribution_types:
+                contribution_types[contrib.contribution_type] += flt(contrib.amount)
+            else:
+                contribution_types[contrib.contribution_type] = flt(contrib.amount)
+        
+        # Update summary
+        statement["summary"]["total_contributions"] = total_contributions
+        statement["summary"]["total_paid"] = total_paid
+        statement["summary"]["total_unpaid"] = total_unpaid
+        statement["summary"]["contribution_types"] = contribution_types
+        
+        return statement
         
         # Update total payments received
         total_payments = frappe.db.sql("""
