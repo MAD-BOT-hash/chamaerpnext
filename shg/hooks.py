@@ -32,7 +32,7 @@ doc_events = {
         "before_save": "shg.shg.doctype.shg_loan.shg_loan.before_save",
         "on_submit": "shg.shg.doctype.shg_loan.shg_loan.on_submit",
         "after_insert": "shg.shg.doctype.shg_loan.shg_loan.after_insert_or_update",
-        "on_update_after_submit": "shg.shg.doctype.shg_loan.shg_loan.on_update_after_submit",
+        "on_update_after_submit": "shg.shg.doctype.shg_loan.shg_loan.after_insert_or_update",
         "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     },
     "SHG Loan Repayment": {

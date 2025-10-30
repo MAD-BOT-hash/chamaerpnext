@@ -204,10 +204,12 @@ class SHGLoan(Document):
         self.db_set("status", "Disbursed")
         frappe.msgprint(f"✅ Loan {self.name} posted as {je.name}")
 
-    def on_update_after_submit(self):
-        """Handle updates to submitted loans."""
-        # For now, we'll just ensure the repayment schedule is consistent
-        pass
+    def before_save(self):
+        """Ensure total loan amount = sum of allocations before save."""
+        is_group_loan = bool(self.get("loan_members"))
+        if is_group_loan and getattr(self, "loan_members", None):
+            total = sum(flt(r.allocated_amount) for r in self.loan_members)
+            self.loan_amount = total or 0
 
     # ---------------------------------------------------
     # REPAYMENT SCHEDULE
