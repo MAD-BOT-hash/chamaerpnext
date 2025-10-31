@@ -1,0 +1,21 @@
+{
+  "doctype": "Custom Field",
+  "dt": "SHG Loan",
+  "module": "SHG",
+  "app": "shg",
+  "name": "SHG Loan-disbursed_on",
+  "fieldname": "disbursed_on",
+  "label": "Disbursed On",
+  "fieldtype": "Datetime",
+  "insert_after": "disbursement_date",
+  "read_only": 1,
+  "hidden": 0,
+  "no_copy": 1,
+  "allow_on_submit": 1,
+  "default": "",
+  "description": "Automatically set when loan is disbursed and posted to the ledger.",
+  "owner": "Administrator",
+  "create": 1,
+  "modified_by": "Administrator",
+  "custom_insert_after": "disbursement_date"
+}

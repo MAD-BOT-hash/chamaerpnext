@@ -156,7 +156,8 @@ class SHGLoan(Document):
             "credit_in_account_currency": total,
             "company": company,
             "party_type": "Customer",
-            "party": cust
+            "party": cust,
+            "is_advance": "No"
         })
 
         try:
