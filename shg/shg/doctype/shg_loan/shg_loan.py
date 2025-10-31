@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import today, add_months, flt, now_datetime, getdate, nowdate
+from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 class SHGLoan(Document):
     """SHG Loan controller with automatic ledger and repayment schedule posting."""
@@ -373,7 +374,7 @@ def generate_individual_loans(parent_loan):
 def before_save(doc, method=None):
     """Hook to safely round and validate before saving."""
     for field in ["loan_amount", "monthly_installment", "total_payable", "balance_amount"]:
-        if getattr(doc, field, None):
+        if getattr(doc, field, None):F
             setattr(doc, field, round(flt(getattr(doc, field)), 2))
     if hasattr(doc, "calculate_repayment_details"):
         doc.calculate_repayment_details()
