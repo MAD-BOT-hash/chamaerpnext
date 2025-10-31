@@ -1,169 +1,209 @@
 frappe.ui.form.on('SHG Loan', {
     refresh: function(frm) {
-        // Add custom buttons based on status
-        if (frm.doc.docstatus === 1) {
-            if (frm.doc.status === 'Applied') {
-                frm.add_custom_button(__('Approve Loan'), function() {
-                    frm.set_value('status', 'Approved');
-                    frm.save();
-                }).addClass('btn-primary');
-            }
-            
-            if (frm.doc.status === 'Approved') {
-                frm.add_custom_button(__('Disburse Loan'), function() {
-                    frappe.call({
-                        method: 'frappe.client.submit',
-                        args: { doctype: "SHG Loan", name: frm.doc.name },
-                        callback: function(r) {
-                            if (!r.exc) {
-                                frm.reload_doc();
-                                frappe.msgprint(__('Loan disbursed successfully'));
-                            }
-                        }
-                    });
-                }).addClass('btn-primary');
-            }
-            
-            if (frm.doc.status === 'Disbursed') {
-                frm.add_custom_button(__('Record Repayment'), function() {
-                    frappe.new_doc('SHG Loan Repayment', {
-                        loan: frm.doc.name,
-                        member: frm.doc.member,
-                        member_name: frm.doc.member_name
-                    });
-                });
-                
-                frm.add_custom_button(__('View Repayment Schedule'), function() {
-                    frappe.route_options = {
-                        "loan": frm.doc.name
-                    };
-                    frappe.set_route("query-report", "Loan Repayment Schedule");
-                });
-                
-                // On refresh: if submitted & schedule exists, show quick actions
-                if (frm.doc.repayment_schedule && frm.doc.repayment_schedule.length > 0) {
-                    frm.add_custom_button(__('Mark all due as paid today'), function() {
-                        frappe.confirm(
-                            'Are you sure you want to mark all due installments as paid?',
-                            function() {
-                                // Call server-side method to mark all due installments as paid
-                                frappe.call({
-                                    method: 'shg.shg.doctype.shg_loan.shg_loan.mark_all_due_as_paid',
-                                    args: {
-                                        loan_name: frm.doc.name
-                                    },
-                                    callback: function(r) {
-                                        if (!r.exc) {
-                                            frm.reload_doc();
-                                            frappe.msgprint(__('All due installments marked as paid'));
-                                        }
-                                    }
-                                });
-                            }
-                        );
-                    }, __('Quick Actions'));
-                }
-            }
-            
-            // Print loan agreement
-            frm.add_custom_button(__('Print Agreement'), function() {
-                frappe.utils.print(
-                    frm.doc.doctype,
-                    frm.doc.name,
-                    'SHG Loan Agreement'
-                );
-            });
-        }
-        else {
-            // Add "Select Multiple Members" button for new loans
-            frm.add_custom_button(__('Select Multiple Members'), () => {
-                const d = new frappe.ui.Dialog({
-                    title: __('Select Members for Loan'),
-                    fields: [
-                        {
-                            label: 'Filter by Group',
-                            fieldname: 'group_filter',
-                            fieldtype: 'Link',
-                            options: 'SHG Group',
-                            onchange: function() {
-                                const group = d.get_value('group_filter');
-                                if (group) {
-                                    frappe.db.get_list('SHG Member', {
-                                        filters: { group: group, membership_status: 'Active' },
-                                        fields: ['name', 'member_name', 'total_contributions']
-                                    }).then(members => {
-                                        const member_list = members.map(m => ({
-                                            label: `${m.member_name} (${m.name})`,
-                                            value: m.name
-                                        }));
+        // --- 1️⃣ Detect group loan ---
+        const is_group_loan = (frm.doc.loan_members && frm.doc.loan_members.length > 0);
 
-                                        d.fields_dict.member_select.df.options = member_list;
-                                        d.fields_dict.member_select.refresh();
-                                    });
-                                }
-                            }
-                        },
-                        {
-                            label: 'Select Members',
-                            fieldname: 'member_select',
-                            fieldtype: 'MultiCheck',
-                            options: []
-                        },
-                        {
-                            label: 'Distribute Amount Equally',
-                            fieldname: 'distribute_equally',
-                            fieldtype: 'Check',
-                            default: 1
-                        }
-                    ],
-                    primary_action_label: 'Add to Loan',
-                    primary_action(values) {
-                        const selected = values.member_select;
-                        if (!selected || selected.length === 0) {
-                            frappe.msgprint(__('Please select at least one member.'));
-                            return;
-                        }
+        // Clear default ERPNext "Submit this document to confirm" helper
+        frm.page.clear_indicator();
 
-                        const per_member = flt(frm.doc.loan_amount) / selected.length;
+        // --- 2️⃣ If group loan, show banner & disable submit ---
+        if (is_group_loan) {
+            frm.dashboard.clear_headline();
+            frm.dashboard.set_headline_alert(
+                "📢 This is a <b>Group Loan Container</b>. <br>" +
+                "👉 Please <b>create and submit individual member loans</b> below instead.",
+                "orange"
+            );
 
-                        selected.forEach(member_id => {
-                            frappe.db.get_doc('SHG Member', member_id).then(m => {
-                                frm.add_child('loan_members', {
-                                    member: m.name,
-                                    member_name: m.member_name,
-                                    allocated_amount: values.distribute_equally ? per_member : 0
-                                });
-                                frm.refresh_field('loan_members');
-                            });
-                        });
-                        d.hide();
+            // Disable submit to prevent errors
+            frm.disable_save();
+
+            // --- 3️⃣ Add button to generate individual loans ---
+            frm.add_custom_button("👥 Create Individual Member Loans", function() {
+                frappe.call({
+                    method: "shg.shg.doctype.shg_loan.shg_loan.generate_individual_loans",
+                    args: { parent_loan: frm.doc.name },
+                    freeze: true,
+                    freeze_message: "Generating individual member loans...",
+                    callback: function(r) {
+                        if (r.message && r.message.created && r.message.created.length > 0) {
+                            frappe.msgprint(
+                                `✅ Created ${r.message.created.length} individual loans:<br>` +
+                                r.message.created.join(", ")
+                            );
+                            frm.reload_doc();
+                        } else {
+                            frappe.msgprint("⚠️ No individual loans were created (check members list).");
+                        }
                     }
                 });
-                
-                // Fetch all active members
-                frappe.db.get_list('SHG Member', {
-                    filters: { membership_status: 'Active' },
-                    fields: ['name', 'member_name', 'total_contributions']
-                }).then(members => {
-                    const member_list = members.map(m => ({
-                        label: `${m.member_name} (${m.name})`,
-                        value: m.name
-                    }));
+            }).addClass("btn-primary");
 
-                    d.fields_dict.member_select.df.options = member_list;
-                    d.fields_dict.member_select.refresh();
-                    d.show();
-                });
-            }, 'Actions');
+            // --- 4️⃣ Hide standard "Submit" and "Disburse" actions for container ---
+            frm.page.set_primary_action("Submit", null);
         }
-        
-        // If group loan (has members): show banner "Submit the individual loans, not this container"
-        if (frm.doc.loan_members && frm.doc.loan_members.length > 0) {
-            frm.dashboard.add_comment(
-                __("This is a group loan container. Please submit the individual member loans, not this container."),
-                "yellow",
-                true
-            );
+
+        // --- 5️⃣ For individual loans (normal flow) ---
+        else {
+            frm.dashboard.clear_headline();
+            frm.enable_save();
+            
+            // Add custom buttons based on status
+            if (frm.doc.docstatus === 1) {
+                if (frm.doc.status === 'Applied') {
+                    frm.add_custom_button(__('Approve Loan'), function() {
+                        frm.set_value('status', 'Approved');
+                        frm.save();
+                    }).addClass('btn-primary');
+                }
+                
+                if (frm.doc.status === 'Approved') {
+                    frm.add_custom_button(__('Disburse Loan'), function() {
+                        frappe.call({
+                            method: 'frappe.client.submit',
+                            args: { doctype: "SHG Loan", name: frm.doc.name },
+                            callback: function(r) {
+                                if (!r.exc) {
+                                    frm.reload_doc();
+                                    frappe.msgprint(__('Loan disbursed successfully'));
+                                }
+                            }
+                        });
+                    }).addClass('btn-primary');
+                }
+                
+                if (frm.doc.status === 'Disbursed') {
+                    frm.add_custom_button(__('Record Repayment'), function() {
+                        frappe.new_doc('SHG Loan Repayment', {
+                            loan: frm.doc.name,
+                            member: frm.doc.member,
+                            member_name: frm.doc.member_name
+                        });
+                    });
+                    
+                    frm.add_custom_button(__('View Repayment Schedule'), function() {
+                        frappe.route_options = {
+                            "loan": frm.doc.name
+                        };
+                        frappe.set_route("query-report", "Loan Repayment Schedule");
+                    });
+                    
+                    // On refresh: if submitted & schedule exists, show quick actions
+                    if (frm.doc.repayment_schedule && frm.doc.repayment_schedule.length > 0) {
+                        frm.add_custom_button(__('Mark all due as paid today'), function() {
+                            frappe.confirm(
+                                'Are you sure you want to mark all due installments as paid?',
+                                function() {
+                                    // Call server-side method to mark all due installments as paid
+                                    frappe.call({
+                                        method: 'shg.shg.doctype.shg_loan.shg_loan.mark_all_due_as_paid',
+                                        args: {
+                                            loan_name: frm.doc.name
+                                        },
+                                        callback: function(r) {
+                                            if (!r.exc) {
+                                                frm.reload_doc();
+                                                frappe.msgprint(__('All due installments marked as paid'));
+                                            }
+                                        }
+                                    });
+                                }
+                            );
+                        }, __('Quick Actions'));
+                    }
+                }
+                
+                // Print loan agreement
+                frm.add_custom_button(__('Print Agreement'), function() {
+                    frappe.utils.print(
+                        frm.doc.doctype,
+                        frm.doc.name,
+                        'SHG Loan Agreement'
+                    );
+                });
+            }
+            else {
+                // Add "Select Multiple Members" button for new loans
+                frm.add_custom_button(__('Select Multiple Members'), () => {
+                    const d = new frappe.ui.Dialog({
+                        title: __('Select Members for Loan'),
+                        fields: [
+                            {
+                                label: 'Filter by Group',
+                                fieldname: 'group_filter',
+                                fieldtype: 'Link',
+                                options: 'SHG Group',
+                                onchange: function() {
+                                    const group = d.get_value('group_filter');
+                                    if (group) {
+                                        frappe.db.get_list('SHG Member', {
+                                            filters: { group: group, membership_status: 'Active' },
+                                            fields: ['name', 'member_name', 'total_contributions']
+                                        }).then(members => {
+                                            const member_list = members.map(m => ({
+                                                label: `${m.member_name} (${m.name})`,
+                                                value: m.name
+                                            }));
+
+                                            d.fields_dict.member_select.df.options = member_list;
+                                            d.fields_dict.member_select.refresh();
+                                        });
+                                    }
+                                }
+                            },
+                            {
+                                label: 'Select Members',
+                                fieldname: 'member_select',
+                                fieldtype: 'MultiCheck',
+                                options: []
+                            },
+                            {
+                                label: 'Distribute Amount Equally',
+                                fieldname: 'distribute_equally',
+                                fieldtype: 'Check',
+                                default: 1
+                            }
+                        ],
+                        primary_action_label: 'Add to Loan',
+                        primary_action(values) {
+                            const selected = values.member_select;
+                            if (!selected || selected.length === 0) {
+                                frappe.msgprint(__('Please select at least one member.'));
+                                return;
+                            }
+
+                            const per_member = flt(frm.doc.loan_amount) / selected.length;
+
+                            selected.forEach(member_id => {
+                                frappe.db.get_doc('SHG Member', member_id).then(m => {
+                                    frm.add_child('loan_members', {
+                                        member: m.name,
+                                        member_name: m.member_name,
+                                        allocated_amount: values.distribute_equally ? per_member : 0
+                                    });
+                                    frm.refresh_field('loan_members');
+                                });
+                            });
+                            d.hide();
+                        }
+                    });
+                    
+                    // Fetch all active members
+                    frappe.db.get_list('SHG Member', {
+                        filters: { membership_status: 'Active' },
+                        fields: ['name', 'member_name', 'total_contributions']
+                    }).then(members => {
+                        const member_list = members.map(m => ({
+                            label: `${m.member_name} (${m.name})`,
+                            value: m.name
+                        }));
+
+                        d.fields_dict.member_select.df.options = member_list;
+                        d.fields_dict.member_select.refresh();
+                        d.show();
+                    });
+                }, 'Actions');
+            }
         }
         
         // Add dashboard indicators

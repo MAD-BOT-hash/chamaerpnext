@@ -355,6 +355,20 @@ class SHGLoan(Document):
         else:
             frappe.msgprint(_("No due installments found to mark as paid."))
 
+@frappe.whitelist()
+def generate_individual_loans(parent_loan):
+    """Generate individual member loans from a group loan container."""
+    try:
+        loan = frappe.get_doc("SHG Loan", parent_loan)
+        if not loan.get("loan_members"):
+            return {"created": []}
+        
+        created = loan.generate_individual_member_loans()
+        return {"created": created}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Generate Individual Loans Error")
+        frappe.throw(str(e))
+
 # -------------------------------
 # HOOKS
 # -------------------------------
