@@ -82,10 +82,142 @@ frappe.ui.form.on('SHG Loan', {
                     });
                     
                     frm.add_custom_button(__('View Repayment Schedule'), function() {
-                        frappe.route_options = {
-                            "loan": frm.doc.name
-                        };
-                        frappe.set_route("query-report", "Loan Repayment Schedule");
+                        // Use the accurate repayment schedule from the server-side method
+                        frappe.call({
+                            method: 'shg.shg.doctype.shg_loan.shg_loan.get_member_loan_statement',
+                            args: { docname: frm.doc.name },
+                            callback: function(r) {
+                                if (r.message) {
+                                    // Create a dialog to display the repayment schedule
+                                    let schedule_data = r.message.repayment_schedule;
+                                    let loan_details = r.message.loan_details;
+                                    let summary = r.message.summary;
+                                    
+                                    // Format data for the grid
+                                    let formatted_data = schedule_data.map(row => {
+                                        return [
+                                            row.installment_no,
+                                            frappe.datetime.str_to_user(row.due_date),
+                                            format_currency(row.total_due, 'KES'),
+                                            format_currency(row.amount_paid, 'KES'),
+                                            format_currency(row.unpaid_balance, 'KES'),
+                                            row.status
+                                        ];
+                                    });
+                                    
+                                    let dialog = new frappe.ui.Dialog({
+                                        title: __('Repayment Schedule for Loan {0}', [frm.doc.name]),
+                                        fields: [
+                                            {
+                                                label: __('Loan Details'),
+                                                fieldtype: 'Section Break',
+                                                collapsible: 1
+                                            },
+                                            {
+                                                label: __('Member'),
+                                                fieldtype: 'Data',
+                                                default: loan_details.member_name,
+                                                read_only: 1
+                                            },
+                                            {
+                                                label: __('Loan Amount'),
+                                                fieldtype: 'Currency',
+                                                default: loan_details.loan_amount,
+                                                read_only: 1
+                                            },
+                                            {
+                                                label: __('Interest Rate'),
+                                                fieldtype: 'Percent',
+                                                default: loan_details.interest_rate,
+                                                read_only: 1
+                                            },
+                                            {
+                                                label: __('Loan Period'),
+                                                fieldtype: 'Int',
+                                                default: loan_details.loan_period_months,
+                                                read_only: 1
+                                            },
+                                            {
+                                                label: __('Repayment Schedule'),
+                                                fieldtype: 'Section Break'
+                                            },
+                                            {
+                                                label: __('Schedule Summary'),
+                                                fieldtype: 'HTML',
+                                                options: `
+                                                    <div class="row">
+                                                        <div class="col-xs-4">
+                                                            <b>Total Due:</b> ${format_currency(summary.total_due, 'KES')}
+                                                        </div>
+                                                        <div class="col-xs-4">
+                                                            <b>Total Paid:</b> ${format_currency(summary.total_paid, 'KES')}
+                                                        </div>
+                                                        <div class="col-xs-4">
+                                                            <b>Outstanding:</b> ${format_currency(summary.outstanding_balance, 'KES')}
+                                                        </div>
+                                                    </div>
+                                                    <div class="row" style="margin-top: 10px;">
+                                                        <div class="col-xs-4">
+                                                            <b>Overdue Installments:</b> ${summary.overdue_count}
+                                                        </div>
+                                                    </div>
+                                                `
+                                            },
+                                            {
+                                                label: '',
+                                                fieldtype: 'Table',
+                                                fields: [
+                                                    {
+                                                        label: __('Installment'),
+                                                        fieldname: 'installment_no',
+                                                        fieldtype: 'Int',
+                                                        width: '100px'
+                                                    },
+                                                    {
+                                                        label: __('Due Date'),
+                                                        fieldname: 'due_date',
+                                                        fieldtype: 'Date',
+                                                        width: '150px'
+                                                    },
+                                                    {
+                                                        label: __('Total Due'),
+                                                        fieldname: 'total_due',
+                                                        fieldtype: 'Currency',
+                                                        width: '150px'
+                                                    },
+                                                    {
+                                                        label: __('Amount Paid'),
+                                                        fieldname: 'amount_paid',
+                                                        fieldtype: 'Currency',
+                                                        width: '150px'
+                                                    },
+                                                    {
+                                                        label: __('Unpaid Balance'),
+                                                        fieldname: 'unpaid_balance',
+                                                        fieldtype: 'Currency',
+                                                        width: '150px'
+                                                    },
+                                                    {
+                                                        label: __('Status'),
+                                                        fieldname: 'status',
+                                                        fieldtype: 'Data',
+                                                        width: '120px'
+                                                    }
+                                                ],
+                                                data: formatted_data,
+                                                get_data: () => formatted_data
+                                            }
+                                        ],
+                                        primary_action_label: 'Close',
+                                        primary_action() {
+                                            dialog.hide();
+                                        }
+                                    });
+                                    
+                                    dialog.show();
+                                }
+                            }
+                        });
                     });
                     
                     // On refresh: if submitted & schedule exists, show quick actions
