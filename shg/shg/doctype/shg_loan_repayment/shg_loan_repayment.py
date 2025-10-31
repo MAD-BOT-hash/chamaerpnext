@@ -186,40 +186,6 @@ class SHGLoanRepayment(Document):
         }
 
 
-# ------------------------------
-# Utility: Fetch outstanding loans
-# ------------------------------
-@frappe.whitelist()
-def get_outstanding_loans(member=None):
-    """Return all outstanding loans (disbursed/partially paid) with member details."""
-    conditions = ""
-    values = {}
-    if member:
-        conditions = "AND l.member = %(member)s"
-        values["member"] = member
-
-    loans = frappe.db.sql(
-        f"""
-        SELECT
-            l.name AS loan_id,
-            l.member,
-            m.member_name,
-            l.loan_amount,
-            l.balance_amount,
-            l.status
-        FROM `tabSHG Loan` l
-        LEFT JOIN `tabSHG Member` m ON m.name = l.member
-        WHERE l.status IN ('Disbursed', 'Partially Paid')
-        {conditions}
-        ORDER BY m.member_name ASC
-        """,
-        values,
-        as_dict=True,
-    )
-
-    return loans
-
-
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
 def validate_repayment(doc, method):
@@ -232,3 +198,34 @@ def post_to_general_ledger(doc, method):
     if doc.docstatus == 1:
         # The actual posting to ledger is handled in the on_submit method
         pass
+
+
+@frappe.whitelist()
+def get_repayment_details(loan_id):
+    """Return repayment summary and schedule metrics for the given loan."""
+    if not loan_id:
+        frappe.throw("Loan ID is required.")
+
+    loan = frappe.get_doc("SHG Loan", loan_id)
+
+    # Calculate totals dynamically (safe fallback if fields missing)
+    total_repaid = 0
+    overdue_amount = 0
+    schedule = loan.get("repayment_schedule") or []
+
+    for row in schedule:
+        total_repaid += flt(row.amount_paid)
+        if row.status == "Overdue":
+            overdue_amount += flt(row.unpaid_balance)
+
+    return {
+        "member": loan.member,
+        "member_name": loan.member_name,
+        "repayment_start_date": loan.repayment_start_date,
+        "monthly_installment": flt(getattr(loan, "monthly_installment", 0)),
+        "total_payable": flt(getattr(loan, "total_payable", 0)),
+        "balance_amount": flt(getattr(loan, "balance_amount", 0)),
+        "total_repaid": round(total_repaid, 2),
+        "overdue_amount": round(overdue_amount, 2),
+        "loan_status": loan.status
+    }

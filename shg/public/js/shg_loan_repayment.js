@@ -61,48 +61,19 @@ frappe.ui.form.on('SHG Loan Repayment', {
                 });
             }, __('Filter Outstanding Loans'));
         });
+        
+        // Add Refresh Loan Details button
+        if (frm.doc.loan) {
+            frm.add_custom_button(__('Refresh Loan Details'), function() {
+                refresh_loan_details(frm);
+            });
+        }
     },
     
     loan: function(frm) {
-        if (frm.doc.loan) {
-            // Get loan details and calculate suggested repayment
-            frappe.call({
-                method: 'frappe.client.get',
-                args: {
-                    doctype: 'SHG Loan',
-                    name: frm.doc.loan
-                },
-                callback: function(r) {
-                    if (r.message) {
-                        let loan = r.message;
-                        
-                        frm.set_value('member', loan.member);
-                        frm.set_value('member_name', loan.member_name);
-                        frm.set_value('outstanding_balance', loan.balance_amount);
-                        
-                        // Set suggested repayment amount
-                        if (!frm.doc.total_paid && loan.monthly_installment) {
-                            frm.set_value('total_paid', loan.monthly_installment);
-                        }
-                        
-                        // Show loan status
-                        if (loan.status === 'Disbursed') {
-                            frm.dashboard.add_indicator(__('Loan Status: Active'), 'blue');
-                        }
-                        
-                        // Show overdue warning if applicable
-                        if (loan.next_due_date && frappe.datetime.get_diff(loan.next_due_date, frappe.datetime.get_today()) < 0) {
-                            let overdue_days = Math.abs(frappe.datetime.get_diff(loan.next_due_date, frappe.datetime.get_today()));
-                            frappe.msgprint({
-                                title: __('Overdue Payment'),
-                                message: __('This loan is {0} days overdue. A penalty may be applied.', [overdue_days]),
-                                indicator: 'red'
-                            });
-                        }
-                    }
-                }
-            });
-        }
+        if (!frm.doc.loan) return;
+        
+        refresh_loan_details(frm);
     },
     
     total_paid: function(frm) {
@@ -140,3 +111,72 @@ frappe.ui.form.on('SHG Loan Repayment', {
         }
     }
 });
+
+// Function to refresh loan details
+function refresh_loan_details(frm) {
+    if (!frm.doc.loan) return;
+
+    frappe.call({
+        method: 'shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.get_repayment_details',
+        args: { loan_id: frm.doc.loan },
+        callback: function(r) {
+            if (!r.message) return;
+
+            const d = r.message;
+
+            // Set all repayment-related fields
+            frm.set_value('member', d.member);
+            frm.set_value('member_name', d.member_name);
+            frm.set_value('repayment_start_date', d.repayment_start_date);
+            frm.set_value('monthly_installment', d.monthly_installment);
+            frm.set_value('total_payable', d.total_payable);
+            frm.set_value('outstanding_balance', d.balance_amount);
+            frm.set_value('total_repaid', d.total_repaid);
+            frm.set_value('overdue_amount', d.overdue_amount);
+
+            // Set suggested repayment amount
+            if (!frm.doc.total_paid && d.monthly_installment) {
+                frm.set_value('total_paid', d.monthly_installment);
+            }
+
+            // Show loan status
+            if (d.loan_status === 'Disbursed') {
+                frm.dashboard.add_indicator(__('Loan Status: Active'), 'blue');
+            }
+
+            // Update progress bar
+            update_progress_bar(frm, d);
+
+            frm.refresh_fields();
+        }
+    });
+}
+
+// Function to update progress bar
+function update_progress_bar(frm, loan_data) {
+    if (!loan_data.total_payable || loan_data.total_payable <= 0) return;
+    
+    const paid_percentage = Math.round((loan_data.total_repaid / loan_data.total_payable) * 100);
+    const balance_amount = loan_data.balance_amount || 0;
+    const overdue_amount = loan_data.overdue_amount || 0;
+    
+    // Create progress bar HTML
+    const progress_html = `
+        <div style="margin-top: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span>Paid: ${paid_percentage}%</span>
+                <span>Overdue: ${format_currency(overdue_amount, 'KES')}</span>
+                <span>Balance: ${format_currency(balance_amount, 'KES')}</span>
+            </div>
+            <div style="width: 100%; background-color: #f0f0f0; border-radius: 4px; height: 20px;">
+                <div style="width: ${paid_percentage}%; height: 100%; background-color: #4CAF50; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px;">
+                    ${paid_percentage}%
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add progress bar to the form
+    frm.dashboard.add_section(progress_html, 'Loan Progress');
+    frm.dashboard.show();
+}
