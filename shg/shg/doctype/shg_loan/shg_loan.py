@@ -101,64 +101,98 @@ class SHGLoan(Document):
     # POST TO LEDGER
     # ---------------------------------------------------
     def post_to_ledger_if_needed(self):
-        """Create Journal Entry for loan disbursement."""
+        """
+        Post loan disbursement as a Journal Entry.
+        Uses per-member receivable subaccounts (via account_helpers).
+        Prevents group account posting errors.
+        """
+
+        # --- Skip if already posted ---
         if getattr(self, "posted_to_gl", 0):
+            frappe.msgprint(f"GL already posted for {self.name} ({self.journal_entry})", alert=True)
             return
 
-        # Ensure company is set with fallback logic
+        from shg.shg.utils.account_helpers import get_or_create_member_receivable
+
+        # --- Resolve company info ---
         company = self.company or frappe.db.get_single_value("SHG Settings", "company")
         if not company:
             frappe.throw(_("Company not set on loan or in SHG Settings."))
 
-        abbr = frappe.db.get_value("Company", company, "abbr")
-        settings = frappe.get_single("SHG Settings")
-        loan_source_account = getattr(settings, "default_loan_account", None)
-        if not loan_source_account:
-            frappe.throw(_("Please set Default Loan Account in SHG Settings."))
+        company_abbr = frappe.db.get_value("Company", company, "abbr")
+        if not company_abbr:
+            frappe.throw(_("Company abbreviation missing for {0}").format(company))
 
-        is_group = bool(self.get("loan_members"))
+        # --- Load SHG settings ---
+        settings = frappe.get_single("SHG Settings")
+        loan_source_account = settings.default_loan_account
+        if not loan_source_account:
+            frappe.throw(_("Please set 'Default Loan Account' (e.g. Bank or Cash) in SHG Settings."))
+
+        # --- Create Journal Entry ---
+        posting_date = self.disbursement_date or frappe.utils.today()
         je = frappe.new_doc("Journal Entry")
         je.voucher_type = "Journal Entry"
         je.company = company
-        je.posting_date = self.disbursement_date or today()
+        je.posting_date = posting_date
         je.user_remark = f"Loan disbursement for {self.name}"
 
-        if is_group:
-            for r in self.get("loan_members", []):
-                if not r.member or not flt(r.allocated_amount):
+        total_disbursed = 0
+        is_group_loan = bool(self.get("loan_members"))
+
+        if is_group_loan:
+            for row in self.get("loan_members", []):
+                if not row.member or not flt(row.allocated_amount):
                     continue
-                member_account = get_or_create_member_receivable(r.member, company)
-                cust = frappe.db.get_value("SHG Member", r.member, "customer") or r.member
+
+                # ✅ get or create member subaccount
+                member_account = get_or_create_member_receivable(row.member, company)
+
+                if frappe.db.get_value("Account", member_account, "is_group"):
+                    frappe.throw(_(f"❌ Subaccount {member_account} is still marked as a Group account — please set Is Group = No."))
+
+                customer = frappe.db.get_value("SHG Member", row.member, "customer") or row.member
+                amount = flt(row.allocated_amount)
+
                 je.append("accounts", {
-                    "account": member_account,  # 👈 must be the member subaccount
+                    "account": member_account,
                     "party_type": "Customer",
-                    "party": cust,
-                    "debit_in_account_currency": flt(r.allocated_amount),
-                    "company": company
+                    "party": customer,
+                    "debit_in_account_currency": amount,
+                    "credit_in_account_currency": 0,
+                    "company": company,
                 })
+                total_disbursed += amount
         else:
+            # ✅ Individual loan
+            if not self.member:
+                frappe.throw(_("Member is required for this loan."))
+
             member_account = get_or_create_member_receivable(self.member, company)
-            cust = frappe.db.get_value("SHG Member", self.member, "customer") or self.member
+            if frappe.db.get_value("Account", member_account, "is_group"):
+                frappe.throw(_(f"❌ Subaccount {member_account} is still marked as a Group account — please set Is Group = No."))
+
+            customer = frappe.db.get_value("SHG Member", self.member, "customer") or self.member
+            total_disbursed = flt(self.loan_amount)
+
             je.append("accounts", {
-                "account": member_account,  # 👈 must be the member subaccount
+                "account": member_account,
                 "party_type": "Customer",
-                "party": cust,
-                "debit_in_account_currency": flt(self.loan_amount),
-                "company": company
+                "party": customer,
+                "debit_in_account_currency": total_disbursed,
+                "credit_in_account_currency": 0,
+                "company": company,
             })
 
-        total = sum(flt(r.allocated_amount) for r in self.get("loan_members", [])) if is_group else flt(self.loan_amount)
-        main_member = self.member if not is_group else self.loan_members[0].member
-        cust = frappe.db.get_value("SHG Member", main_member, "customer") or main_member
-
+        # ✅ Credit the loan source (e.g., Cash/Bank)
         je.append("accounts", {
             "account": loan_source_account,
-            "credit_in_account_currency": total,
-            "company": company,
-            "party_type": "Customer",
-            "party": cust
+            "debit_in_account_currency": 0,
+            "credit_in_account_currency": total_disbursed,
+            "company": company
         })
 
+        # --- Save and submit ---
         try:
             je.insert(ignore_permissions=True)
             je.submit()
@@ -166,10 +200,14 @@ class SHGLoan(Document):
             frappe.log_error(frappe.get_traceback(), "Loan JE Post Error")
             frappe.throw(_("Failed to post Journal Entry: {0}").format(e))
 
+        # --- Link back to loan ---
         self.db_set("journal_entry", je.name)
         self.db_set("posted_to_gl", 1)
+        self.db_set("posted_on", frappe.utils.now_datetime())
         self.db_set("status", "Disbursed")
-        frappe.msgprint(f"✅ Loan {self.name} posted as {je.name}")
+        frappe.db.commit()
+
+        frappe.msgprint(f"✅ Loan {self.name} successfully posted to GL as Journal Entry {je.name}.")
 
     # ---------------------------------------------------
     # REPAYMENT SCHEDULE
