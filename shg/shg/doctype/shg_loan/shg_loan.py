@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import today, add_months, flt, now_datetime, getdate, nowdate
+from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 class SHGLoan(Document):
     """SHG Loan controller with automatic ledger and repayment schedule posting."""
@@ -115,44 +116,6 @@ class SHGLoan(Document):
         if not loan_source_account:
             frappe.throw(_("Please set Default Loan Account in SHG Settings."))
 
-        # Parent loan receivable
-        def ensure_parent_account():
-            parent = f"SHG Loans receivable - {abbr}"
-            if not frappe.db.exists("Account", parent):
-                ar = f"Accounts Receivable - {abbr}"
-                if not frappe.db.exists("Account", ar):
-                    frappe.throw(_("{0} not found").format(ar))
-                frappe.get_doc({
-                    "doctype": "Account",
-                    "account_name": "SHG Loans receivable",
-                    "name": parent,
-                    "parent_account": ar,
-                    "company": company,
-                    "is_group": 1,
-                    "account_type": "Receivable"
-                }).insert(ignore_permissions=True)
-                frappe.db.commit()
-            else:
-                frappe.db.set_value("Account", parent, "is_group", 1)
-            return parent
-
-        def ensure_member_account(member_id):
-            parent = ensure_parent_account()
-            acc_name = f"{member_id} - {abbr}"
-            if not frappe.db.exists("Account", acc_name):
-                member_name = frappe.db.get_value("SHG Member", member_id, "member_name") or member_id
-                frappe.get_doc({
-                    "doctype": "Account",
-                    "account_name": member_name,
-                    "name": acc_name,
-                    "parent_account": parent,
-                    "company": company,
-                    "is_group": 0,
-                    "account_type": "Receivable"
-                }).insert(ignore_permissions=True)
-                frappe.db.commit()
-            return acc_name
-
         is_group = bool(self.get("loan_members"))
         je = frappe.new_doc("Journal Entry")
         je.voucher_type = "Journal Entry"
@@ -164,20 +127,20 @@ class SHGLoan(Document):
             for r in self.get("loan_members", []):
                 if not r.member or not flt(r.allocated_amount):
                     continue
-                acc = ensure_member_account(r.member)
+                member_account = get_or_create_member_receivable(r.member, company)
                 cust = frappe.db.get_value("SHG Member", r.member, "customer") or r.member
                 je.append("accounts", {
-                    "account": acc,
+                    "account": member_account,  # 👈 must be the member subaccount
                     "party_type": "Customer",
                     "party": cust,
                     "debit_in_account_currency": flt(r.allocated_amount),
                     "company": company
                 })
         else:
-            acc = ensure_member_account(self.member)
+            member_account = get_or_create_member_receivable(self.member, company)
             cust = frappe.db.get_value("SHG Member", self.member, "customer") or self.member
             je.append("accounts", {
-                "account": acc,
+                "account": member_account,  # 👈 must be the member subaccount
                 "party_type": "Customer",
                 "party": cust,
                 "debit_in_account_currency": flt(self.loan_amount),
