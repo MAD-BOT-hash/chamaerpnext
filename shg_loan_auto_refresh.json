@@ -1,0 +1,11 @@
+{
+  "doctype": "Client Script",
+  "name": "SHG Loan Auto Refresh",
+  "dt": "SHG Loan",
+  "view": "Form",
+  "enabled": 1,
+  "script_type": "Client",
+  "module": "SHG",
+  "app": "shg",
+  "script": "frappe.ui.form.on('SHG Loan', {\n    on_submit(frm) {\n        frappe.ui.form.trigger('SHG Loan', 'refresh', frm);\n    }\n});"
+}

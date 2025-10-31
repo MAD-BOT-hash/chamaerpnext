@@ -81,104 +81,6 @@ frappe.ui.form.on('SHG Loan', {
                         });
                     });
                     
-                    frm.add_custom_button(__('View Loan Statement'), function() {
-                        frappe.call({
-                            method: 'shg.shg.doctype.shg_loan.shg_loan.get_member_loan_statement',
-                            args: { loan_id: frm.doc.name },
-                            callback: function(r) {
-                                if (r.message) {
-                                    // Create a dialog to display the loan statement
-                                    let statement_dialog = new frappe.ui.Dialog({
-                                        title: __('Loan Statement for {0}', [frm.doc.name]),
-                                        fields: [
-                                            {
-                                                label: __('Member'),
-                                                fieldtype: 'Data',
-                                                default: r.message.member,
-                                                read_only: 1
-                                            },
-                                            {
-                                                label: __('Total Outstanding'),
-                                                fieldtype: 'Currency',
-                                                default: r.message.total_outstanding,
-                                                read_only: 1
-                                            },
-                                            {
-                                                label: __('Loans'),
-                                                fieldtype: 'Table',
-                                                fields: [
-                                                    {
-                                                        label: __('Loan ID'),
-                                                        fieldname: 'loan_id',
-                                                        fieldtype: 'Link',
-                                                        options: 'SHG Loan',
-                                                        width: '150px'
-                                                    },
-                                                    {
-                                                        label: __('Loan Amount'),
-                                                        fieldname: 'loan_amount',
-                                                        fieldtype: 'Currency',
-                                                        width: '120px'
-                                                    },
-                                                    {
-                                                        label: __('Interest Rate'),
-                                                        fieldname: 'interest_rate',
-                                                        fieldtype: 'Percent',
-                                                        width: '100px'
-                                                    },
-                                                    {
-                                                        label: __('Period (Months)'),
-                                                        fieldname: 'loan_period_months',
-                                                        fieldtype: 'Int',
-                                                        width: '100px'
-                                                    },
-                                                    {
-                                                        label: __('Start Date'),
-                                                        fieldname: 'repayment_start_date',
-                                                        fieldtype: 'Date',
-                                                        width: '120px'
-                                                    },
-                                                    {
-                                                        label: __('Total Payable'),
-                                                        fieldname: 'total_payable',
-                                                        fieldtype: 'Currency',
-                                                        width: '120px'
-                                                    },
-                                                    {
-                                                        label: __('Total Repaid'),
-                                                        fieldname: 'total_repaid',
-                                                        fieldtype: 'Currency',
-                                                        width: '120px'
-                                                    },
-                                                    {
-                                                        label: __('Balance'),
-                                                        fieldname: 'balance',
-                                                        fieldtype: 'Currency',
-                                                        width: '120px'
-                                                    },
-                                                    {
-                                                        label: __('Status'),
-                                                        fieldname: 'status',
-                                                        fieldtype: 'Data',
-                                                        width: '100px'
-                                                    }
-                                                ],
-                                                data: r.message.loans,
-                                                get_data: () => r.message.loans
-                                            }
-                                        ],
-                                        primary_action_label: 'Close',
-                                        primary_action() {
-                                            statement_dialog.hide();
-                                        }
-                                    });
-                                    
-                                    statement_dialog.show();
-                                }
-                            }
-                        });
-                    });
-                    
                     frm.add_custom_button(__('View Repayment Schedule'), function() {
                         // Use the accurate repayment schedule from the server-side method
                         frappe.call({
@@ -447,6 +349,11 @@ frappe.ui.form.on('SHG Loan', {
                 frm.dashboard.add_indicator(__('Balance: {0}', [format_currency(frm.doc.balance_amount, 'KES')]), 'orange');
             }
         }
+    },
+    
+    // Auto-refresh repayment details after loan submission
+    on_submit: function(frm) {
+        frappe.ui.form.trigger('SHG Loan', 'refresh', frm);
     },
     
     member: function(frm) {

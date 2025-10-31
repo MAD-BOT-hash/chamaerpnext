@@ -1,0 +1,11 @@
+{
+  "doctype": "Client Script",
+  "name": "SHG Loan Refresh Repayment Button",
+  "dt": "SHG Loan",
+  "view": "Form",
+  "enabled": 1,
+  "script_type": "Client",
+  "module": "SHG",
+  "app": "shg",
+  "script": "frappe.ui.form.on('SHG Loan', {\n    refresh: function(frm) {\n        if (frm.doc.docstatus < 2) {\n            frm.add_custom_button(__('🔄 Refresh Repayment Details'), function() {\n                if (!frm.doc.name) {\n                    frappe.msgprint(__('Please save the Loan first.'));\n                    return;\n                }\n\n                frappe.call({\n                    method: 'shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.get_repayment_details',\n                    args: { loan_id: frm.doc.name },\n                    callback: function(r) {\n                        if (!r.message) {\n                            frappe.msgprint(__('No repayment details found for this loan.'));\n                            return;\n                        }\n                        const d = r.message;\n\n                        frm.set_value('repayment_start_date', d.repayment_start_date);\n                        frm.set_value('monthly_installment', d.monthly_installment);\n                        frm.set_value('total_payable', d.total_payable);\n                        frm.set_value('balance_amount', d.balance_amount);\n                        frm.set_value('total_repaid', d.total_repaid);\n                        frm.set_value('overdue_amount', d.overdue_amount);\n                        frm.refresh_fields();\n\n                        frappe.show_alert({\n                            message: __('Repayment details refreshed successfully.'),\n                            indicator: 'green'\n                        });\n                    }\n                });\n            }).addClass('btn-primary');\n        }\n    }\n});"
+}
