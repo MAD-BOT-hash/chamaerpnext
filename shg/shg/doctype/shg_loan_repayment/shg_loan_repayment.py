@@ -186,6 +186,40 @@ class SHGLoanRepayment(Document):
         }
 
 
+# ------------------------------
+# Utility: Fetch outstanding loans
+# ------------------------------
+@frappe.whitelist()
+def get_outstanding_loans(member=None):
+    """Return all outstanding loans (disbursed/partially paid) with member details."""
+    conditions = ""
+    values = {}
+    if member:
+        conditions = "AND l.member = %(member)s"
+        values["member"] = member
+
+    loans = frappe.db.sql(
+        f"""
+        SELECT
+            l.name AS loan_id,
+            l.member,
+            m.member_name,
+            l.loan_amount,
+            l.balance_amount,
+            l.status
+        FROM `tabSHG Loan` l
+        LEFT JOIN `tabSHG Member` m ON m.name = l.member
+        WHERE l.status IN ('Disbursed', 'Partially Paid')
+        {conditions}
+        ORDER BY m.member_name ASC
+        """,
+        values,
+        as_dict=True,
+    )
+
+    return loans
+
+
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
 def validate_repayment(doc, method):

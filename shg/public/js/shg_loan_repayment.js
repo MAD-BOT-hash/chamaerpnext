@@ -29,6 +29,38 @@ frappe.ui.form.on('SHG Loan Repayment', {
                 });
             });
         }
+        
+        // Add button to fetch outstanding loans
+        frm.add_custom_button(__('Fetch Outstanding Loans'), function() {
+            frappe.prompt([
+                {
+                    fieldname: 'member',
+                    label: 'Filter by Member (optional)',
+                    fieldtype: 'Link',
+                    options: 'SHG Member',
+                    reqd: 0
+                }
+            ], function(values) {
+                frappe.call({
+                    method: 'shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.get_outstanding_loans',
+                    args: { member: values.member },
+                    callback: function(r) {
+                        if (r.message && r.message.length > 0) {
+                            let list = r.message.map(l =>
+                                `<b>${l.member_name}</b> → ${l.loan_id} (Balance: ${format_currency(l.balance_amount, 'KES')})`
+                            ).join("<br>");
+                            frappe.msgprint({
+                                title: __("Outstanding Loans"),
+                                message: list,
+                                indicator: 'blue'
+                            });
+                        } else {
+                            frappe.msgprint(__('No outstanding loans found.'));
+                        }
+                    }
+                });
+            }, __('Filter Outstanding Loans'));
+        });
     },
     
     loan: function(frm) {

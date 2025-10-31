@@ -322,16 +322,71 @@ class SHGLoan(Document):
         else:
             frappe.msgprint(_("No due installments found to mark as paid."))
 
-# -------------------------------
-@frappe.whitelist()
-def get_member_loan_statement(docname):
-    """
-    Generate a loan statement for a member.
-    Returns loan details and repayment schedule.
-    """
-    loan = frappe.get_doc("SHG Loan", docname)
-    return loan.get_member_loan_statement()
+    def recalculate_outstanding_after_payment(self):
+        """Recalculate loan balance and status after a payment is applied."""
+        total_paid = 0
+        total_due = 0
+        overdue_count = 0
+        today_date = getdate(nowdate())
+        
+        if self.get("repayment_schedule"):
+            for row in self.get("repayment_schedule"):
+                total_due += flt(row.total_due)
+                total_paid += flt(row.amount_paid)
+                
+                # Check if installment is overdue
+                if row.status != "Paid" and getdate(row.due_date) < today_date:
+                    overdue_count += 1
+            
+            self.balance_amount = total_due - total_paid
+            
+            # Update loan status based on payment status
+            if self.balance_amount <= 0:
+                self.status = "Paid"
+            elif total_paid > 0:
+                self.status = "Partially Paid"
+            else:
+                self.status = "Disbursed"
+                
+            # Update next due date
+            pending_installments = [row for row in self.get("repayment_schedule") if row.status != "Paid"]
+            if pending_installments:
+                # Sort by due date and get the earliest
+                pending_installments.sort(key=lambda x: getdate(x.due_date))
+                self.next_due_date = pending_installments[0].due_date
+            else:
+                self.next_due_date = None
+                
+        else:
+            # Fallback for loans without schedule
+            if self.balance_amount <= 0:
+                self.status = "Paid"
+            elif flt(self.total_repaid) > 0:
+                self.status = "Partially Paid"
+            else:
+                self.status = "Disbursed"
+        
+        self.total_repaid = total_paid
+        self.db_update()
+        frappe.db.commit()
 
+@frappe.whitelist()
+def generate_individual_loans(parent_loan):
+    """Generate individual member loans from a group loan container."""
+    try:
+        loan = frappe.get_doc("SHG Loan", parent_loan)
+        if not loan.get("loan_members"):
+            return {"created": []}
+        
+        created = loan.generate_individual_member_loans()
+        return {"created": created}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Generate Individual Loans Error")
+        frappe.throw(str(e))
+
+# -------------------------------
+# HOOKS
+# -------------------------------
 def before_save(doc, method=None):
     """Hook to safely round and validate before saving."""
     for field in ["loan_amount", "monthly_installment", "total_payable", "balance_amount"]:
