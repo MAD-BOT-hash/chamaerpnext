@@ -73,6 +73,21 @@ frappe.ui.form.on('SHG Loan Repayment', {
     loan: function(frm) {
         if (!frm.doc.loan) return;
         
+        // Auto-populate member details when loan is selected
+        frappe.call({
+            method: 'frappe.client.get',
+            args: {
+                doctype: 'SHG Loan',
+                name: frm.doc.loan
+            },
+            callback: function(r) {
+                if (r.message) {
+                    frm.set_value('member', r.message.member);
+                    frm.set_value('member_name', r.message.member_name);
+                }
+            }
+        });
+        
         refresh_loan_details(frm);
     },
     
@@ -125,8 +140,6 @@ function refresh_loan_details(frm) {
             const d = r.message;
 
             // Set all repayment-related fields
-            frm.set_value('member', d.member);
-            frm.set_value('member_name', d.member_name);
             frm.set_value('repayment_start_date', d.repayment_start_date);
             frm.set_value('monthly_installment', d.monthly_installment);
             frm.set_value('total_payable', d.total_payable);
@@ -137,11 +150,6 @@ function refresh_loan_details(frm) {
             // Set suggested repayment amount
             if (!frm.doc.total_paid && d.monthly_installment) {
                 frm.set_value('total_paid', d.monthly_installment);
-            }
-
-            // Show loan status
-            if (d.loan_status === 'Disbursed') {
-                frm.dashboard.add_indicator(__('Loan Status: Active'), 'blue');
             }
 
             // Update progress bar

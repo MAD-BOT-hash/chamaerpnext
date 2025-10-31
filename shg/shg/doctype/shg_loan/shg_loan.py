@@ -238,64 +238,6 @@ class SHGLoan(Document):
         self.db_set("balance_amount", round(principal, 2))
 
     @frappe.whitelist()
-    def get_member_loan_statement(self):
-        """
-        Generate a loan statement for a member.
-        Returns loan details and repayment schedule.
-        """
-        statement = {
-            "loan_details": {
-                "loan_id": self.name,
-                "member_name": self.member_name,
-                "loan_amount": self.loan_amount,
-                "interest_rate": self.interest_rate,
-                "interest_type": self.interest_type,
-                "loan_period_months": self.loan_period_months,
-                "disbursement_date": self.disbursement_date,
-                "status": self.status,
-                "balance_amount": self.balance_amount,
-                "total_repaid": self.total_repaid
-            },
-            "repayment_schedule": [],
-            "summary": {
-                "total_due": 0,
-                "total_paid": 0,
-                "outstanding_balance": 0,
-                "overdue_count": 0
-            }
-        }
-        
-        # Add repayment schedule details
-        total_due = 0
-        total_paid = 0
-        overdue_count = 0
-        
-        for row in self.get("repayment_schedule", []):
-            installment = {
-                "installment_no": row.installment_no,
-                "due_date": row.due_date,
-                "total_due": row.total_due,
-                "amount_paid": row.amount_paid,
-                "unpaid_balance": row.unpaid_balance,
-                "status": row.status
-            }
-            statement["repayment_schedule"].append(installment)
-            
-            total_due += flt(row.total_due)
-            total_paid += flt(row.amount_paid)
-            
-            if row.status == "Overdue":
-                overdue_count += 1
-        
-        # Update summary
-        statement["summary"]["total_due"] = total_due
-        statement["summary"]["total_paid"] = total_paid
-        statement["summary"]["outstanding_balance"] = total_due - total_paid
-        statement["summary"]["overdue_count"] = overdue_count
-        
-        return statement
-
-    @frappe.whitelist()
     def mark_all_due_as_paid(self):
         """Mark all due installments as paid"""
         if not self.get("repayment_schedule"):
@@ -324,72 +266,60 @@ class SHGLoan(Document):
 
 # -------------------------------
 @frappe.whitelist()
-def get_member_loan_statement(member):
-    """
-    Returns a detailed loan statement for a specific member,
-    including repayment schedule details and balances.
-    """
-    if not member:
-        frappe.throw(_("Member is required."))
+def get_member_loan_statement(member=None, loan_id=None):
+    """Return detailed loan statement for a given member or loan."""
+    if not member and not loan_id:
+        frappe.throw("Either Member or Loan ID is required.")
 
-    # Validate member existence
-    if not frappe.db.exists("SHG Member", member):
-        frappe.throw(_("Member {0} not found.").format(member))
+    if loan_id:
+        loan = frappe.get_doc("SHG Loan", loan_id)
+        member = loan.member
 
-    # Fetch all active or closed loans for this member
-    loans = frappe.get_all(
-        "SHG Loan",
-        filters={"member": member},
-        fields=["name", "loan_amount", "interest_rate", "status", "repayment_start_date"],
-        order_by="repayment_start_date desc"
-    )
-
+    # Load all member loans
+    loans = frappe.get_all("SHG Loan", filters={"member": member}, pluck="name")
     if not loans:
-        return {"member": member, "loans": [], "total_outstanding": 0}
+        return {"loans": [], "total_outstanding": 0}
 
     statement = []
     total_outstanding = 0
 
-    for loan in loans:
-        # Get repayment schedule
-        schedule_rows = frappe.get_all(
+    for loan_name in loans:
+        loan = frappe.get_doc("SHG Loan", loan_name)
+        schedule = loan.get("repayment_schedule") or frappe.get_all(
             "SHG Loan Repayment Schedule",
-            filters={"parent": loan.name},
+            filters={"parent": loan_name},
             fields=[
-                "due_date",
-                "principal_amount",
-                "interest_amount",
-                "total_payment",
-                "amount_paid",
-                "unpaid_balance",
-                "status"
+                "installment_no", "due_date",
+                "principal_component as principal_amount",
+                "interest_component as interest_amount",
+                "total_payment", "amount_paid",
+                "unpaid_balance", "status"
             ],
-            order_by="due_date asc"
+            order_by="installment_no asc"
         )
 
-        principal_due = sum(flt(r["principal_amount"]) for r in schedule_rows)
-        principal_paid = sum(flt(r["amount_paid"]) for r in schedule_rows)
-        total_due = sum(flt(r["total_payment"]) for r in schedule_rows)
-        balance = principal_due - principal_paid
-
+        total_paid = sum(flt(r["amount_paid"]) for r in schedule)
+        total_due = sum(flt(r["total_payment"]) for r in schedule)
+        balance = total_due - total_paid
         total_outstanding += balance
 
         statement.append({
             "loan_id": loan.name,
             "loan_amount": flt(loan.loan_amount),
             "interest_rate": flt(loan.interest_rate),
+            "loan_period_months": loan.loan_period_months,
             "status": loan.status,
             "repayment_start_date": loan.repayment_start_date,
-            "total_due": total_due,
-            "total_paid": principal_paid,
+            "total_payable": total_due,
+            "total_repaid": total_paid,
             "balance": balance,
-            "schedule": schedule_rows
+            "schedule": schedule,
         })
 
     return {
         "member": member,
         "loans": statement,
-        "total_outstanding": round(total_outstanding, 2)
+        "total_outstanding": total_outstanding
     }
 
 def before_save(doc, method=None):

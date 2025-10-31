@@ -202,30 +202,29 @@ def post_to_general_ledger(doc, method):
 
 @frappe.whitelist()
 def get_repayment_details(loan_id):
-    """Return repayment summary and schedule metrics for the given loan."""
+    """Return repayment detail summary from the schedule."""
     if not loan_id:
-        frappe.throw("Loan ID is required.")
+        frappe.throw("Loan ID required.")
 
     loan = frappe.get_doc("SHG Loan", loan_id)
+    schedule = frappe.get_all(
+        "SHG Loan Repayment Schedule",
+        filters={"parent": loan_id},
+        fields=["total_payment", "amount_paid", "unpaid_balance", "status"]
+    )
 
-    # Calculate totals dynamically (safe fallback if fields missing)
-    total_repaid = 0
-    overdue_amount = 0
-    schedule = loan.get("repayment_schedule") or []
+    total_payable = sum(flt(r.total_payment) for r in schedule)
+    total_repaid = sum(flt(r.amount_paid) for r in schedule)
+    overdue_amount = sum(flt(r.unpaid_balance) for r in schedule if r.status == "Overdue")
+    balance_amount = total_payable - total_repaid
 
-    for row in schedule:
-        total_repaid += flt(row.amount_paid)
-        if row.status == "Overdue":
-            overdue_amount += flt(row.unpaid_balance)
+    monthly_installment = flt(getattr(loan, "monthly_installment", 0))
 
     return {
-        "member": loan.member,
-        "member_name": loan.member_name,
         "repayment_start_date": loan.repayment_start_date,
-        "monthly_installment": flt(getattr(loan, "monthly_installment", 0)),
-        "total_payable": flt(getattr(loan, "total_payable", 0)),
-        "balance_amount": flt(getattr(loan, "balance_amount", 0)),
-        "total_repaid": round(total_repaid, 2),
-        "overdue_amount": round(overdue_amount, 2),
-        "loan_status": loan.status
+        "monthly_installment": monthly_installment,
+        "total_payable": total_payable,
+        "balance_amount": balance_amount,
+        "total_repaid": total_repaid,
+        "overdue_amount": overdue_amount,
     }
