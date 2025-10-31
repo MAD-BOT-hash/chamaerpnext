@@ -297,61 +297,71 @@ def update_repayment_summary(loan_id):
 
 
 @frappe.whitelist()
-def get_member_loan_statement(member=None, loan_id=None):
-    """Return detailed loan statement for a given member or loan."""
-    if not member and not loan_id:
-        frappe.throw("Either Member or Loan ID is required.")
+def get_member_loan_statement(loan_id=None, member=None):
+    """
+    Returns loan + repayment schedule for a given member or loan_id.
+    Either argument is accepted.
+    """
+    if not (loan_id or member):
+        frappe.throw(_("Either Member or Loan ID is required."))
 
+    # Initialize loan variable
+    loan = None
+    
+    # Try loading by loan_id first
     if loan_id:
         loan = frappe.get_doc("SHG Loan", loan_id)
-        member = loan.member
-
-    # Load all member loans
-    loans = frappe.get_all("SHG Loan", filters={"member": member}, pluck="name")
-    if not loans:
-        return {"loans": [], "total_outstanding": 0}
-
-    statement = []
-    total_outstanding = 0
-
-    for loan_name in loans:
-        loan = frappe.get_doc("SHG Loan", loan_name)
-        schedule = loan.get("repayment_schedule") or frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={"parent": loan_name},
-            fields=[
-                "installment_no", "due_date",
-                "principal_component as principal_amount",
-                "interest_component as interest_amount",
-                "total_payment", "amount_paid",
-                "unpaid_balance", "status"
-            ],
-            order_by="installment_no asc"
+    elif member:
+        # fallback: get latest active loan for that member
+        loan_name = frappe.db.get_value(
+            "SHG Loan", 
+            {"member": member, "docstatus": 1}, 
+            "name"
         )
+        if not loan_name:
+            frappe.throw(_("No active loan found for this member."))
+        loan = frappe.get_doc("SHG Loan", loan_name)
+    
+    # Ensure we have a loan
+    if not loan:
+        frappe.throw(_("Either Member or Loan ID is required."))
 
-        total_paid = sum(flt(r["amount_paid"]) for r in schedule)
-        total_due = sum(flt(r["total_payment"]) for r in schedule)
-        balance = total_due - total_paid
-        total_outstanding += balance
+    # Build repayment details
+    schedule = frappe.get_all(
+        "SHG Loan Repayment Schedule",
+        filters={"parent": loan.name},
+        fields=[
+            "installment_no",
+            "due_date",
+            "principal_component as principal_amount",
+            "interest_component as interest_amount",
+            "total_payment",
+            "amount_paid",
+            "unpaid_balance",
+            "status"
+        ],
+        order_by="installment_no asc"
+    )
 
-        statement.append({
-            "loan_id": loan.name,
-            "loan_amount": flt(loan.loan_amount),
-            "interest_rate": flt(loan.interest_rate),
-            "loan_period_months": loan.loan_period_months,
-            "status": loan.status,
-            "repayment_start_date": loan.repayment_start_date,
-            "total_payable": total_due,
-            "total_repaid": total_paid,
-            "balance": balance,
-            "schedule": schedule,
-        })
+    summary = {
+        "loan_id": loan.name,
+        "member_name": loan.member_name,
+        "loan_amount": loan.loan_amount,
+        "interest_rate": loan.interest_rate,
+        "repayment_start_date": loan.repayment_start_date,
+        "monthly_installment": loan.monthly_installment,
+        "total_payable": loan.total_payable,
+        "total_repaid": loan.total_repaid,
+        "balance_amount": loan.balance_amount,
+        "overdue_amount": loan.overdue_amount,
+    }
 
     return {
-        "member": member,
-        "loans": statement,
-        "total_outstanding": total_outstanding
+        "loan_details": summary,
+        "repayment_schedule": schedule,
+        "count": len(schedule)
     }
+
 
 def before_save(doc, method=None):
     """Hook to safely round and validate before saving."""

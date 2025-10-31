@@ -81,44 +81,24 @@ frappe.ui.form.on('SHG Loan', {
                         });
                     });
                     
-                    // Add Refresh Repayment Summary button
-                    frm.add_custom_button(__('🔄 Refresh Repayment Summary'), function() {
-                        if (!frm.doc.name) {
-                            frappe.msgprint(__('Please save the Loan first.'));
-                            return;
-                        }
-
-                        frappe.call({
-                            method: 'shg.shg.doctype.shg_loan.shg_loan.update_repayment_summary',
-                            args: { loan_id: frm.doc.name },
-                            callback: function(r) {
-                                frm.reload_doc();
-                                frappe.show_alert({
-                                    message: __('Repayment summary refreshed successfully.'),
-                                    indicator: 'green'
-                                });
-                            }
-                        });
-                    }).addClass('btn-primary');
-                    
                     frm.add_custom_button(__('View Repayment Schedule'), function() {
                         // Use the accurate repayment schedule from the server-side method
                         frappe.call({
                             method: 'shg.shg.doctype.shg_loan.shg_loan.get_member_loan_statement',
-                            args: { docname: frm.doc.name },
+                            args: { loan_id: frm.doc.name },
                             callback: function(r) {
                                 if (r.message) {
                                     // Create a dialog to display the repayment schedule
                                     let schedule_data = r.message.repayment_schedule;
                                     let loan_details = r.message.loan_details;
-                                    let summary = r.message.summary;
+                                    let count = r.message.count;
                                     
                                     // Format data for the grid
                                     let formatted_data = schedule_data.map(row => {
                                         return [
                                             row.installment_no,
                                             frappe.datetime.str_to_user(row.due_date),
-                                            format_currency(row.total_due, 'KES'),
+                                            format_currency(row.total_payment, 'KES'),
                                             format_currency(row.amount_paid, 'KES'),
                                             format_currency(row.unpaid_balance, 'KES'),
                                             row.status
@@ -152,9 +132,39 @@ frappe.ui.form.on('SHG Loan', {
                                                 read_only: 1
                                             },
                                             {
-                                                label: __('Loan Period'),
-                                                fieldtype: 'Int',
-                                                default: loan_details.loan_period_months,
+                                                label: __('Repayment Start Date'),
+                                                fieldtype: 'Date',
+                                                default: loan_details.repayment_start_date,
+                                                read_only: 1
+                                            },
+                                            {
+                                                label: __('Monthly Installment'),
+                                                fieldtype: 'Currency',
+                                                default: loan_details.monthly_installment,
+                                                read_only: 1
+                                            },
+                                            {
+                                                label: __('Total Payable'),
+                                                fieldtype: 'Currency',
+                                                default: loan_details.total_payable,
+                                                read_only: 1
+                                            },
+                                            {
+                                                label: __('Total Repaid'),
+                                                fieldtype: 'Currency',
+                                                default: loan_details.total_repaid,
+                                                read_only: 1
+                                            },
+                                            {
+                                                label: __('Balance Amount'),
+                                                fieldtype: 'Currency',
+                                                default: loan_details.balance_amount,
+                                                read_only: 1
+                                            },
+                                            {
+                                                label: __('Overdue Amount'),
+                                                fieldtype: 'Currency',
+                                                default: loan_details.overdue_amount,
                                                 read_only: 1
                                             },
                                             {
@@ -167,18 +177,21 @@ frappe.ui.form.on('SHG Loan', {
                                                 options: `
                                                     <div class="row">
                                                         <div class="col-xs-4">
-                                                            <b>Total Due:</b> ${format_currency(summary.total_due, 'KES')}
+                                                            <b>Total Installments:</b> ${count}
                                                         </div>
                                                         <div class="col-xs-4">
-                                                            <b>Total Paid:</b> ${format_currency(summary.total_paid, 'KES')}
+                                                            <b>Total Payable:</b> ${format_currency(loan_details.total_payable, 'KES')}
                                                         </div>
                                                         <div class="col-xs-4">
-                                                            <b>Outstanding:</b> ${format_currency(summary.outstanding_balance, 'KES')}
+                                                            <b>Total Repaid:</b> ${format_currency(loan_details.total_repaid, 'KES')}
                                                         </div>
                                                     </div>
                                                     <div class="row" style="margin-top: 10px;">
                                                         <div class="col-xs-4">
-                                                            <b>Overdue Installments:</b> ${summary.overdue_count}
+                                                            <b>Balance:</b> ${format_currency(loan_details.balance_amount, 'KES')}
+                                                        </div>
+                                                        <div class="col-xs-4">
+                                                            <b>Overdue:</b> ${format_currency(loan_details.overdue_amount, 'KES')}
                                                         </div>
                                                     </div>
                                                 `
@@ -200,8 +213,8 @@ frappe.ui.form.on('SHG Loan', {
                                                         width: '150px'
                                                     },
                                                     {
-                                                        label: __('Total Due'),
-                                                        fieldname: 'total_due',
+                                                        label: __('Total Payment'),
+                                                        fieldname: 'total_payment',
                                                         fieldtype: 'Currency',
                                                         width: '150px'
                                                     },
