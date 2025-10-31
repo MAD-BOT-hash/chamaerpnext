@@ -1,0 +1,11 @@
+{
+  "doctype": "Client Script",
+  "name": "SHG Loan Refresh Summary Button",
+  "dt": "SHG Loan",
+  "view": "Form",
+  "enabled": 1,
+  "script_type": "Client",
+  "module": "SHG",
+  "app": "shg",
+  "script": "frappe.ui.form.on('SHG Loan', {\n    refresh: function(frm) {\n        if (frm.doc.docstatus === 1 && frm.doc.status === 'Disbursed') {\n            frm.add_custom_button(__('🔄 Refresh Repayment Summary'), function() {\n                if (!frm.doc.name) {\n                    frappe.msgprint(__('Please save the Loan first.'));\n                    return;\n                }\n\n                frappe.call({\n                    method: 'shg.shg.doctype.shg_loan.shg_loan.update_repayment_summary',\n                    args: { loan_id: frm.doc.name },\n                    callback: function(r) {\n                        frm.reload_doc();\n                        frappe.show_alert({\n                            message: __('Repayment summary refreshed successfully.'),\n                            indicator: 'green'\n                        });\n                    }\n                });\n            }).addClass('btn-primary');\n        }\n    }\n});"
+}

@@ -81,6 +81,26 @@ frappe.ui.form.on('SHG Loan', {
                         });
                     });
                     
+                    // Add Refresh Repayment Summary button
+                    frm.add_custom_button(__('🔄 Refresh Repayment Summary'), function() {
+                        if (!frm.doc.name) {
+                            frappe.msgprint(__('Please save the Loan first.'));
+                            return;
+                        }
+
+                        frappe.call({
+                            method: 'shg.shg.doctype.shg_loan.shg_loan.update_repayment_summary',
+                            args: { loan_id: frm.doc.name },
+                            callback: function(r) {
+                                frm.reload_doc();
+                                frappe.show_alert({
+                                    message: __('Repayment summary refreshed successfully.'),
+                                    indicator: 'green'
+                                });
+                            }
+                        });
+                    }).addClass('btn-primary');
+                    
                     frm.add_custom_button(__('View Repayment Schedule'), function() {
                         // Use the accurate repayment schedule from the server-side method
                         frappe.call({
@@ -349,11 +369,6 @@ frappe.ui.form.on('SHG Loan', {
                 frm.dashboard.add_indicator(__('Balance: {0}', [format_currency(frm.doc.balance_amount, 'KES')]), 'orange');
             }
         }
-    },
-    
-    // Auto-refresh repayment details after loan submission
-    on_submit: function(frm) {
-        frappe.ui.form.trigger('SHG Loan', 'refresh', frm);
     },
     
     member: function(frm) {

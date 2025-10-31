@@ -264,7 +264,38 @@ class SHGLoan(Document):
         else:
             frappe.msgprint(_("No due installments found to mark as paid."))
 
-# -------------------------------
+    def update_repayment_summary(self):
+        """Refresh repayment summary fields from repayment schedule."""
+        schedule = self.get("repayment_schedule") or frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={"parent": self.name},
+            fields=["total_payment", "amount_paid", "unpaid_balance", "status"]
+        )
+
+        total_payable = sum(flt(r.get("total_payment")) for r in schedule)
+        total_repaid = sum(flt(r.get("amount_paid")) for r in schedule)
+        overdue_amount = sum(flt(r.get("unpaid_balance")) for r in schedule if r.get("status") == "Overdue")
+        balance = total_payable - total_repaid
+
+        self.db_set({
+            "total_payable": round(total_payable, 2),
+            "total_repaid": round(total_repaid, 2),
+            "overdue_amount": round(overdue_amount, 2),
+            "balance_amount": round(balance, 2)
+        })
+
+
+@frappe.whitelist()
+def update_repayment_summary(loan_id):
+    """Refresh repayment summary fields from repayment schedule."""
+    if not loan_id:
+        frappe.throw("Loan ID is required.")
+        
+    loan = frappe.get_doc("SHG Loan", loan_id)
+    loan.update_repayment_summary()
+    return True
+
+
 @frappe.whitelist()
 def get_member_loan_statement(member=None, loan_id=None):
     """Return detailed loan statement for a given member or loan."""

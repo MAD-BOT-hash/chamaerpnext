@@ -65,6 +65,12 @@ class SHGLoanRepayment(Document):
         loan_doc.save(ignore_permissions=True)
         frappe.db.commit()
 
+        # Update repayment summary fields
+        try:
+            loan_doc.update_repayment_summary()
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "Failed to update repayment summary")
+
         loan_doc.add_comment(
             "Edit",
             f"Repayment {self.name} applied ({self.total_paid}). Remaining balance: {loan_doc.balance_amount}",
@@ -198,33 +204,3 @@ def post_to_general_ledger(doc, method):
     if doc.docstatus == 1:
         # The actual posting to ledger is handled in the on_submit method
         pass
-
-
-@frappe.whitelist()
-def get_repayment_details(loan_id):
-    """Return repayment detail summary from the schedule."""
-    if not loan_id:
-        frappe.throw("Loan ID required.")
-
-    loan = frappe.get_doc("SHG Loan", loan_id)
-    schedule = frappe.get_all(
-        "SHG Loan Repayment Schedule",
-        filters={"parent": loan_id},
-        fields=["total_payment", "amount_paid", "unpaid_balance", "status"]
-    )
-
-    total_payable = sum(flt(r.total_payment) for r in schedule)
-    total_repaid = sum(flt(r.amount_paid) for r in schedule)
-    overdue_amount = sum(flt(r.unpaid_balance) for r in schedule if r.status == "Overdue")
-    balance_amount = total_payable - total_repaid
-
-    monthly_installment = flt(getattr(loan, "monthly_installment", 0))
-
-    return {
-        "repayment_start_date": loan.repayment_start_date,
-        "monthly_installment": monthly_installment,
-        "total_payable": total_payable,
-        "balance_amount": balance_amount,
-        "total_repaid": total_repaid,
-        "overdue_amount": overdue_amount,
-    }
