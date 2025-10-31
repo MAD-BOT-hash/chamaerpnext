@@ -322,71 +322,76 @@ class SHGLoan(Document):
         else:
             frappe.msgprint(_("No due installments found to mark as paid."))
 
-    def recalculate_outstanding_after_payment(self):
-        """Recalculate loan balance and status after a payment is applied."""
-        total_paid = 0
-        total_due = 0
-        overdue_count = 0
-        today_date = getdate(nowdate())
-        
-        if self.get("repayment_schedule"):
-            for row in self.get("repayment_schedule"):
-                total_due += flt(row.total_due)
-                total_paid += flt(row.amount_paid)
-                
-                # Check if installment is overdue
-                if row.status != "Paid" and getdate(row.due_date) < today_date:
-                    overdue_count += 1
-            
-            self.balance_amount = total_due - total_paid
-            
-            # Update loan status based on payment status
-            if self.balance_amount <= 0:
-                self.status = "Paid"
-            elif total_paid > 0:
-                self.status = "Partially Paid"
-            else:
-                self.status = "Disbursed"
-                
-            # Update next due date
-            pending_installments = [row for row in self.get("repayment_schedule") if row.status != "Paid"]
-            if pending_installments:
-                # Sort by due date and get the earliest
-                pending_installments.sort(key=lambda x: getdate(x.due_date))
-                self.next_due_date = pending_installments[0].due_date
-            else:
-                self.next_due_date = None
-                
-        else:
-            # Fallback for loans without schedule
-            if self.balance_amount <= 0:
-                self.status = "Paid"
-            elif flt(self.total_repaid) > 0:
-                self.status = "Partially Paid"
-            else:
-                self.status = "Disbursed"
-        
-        self.total_repaid = total_paid
-        self.db_update()
-        frappe.db.commit()
-
+# -------------------------------
 @frappe.whitelist()
-def generate_individual_loans(parent_loan):
-    """Generate individual member loans from a group loan container."""
-    try:
-        loan = frappe.get_doc("SHG Loan", parent_loan)
-        if not loan.get("loan_members"):
-            return {"created": []}
-        
-        created = loan.generate_individual_member_loans()
-        return {"created": created}
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Generate Individual Loans Error")
-        frappe.throw(str(e))
+def get_member_loan_statement(member):
+    """
+    Returns a detailed loan statement for a specific member,
+    including repayment schedule details and balances.
+    """
+    if not member:
+        frappe.throw(_("Member is required."))
 
-# -------------------------------
-# HOOKS
-# -------------------------------
+    # Validate member existence
+    if not frappe.db.exists("SHG Member", member):
+        frappe.throw(_("Member {0} not found.").format(member))
+
+    # Fetch all active or closed loans for this member
+    loans = frappe.get_all(
+        "SHG Loan",
+        filters={"member": member},
+        fields=["name", "loan_amount", "interest_rate", "status", "repayment_start_date"],
+        order_by="repayment_start_date desc"
+    )
+
+    if not loans:
+        return {"member": member, "loans": [], "total_outstanding": 0}
+
+    statement = []
+    total_outstanding = 0
+
+    for loan in loans:
+        # Get repayment schedule
+        schedule_rows = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={"parent": loan.name},
+            fields=[
+                "due_date",
+                "principal_amount",
+                "interest_amount",
+                "total_payment",
+                "amount_paid",
+                "unpaid_balance",
+                "status"
+            ],
+            order_by="due_date asc"
+        )
+
+        principal_due = sum(flt(r["principal_amount"]) for r in schedule_rows)
+        principal_paid = sum(flt(r["amount_paid"]) for r in schedule_rows)
+        total_due = sum(flt(r["total_payment"]) for r in schedule_rows)
+        balance = principal_due - principal_paid
+
+        total_outstanding += balance
+
+        statement.append({
+            "loan_id": loan.name,
+            "loan_amount": flt(loan.loan_amount),
+            "interest_rate": flt(loan.interest_rate),
+            "status": loan.status,
+            "repayment_start_date": loan.repayment_start_date,
+            "total_due": total_due,
+            "total_paid": principal_paid,
+            "balance": balance,
+            "schedule": schedule_rows
+        })
+
+    return {
+        "member": member,
+        "loans": statement,
+        "total_outstanding": round(total_outstanding, 2)
+    }
+
 def before_save(doc, method=None):
     """Hook to safely round and validate before saving."""
     for field in ["loan_amount", "monthly_installment", "total_payable", "balance_amount"]:

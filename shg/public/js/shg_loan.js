@@ -220,6 +220,33 @@ frappe.ui.form.on('SHG Loan', {
                         });
                     });
                     
+                    // Add View Loan Statement button
+                    if (frm.doc.member) {
+                        frm.add_custom_button(__('View Loan Statement'), function() {
+                            frappe.call({
+                                method: 'shg.shg.doctype.shg_loan.shg_loan.get_member_loan_statement',
+                                args: { member: frm.doc.member },
+                                callback: function(r) {
+                                    if (r.message) {
+                                        const loans = r.message.loans.map(l => `
+                                            <b>${l.loan_id}</b> (${l.status})<br>
+                                            Amount: ${format_currency(l.loan_amount, 'KES')}<br>
+                                            Balance: ${format_currency(l.balance, 'KES')}
+                                        `).join('<hr>');
+
+                                        frappe.msgprint({
+                                            title: __('Loan Statement'),
+                                            message: loans + `<hr><b>Total Outstanding:</b> ${format_currency(r.message.total_outstanding, 'KES')}`,
+                                            indicator: 'blue'
+                                        });
+                                    } else {
+                                        frappe.msgprint(__('No loans found for this member.'));
+                                    }
+                                }
+                            });
+                        });
+                    }
+                    
                     // On refresh: if submitted & schedule exists, show quick actions
                     if (frm.doc.repayment_schedule && frm.doc.repayment_schedule.length > 0) {
                         frm.add_custom_button(__('Mark all due as paid today'), function() {
