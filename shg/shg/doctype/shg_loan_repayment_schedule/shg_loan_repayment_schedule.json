@@ -3,109 +3,115 @@
   "name": "SHG Loan Repayment Schedule",
   "module": "SHG",
   "custom": 0,
-  "is_child_table": 1,
-  "autoname": "field:installment_no",
   "istable": 1,
   "editable_grid": 1,
   "track_changes": 1,
-  "allow_rename": 0,
+  "engine": "InnoDB",
+  "autoname": "autoincrement",
   "fields": [
     {
       "fieldname": "installment_no",
       "label": "Installment No",
       "fieldtype": "Int",
-      "reqd": 1
+      "in_list_view": 0,
+      "reqd": 0
     },
     {
       "fieldname": "due_date",
       "label": "Due Date",
       "fieldtype": "Date",
-      "reqd": 1
+      "in_list_view": 1,
+      "reqd": 1,
+      "columns": 2
     },
     {
-      "fieldname": "principal_amount",
+      "fieldname": "principal_component",
       "label": "Principal Amount",
       "fieldtype": "Currency",
-      "reqd": 0
+      "options": "KES",
+      "in_list_view": 1,
+      "columns": 2
     },
     {
-      "fieldname": "interest_amount",
+      "fieldname": "interest_component",
       "label": "Interest Amount",
-      "fieldtype": "Currency"
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "columns": 2
     },
     {
       "fieldname": "total_payment",
       "label": "Total Payment",
-      "fieldtype": "Currency"
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "columns": 2
     },
     {
       "fieldname": "total_due",
       "label": "Total Due",
-      "fieldtype": "Currency"
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "columns": 2
     },
     {
       "fieldname": "amount_paid",
       "label": "Amount Paid",
       "fieldtype": "Currency",
-      "default": "0"
+      "options": "KES",
+      "in_list_view": 1,
+      "columns": 2
     },
     {
       "fieldname": "unpaid_balance",
       "label": "Unpaid Balance",
-      "fieldtype": "Currency"
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "columns": 2
     },
     {
-      "fieldname": "balance_amount",
-      "label": "Balance Amount",
-      "fieldtype": "Currency"
+      "fieldname": "loan_balance",
+      "label": "Loan Balance",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 0
     },
     {
       "fieldname": "status",
       "label": "Status",
       "fieldtype": "Select",
-      "options": "Pending\nPaid\nOverdue",
+      "options": "\nPending\nPaid\nOverdue",
+      "in_list_view": 0,
       "default": "Pending"
     },
     {
       "fieldname": "payment_entry",
       "label": "Payment Entry",
       "fieldtype": "Link",
-      "options": "Payment Entry"
-    },
-    {
-      "fieldname": "reversed",
-      "label": "Reversed",
-      "fieldtype": "Check",
-      "default": "0"
-    },
-    {
-      "fieldname": "member",
-      "label": "Member",
-      "fieldtype": "Link",
-      "options": "SHG Member"
-    },
-    {
-      "fieldname": "remarks",
-      "label": "Remarks",
-      "fieldtype": "Small Text"
+      "options": "Payment Entry",
+      "in_list_view": 0
     }
   ],
-  "field_order": [
-    "installment_no",
-    "due_date",
-    "principal_amount",
-    "interest_amount",
-    "total_payment",
-    "total_due",
-    "amount_paid",
-    "unpaid_balance",
-    "balance_amount",
-    "status",
-    "payment_entry",
-    "reversed",
-    "member",
-    "remarks"
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Accounts User",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
   ],
-  "permissions": [],
-  "engine": "InnoDB"
+  "sort_field": "installment_no",
+  "sort_order": "ASC",
+  "index_web_pages_for_search": 0
 }
