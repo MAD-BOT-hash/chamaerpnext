@@ -62,6 +62,26 @@ frappe.ui.form.on('SHG Loan Repayment', {
             }, __('Filter Outstanding Loans'));
         });
         
+        // Auto-update loan details on refresh
+        if (frm.doc.loan) {
+            frappe.call({
+                method: 'shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.get_repayment_details',
+                args: { loan_id: frm.doc.loan },
+                callback: function(r) {
+                    if (!r.message) return;
+                    const d = r.message;
+
+                    frm.set_value('repayment_start_date', d.repayment_start_date);
+                    frm.set_value('monthly_installment', d.monthly_installment);
+                    frm.set_value('total_payable', d.total_payable);
+                    frm.set_value('balance_amount', d.balance_amount);
+                    frm.set_value('total_repaid', d.total_repaid);
+                    frm.set_value('overdue_amount', d.overdue_amount);
+                    frm.refresh_fields();
+                }
+            });
+        }
+        
         // Add Refresh Loan Details button
         if (frm.doc.loan) {
             frm.add_custom_button(__('Refresh Loan Details'), function() {
@@ -88,7 +108,29 @@ frappe.ui.form.on('SHG Loan Repayment', {
             }
         });
         
-        refresh_loan_details(frm);
+        // Auto-update loan details when loan is selected
+        frappe.call({
+            method: 'shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.get_repayment_details',
+            args: { loan_id: frm.doc.loan },
+            callback: function(r) {
+                if (!r.message) return;
+                const d = r.message;
+
+                frm.set_value('repayment_start_date', d.repayment_start_date);
+                frm.set_value('monthly_installment', d.monthly_installment);
+                frm.set_value('total_payable', d.total_payable);
+                frm.set_value('balance_amount', d.balance_amount);
+                frm.set_value('total_repaid', d.total_repaid);
+                frm.set_value('overdue_amount', d.overdue_amount);
+
+                frm.refresh_fields();
+
+                frappe.show_alert({
+                    message: __('Repayment details updated from schedule.'),
+                    indicator: 'green'
+                });
+            }
+        });
     },
     
     total_paid: function(frm) {
@@ -143,7 +185,7 @@ function refresh_loan_details(frm) {
             frm.set_value('repayment_start_date', d.repayment_start_date);
             frm.set_value('monthly_installment', d.monthly_installment);
             frm.set_value('total_payable', d.total_payable);
-            frm.set_value('outstanding_balance', d.balance_amount);
+            frm.set_value('balance_amount', d.balance_amount);
             frm.set_value('total_repaid', d.total_repaid);
             frm.set_value('overdue_amount', d.overdue_amount);
 
@@ -156,6 +198,11 @@ function refresh_loan_details(frm) {
             update_progress_bar(frm, d);
 
             frm.refresh_fields();
+            
+            frappe.show_alert({
+                message: __('Repayment details updated from schedule.'),
+                indicator: 'green'
+            });
         }
     });
 }

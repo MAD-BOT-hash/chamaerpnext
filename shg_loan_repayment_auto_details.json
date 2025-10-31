@@ -1,0 +1,11 @@
+{
+  "doctype": "Client Script",
+  "name": "SHG Loan Repayment Auto Details",
+  "dt": "SHG Loan Repayment",
+  "view": "Form",
+  "enabled": 1,
+  "script_type": "Client",
+  "module": "SHG",
+  "app": "shg",
+  "script": "frappe.ui.form.on('SHG Loan Repayment', {\n    loan: function(frm) {\n        if (!frm.doc.loan) return;\n\n        frappe.call({\n            method: 'shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.get_repayment_details',\n            args: { loan_id: frm.doc.loan },\n            callback: function(r) {\n                if (!r.message) return;\n                const d = r.message;\n\n                frm.set_value('repayment_start_date', d.repayment_start_date);\n                frm.set_value('monthly_installment', d.monthly_installment);\n                frm.set_value('total_payable', d.total_payable);\n                frm.set_value('balance_amount', d.balance_amount);\n                frm.set_value('total_repaid', d.total_repaid);\n                frm.set_value('overdue_amount', d.overdue_amount);\n\n                frm.refresh_fields();\n\n                frappe.show_alert({\n                    message: __('Repayment details updated from schedule.'),\n                    indicator: 'green'\n                });\n            }\n        });\n    },\n\n    refresh: function(frm) {\n        if (frm.doc.loan) {\n            frappe.call({\n                method: 'shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.get_repayment_details',\n                args: { loan_id: frm.doc.loan },\n                callback: function(r) {\n                    if (!r.message) return;\n                    const d = r.message;\n\n                    frm.set_value('repayment_start_date', d.repayment_start_date);\n                    frm.set_value('monthly_installment', d.monthly_installment);\n                    frm.set_value('total_payable', d.total_payable);\n                    frm.set_value('balance_amount', d.balance_amount);\n                    frm.set_value('total_repaid', d.total_repaid);\n                    frm.set_value('overdue_amount', d.overdue_amount);\n                    frm.refresh_fields();\n                }\n            });\n        }\n    }\n});"
+}
