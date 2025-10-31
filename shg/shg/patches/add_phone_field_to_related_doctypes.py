@@ -13,7 +13,7 @@ def execute():
         )
 
         if not col_exists:
-            frappe.db.sql(f"ALTER TABLE {table_name} ADD COLUMN phone_number VARCHAR(140)")
+            frappe.db.sql(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS phone_number VARCHAR(140)")
             frappe.logger().info(f"✅ Added 'phone_number' column to {dt}")
         else:
             frappe.logger().info(f"ℹ️ Column 'phone_number' already exists in {dt}")

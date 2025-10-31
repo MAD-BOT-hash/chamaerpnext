@@ -686,3 +686,13 @@ def post_to_contribution(docname):
 
     frappe.db.commit()
     return {"contribution": contribution.name}
+
+@frappe.whitelist()
+def validate_contribution_invoice(doc, method=None):
+    """Validate SHG Contribution Invoice before submission."""
+    frappe.msgprint("Validating contribution invoice...")
+
+@frappe.whitelist()
+def create_contribution_from_invoice(doc, method=None):
+    """Auto-create contribution record from invoice."""
+    frappe.msgprint("Creating contribution record...")

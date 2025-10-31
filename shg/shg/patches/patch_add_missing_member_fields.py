@@ -17,7 +17,7 @@ def execute():
 
     for column, definition in columns.items():
         if column not in existing_columns:
-            frappe.db.sql(f"ALTER TABLE `{table_name}` ADD COLUMN `{column}` {definition}")
+            frappe.db.sql(f"ALTER TABLE `{table_name}` ADD COLUMN IF NOT EXISTS `{column}` {definition}")
             frappe.logger().info(f"Added column {column} to {table_name}")
         else:
             frappe.logger().info(f"Column {column} already exists in {table_name}")

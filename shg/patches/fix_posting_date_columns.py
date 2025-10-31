@@ -15,7 +15,7 @@ def execute():
                 # Add the column directly to the database table
                 frappe.db.sql(f"""
                     ALTER TABLE `tab{doctype}` 
-                    ADD COLUMN `posting_date` DATE NOT NULL DEFAULT CURRENT_DATE 
+                    ADD COLUMN IF NOT EXISTS `posting_date` DATE NOT NULL DEFAULT CURRENT_DATE 
                     AFTER `member`
                 """)
                 frappe.db.commit()

@@ -358,6 +358,36 @@ class SHGLoan(Document):
 # -------------------------------
 # HOOKS
 # -------------------------------
+def before_save(doc, method=None):
+    """Hook to safely round and validate before saving."""
+    for field in ["loan_amount", "monthly_installment", "total_payable", "balance_amount"]:
+        if getattr(doc, field, None):
+            setattr(doc, field, round(flt(getattr(doc, field)), 2))
+    if hasattr(doc, "calculate_repayment_details"):
+        doc.calculate_repayment_details()
+
+def check_member_eligibility(doc):
+    """Ensure member is active and eligible."""
+    if not doc.member:
+        frappe.throw("Member is required.")
+    if not frappe.db.exists("SHG Member", doc.member):
+        frappe.throw(f"Member {doc.member} does not exist.")
+    member_status = frappe.db.get_value("SHG Member", doc.member, "membership_status")
+    if member_status != "Active":
+        frappe.throw(f"Member {doc.member} is not active.")
+
+def calculate_repayment_details(doc):
+    """Compute installment and total payable."""
+    if not doc.loan_amount or not doc.interest_rate or not doc.loan_period_months:
+        return
+    monthly_rate = (doc.interest_rate / 100) / 12
+    if monthly_rate and doc.loan_period_months:
+        doc.monthly_installment = (
+            doc.loan_amount * monthly_rate *
+            (1 + monthly_rate) ** doc.loan_period_months
+        ) / ((1 + monthly_rate) ** doc.loan_period_months - 1)
+    doc.total_payable = doc.monthly_installment * doc.loan_period_months
+
 def validate_loan(doc, method):
     doc.validate()
 
