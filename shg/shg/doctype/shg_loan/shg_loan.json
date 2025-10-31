@@ -33,6 +33,7 @@
         "erpnext_loan_ref",
         "disbursement_journal_entry",
         "disbursement_payment_entry",
+        "journal_entry",
         "posted_to_gl",
         "posted_on",
         "repayment_section",
@@ -223,6 +224,13 @@
             "fieldtype": "Link",
             "label": "Disbursement Payment Entry",
             "options": "Payment Entry",
+            "read_only": 1
+        },
+        {
+            "fieldname": "journal_entry",
+            "label": "Journal Entry",
+            "fieldtype": "Link",
+            "options": "Journal Entry",
             "read_only": 1
         },
         {
