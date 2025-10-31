@@ -1,4 +1,5 @@
 import frappe
+from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 def validate_accounts(self):
     """Validate accounts for loan disbursement"""
@@ -38,24 +39,8 @@ def ensure_parent_loan_receivable(company):
 
 def ensure_member_receivable(company, member_id):
     """Ensure member receivable account exists under parent loan receivable"""
-    parent = ensure_parent_loan_receivable(company)
-    abbr = get_company_abbr(company)
-    acc_name = f"{member_id} - {abbr}"
-    
-    if not frappe.db.exists("Account", acc_name):
-        member_name = frappe.db.get_value("SHG Member", member_id, "member_name") or member_id
-        frappe.get_doc({
-            "doctype": "Account",
-            "account_name": member_name,
-            "name": acc_name,
-            "parent_account": parent,
-            "company": company,
-            "is_group": 0,
-            "account_type": "Receivable"
-        }).insert(ignore_permissions=True)
-        frappe.db.commit()
-    
-    return acc_name
+    # Use the shared helper function instead of duplicating logic
+    return get_or_create_member_receivable(member_id, company)
 
 def validate_settings_defaults():
     """Validate that required settings defaults are configured"""
