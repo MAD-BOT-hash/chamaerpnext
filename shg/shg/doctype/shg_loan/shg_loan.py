@@ -104,7 +104,11 @@ class SHGLoan(Document):
         if getattr(self, "posted_to_gl", 0):
             return
 
-        company = self.company
+        # Ensure company is set with fallback logic
+        company = self.company or frappe.db.get_single_value("SHG Settings", "company")
+        if not company:
+            frappe.throw(_("Company not set on loan or in SHG Settings."))
+
         abbr = frappe.db.get_value("Company", company, "abbr")
         settings = frappe.get_single("SHG Settings")
         loan_source_account = getattr(settings, "default_loan_account", None)
