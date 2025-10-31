@@ -388,14 +388,14 @@ def calculate_repayment_details(doc):
         ) / ((1 + monthly_rate) ** doc.loan_period_months - 1)
     doc.total_payable = doc.monthly_installment * doc.loan_period_months
 
-def validate_loan(doc, method):
+def validate_loan(doc, method=None):
     doc.validate()
 
-def post_to_general_ledger(doc, method):
+def post_to_general_ledger(doc, method=None):
     if doc.docstatus == 1 and not doc.get("posted_to_gl"):
         doc.post_to_ledger_if_needed()
 
-def after_insert_or_update(doc):
+def after_insert_or_update(doc, method=None):
     """Auto actions after saving loan."""
     if doc.get("loan_members"):
         doc.generate_individual_member_loans()
