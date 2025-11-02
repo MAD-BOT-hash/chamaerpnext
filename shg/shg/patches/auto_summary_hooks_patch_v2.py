@@ -1,6 +1,4 @@
 import frappe
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
-
 
 def _ensure_allow_update_after_submit(doctype, fields):
     """Enable allow_update_after_submit for specific fields in a DocType."""
@@ -14,7 +12,7 @@ def _ensure_allow_update_after_submit(doctype, fields):
 
 
 def _ensure_server_script(name, script_type, reference_doctype, script, event=None):
-    """Create or update a server script."""
+    """Create or update a backend (non-client) server script."""
     existing = frappe.db.get_value("Server Script", {"name": name}, "name")
     data = {
         "doctype": "Server Script",
@@ -37,19 +35,13 @@ def _ensure_server_script(name, script_type, reference_doctype, script, event=No
 
 
 def execute():
-    """Patch to allow repayment updates on submitted SHG Loans and add auto-hooks."""
+    """Patch to allow repayment updates on submitted SHG Loans and add hooks."""
 
     # 1️⃣ Allow key fields on SHG Loan to be updated after submit
     frappe.msgprint("🔓 Enabling update after submit for SHG Loan fields...")
     _ensure_allow_update_after_submit(
         "SHG Loan",
-        [
-            "total_repaid",
-            "balance_amount",
-            "overdue_amount",
-            "journal_entry",
-            "next_due_date",
-        ],
+        ["total_repaid", "balance_amount", "overdue_amount", "journal_entry", "next_due_date"],
     )
 
     # 2️⃣ Allow child table fields to update after submit
@@ -59,7 +51,7 @@ def execute():
         ["amount_paid", "balance", "status"],
     )
 
-    # 3️⃣ Create auto-sync Server Script for recalculating repayment summary on Payment Entry submit
+    # 3️⃣ Create auto-sync backend Server Script for recalculating repayment summary on Payment Entry submit
     repayment_sync_script = """
 loan_name = doc.reference_name
 if doc.payment_type in ["Receive", "Pay"] and loan_name:
@@ -76,20 +68,4 @@ if doc.payment_type in ["Receive", "Pay"] and loan_name:
         event="on_submit",
     )
 
-    # 4️⃣ Add form indicator logic to SHG Loan
-    frappe.msgprint("🎨 Adding loan submission indicator logic via Server Script...")
-    form_indicator_script = """
-if doc.docstatus == 1:
-    frappe.show_alert({
-        'message': `🔒 Loan Submitted — Updates are restricted except for repayment-related fields.`,
-        'indicator': 'orange'
-    })
-"""
-    _ensure_server_script(
-        name="SHG Loan Form Indicator",
-        script_type="Client",
-        reference_doctype="SHG Loan",
-        script=form_indicator_script,
-    )
-
-    frappe.msgprint("✅ Patch work completed successfully!")
+    frappe.msgprint("✅ Backend logic patched successfully!")
