@@ -1,12 +1,17 @@
 import frappe
-from frappe.database.schema import add_column
 
 def execute():
-    """Add missing disbursed_on field to SHG Loan DocType (if not already present)."""
-    if not frappe.db.has_column("SHG Loan", "disbursed_on"):
-        frappe.log("🛠 Adding missing column `disbursed_on` to SHG Loan...")
-        add_column("SHG Loan", "disbursed_on", "datetime")
+    """Add missing disbursed_on: datetime(6) to SHG Loan table, if not exists."""
+    doctype = "SHG Loan"
+    fieldname = "disbursed_on"
+
+    if not frappe.db.has_column(doctype, fieldname):
+        frappe.log(f"🛠 Creating field `{fieldname}` on `{doctype}` ...")
+        frappe.db.sql(f"""
+            ALTER TABLE `tab{doctype}`
+            ADD COLUMN `{fieldname}` datetime(6) NULL
+        """)
         frappe.db.commit()
-        frappe.log("✅ Field `disbursed_on` added successfully.")
+        frappe.log(f"✅ Field `{fieldname}` added successfully.")
     else:
-        frappe.log("ℹ️ Field `disbursed_on` already exists. No action taken.")
+        frappe.log(f"ℹ️ Field `{fieldname}` already exists. Skipping.")
