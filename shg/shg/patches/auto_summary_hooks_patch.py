@@ -1,15 +1,20 @@
 import frappe
+from frappe.model.utils.rename_field import rename_field
+
 
 def _ensure_server_script(name: str, script_type: str, reference_doctype: str | None, script: str, event: str | None = None):
-    existing = frappe.db.get_value("Server Script", {"name": name}, "name")
+    """Insert or update a Server Script safely."""
+    existing = frappe.db.get_value("Server Script", name, "name")
     data = {
         "doctype": "Server Script",
         "name": name,
         "script_type": script_type,
         "script": script,
-        "disabled": 0,
+        "disabled": 0
     }
     if script_type == "DocType Event":
+        if not reference_doctype or not event:
+            frappe.throw(f"DocType Event scripts require reference_doctype and event. Missing for {name}")
         data["reference_doctype"] = reference_doctype
         data["event"] = event
 
@@ -19,142 +24,60 @@ def _ensure_server_script(name: str, script_type: str, reference_doctype: str | 
         doc.save()
     else:
         frappe.get_doc(data).insert()
+
     frappe.db.commit()
 
+
 def execute():
-    """Install doc event + API server scripts that keep Repayment Details in sync without touching your Python modules."""
-    # --- 1) SHG Loan — Before Save: compute EMI + totals (if method exists)
+    """Install doc event + API server scripts that keep Repayment Details in sync without touching Python modules."""
+
+    # --- 1) SHG Loan — Before Save: compute EMI + totals
     _ensure_server_script(
-        name="SHG Loan | before_save | compute details",
+        name="SHG Loan | before_save | auto_compute_disbursement_values",
         script_type="DocType Event",
         reference_doctype="SHG Loan",
-        event="Before Save",
+        event="before_save",
         script="""
-# Compute monthly_installment/total_payable if the controller provides it.
-if hasattr(doc, "calculate_repayment_details"):
-    try:
-        result = doc.calculate_repayment_details()
-        if isinstance(result, dict):
-            if result.get("monthly_installment") is not None:
-                doc.monthly_installment = result.get("monthly_installment")
-            if result.get("total_payable") is not None:
-                doc.total_payable = result.get("total_payable")
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "SHG Loan before_save calc error")
+frappe.msgprint("Auto-updating EMI, totals...")
+
+if hasattr(doc, 'update_repayment_summary') and callable(doc.update_repayment_summary):
+    doc.update_repayment_summary()
 """
     )
 
-    # --- 2) SHG Loan — After Insert: build schedule + refresh summary
+    # --- 2) SHG Loan Repayment — After Submit: update member summaries
     _ensure_server_script(
-        name="SHG Loan | after_insert | schedule + summary",
-        script_type="DocType Event",
-        reference_doctype="SHG Loan",
-        event="After Insert",
-        script="""
-# Create schedule once and refresh summary.
-try:
-    if hasattr(doc, "create_repayment_schedule_if_needed"):
-        doc.create_repayment_schedule_if_needed()
-    if hasattr(doc, "update_repayment_summary"):
-        doc.update_repayment_summary()
-except Exception:
-    frappe.log_error(frappe.get_traceback(), "SHG Loan after_insert error")
-"""
-    )
-
-    # --- 3) SHG Loan — On Submit: ensure summary is up to date
-    _ensure_server_script(
-        name="SHG Loan | on_submit | summary",
-        script_type="DocType Event",
-        reference_doctype="SHG Loan",
-        event="on_submit",
-        script="""
-try:
-    if hasattr(doc, "update_repayment_summary"):
-        doc.update_repayment_summary()
-except Exception:
-    frappe.log_error(frappe.get_traceback(), "SHG Loan on_submit summary error")
-"""
-    )
-
-    # --- 4) SHG Loan — On Update After Submit: keep summary current
-    _ensure_server_script(
-        name="SHG Loan | on_update_after_submit | summary",
-        script_type="DocType Event",
-        reference_doctype="SHG Loan",
-        event="on_update_after_submit",
-        script="""
-try:
-    if hasattr(doc, "update_repayment_summary"):
-        doc.update_repayment_summary()
-except Exception:
-    frappe.log_error(frappe.get_traceback(), "SHG Loan on_update_after_submit summary error")
-"""
-    )
-
-    # --- 5) SHG Loan Repayment — On Submit: update parent loan summary
-    _ensure_server_script(
-        name="SHG Loan Repayment | on_submit | update loan summary",
+        name="SHG Loan Repayment | on_submit | update_summary",
         script_type="DocType Event",
         reference_doctype="SHG Loan Repayment",
         event="on_submit",
         script="""
-# When a repayment is submitted, refresh the parent loan's summary.
-try:
-    if doc.loan:
-        loan = frappe.get_doc("SHG Loan", doc.loan)
-        if hasattr(loan, "update_repayment_summary"):
-            loan.update_repayment_summary()
-except Exception:
-    frappe.log_error(frappe.get_traceback(), "Repayment on_submit summary error")
+# Call SHG Loan's internal method to refresh totals after repayment
+loan_id = doc.loan
+if loan_id:
+    loan = frappe.get_doc("SHG Loan", loan_id)
+    if hasattr(loan, 'update_repayment_summary'):
+        loan.update_repayment_summary()
+        loan.save()
 """
     )
 
-    # --- 6) SHG Loan Repayment — On Cancel: update parent loan summary
+    # --- 3) SHG Loan — API Script for refresh button — called via Client Script
     _ensure_server_script(
-        name="SHG Loan Repayment | on_cancel | update loan summary",
-        script_type="DocType Event",
-        reference_doctype="SHG Loan Repayment",
-        event="on_cancel",
-        script="""
-try:
-    if doc.loan:
-        loan = frappe.get_doc("SHG Loan", doc.loan)
-        if hasattr(loan, "update_repayment_summary"):
-            loan.update_repayment_summary()
-except Exception:
-    frappe.log_error(frappe.get_traceback(), "Repayment on_cancel summary error")
-"""
-    )
-
-    # --- 7) API endpoint: refresh summary (called from client button)
-    _ensure_server_script(
-        name="API | shg_loan_refresh_summary",
+        name="SHG Loan | API | trigger_repayment_refresh",
         script_type="API",
         reference_doctype=None,
-        event=None,
-        script=r"""
+        script="""
 import frappe
 
 @frappe.whitelist()
-def shg_loan_refresh_summary(name: str):
-    """
-    Refresh the repayment summary for a loan and return the updated fields.
-    """
-    loan = frappe.get_doc("SHG Loan", name)
-    if hasattr(loan, "update_repayment_summary"):
+def refresh_repayment_summary(loan_id):
+    loan = frappe.get_doc("SHG Loan", loan_id)
+    if hasattr(loan, 'update_repayment_summary'):
         loan.update_repayment_summary()
-
-    # Reload to ensure fresh values
-    loan.reload()
-
-    return {
-        "monthly_installment": float(loan.monthly_installment or 0),
-        "total_payable": float(loan.total_payable or 0),
-        "balance_amount": float(loan.balance_amount or 0),
-        "total_repaid": float(loan.total_repaid or 0),
-        "overdue_amount": float(loan.overdue_amount or 0),
-    }
+        loan.save()
+    return {"ok": True}
 """
     )
-}
+
+    frappe.log("✅ Installed/Updated SHG Repayment Hooks Server Scripts")
