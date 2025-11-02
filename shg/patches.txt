@@ -13,3 +13,4 @@ shg.patches.migrate_repayment_schedule_field_names
 shg.patches.verify_hook_signatures
 shg.shg.patches.add_company_field_to_shg_loan
 shg.shg.patches.fix_draft_loan_journal_entries
+shg.shg.patches.add_disbursed_on_field
