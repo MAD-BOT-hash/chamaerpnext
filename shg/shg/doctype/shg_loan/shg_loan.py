@@ -287,6 +287,40 @@ class SHGLoan(Document):
 
 
 @frappe.whitelist()
+def refresh_repayment_summary(loan_name):
+    """Recalculate repayment summary from schedule and update loan fields."""
+    loan = frappe.get_doc("SHG Loan", loan_name)
+    schedule = loan.repayment_schedule or []
+
+    totals = {
+        "principal": 0.0,
+        "interest": 0.0,
+        "total_payable": 0.0,
+        "amount_paid": 0.0,
+        "unpaid_balance": 0.0,
+    }
+
+    for row in schedule:
+        totals["principal"]      += float(row.get("principal_amount") or row.get("principal_component") or 0)
+        totals["interest"]       += float(row.get("interest_amount") or row.get("interest_component") or 0)
+        totals["total_payable"]  += float(row.get("total_payment") or 0)
+        totals["amount_paid"]    += float(row.get("amount_paid") or 0)
+        totals["unpaid_balance"] += float(row.get("unpaid_balance") or 0)
+
+    loan.total_payable = totals["total_payable"]
+    loan.total_repaid = totals["amount_paid"]
+    loan.balance_amount = totals["unpaid_balance"]
+    loan.overdue_amount = max(0.0, totals["unpaid_balance"] - (loan.total_payable - loan.total_repaid))
+
+    # For monthly installment, take first row or division
+    if loan.total_payable and loan.loan_period_months:
+        loan.monthly_installment = loan.total_payable / loan.loan_period_months
+
+    loan.db_update()
+    return totals
+
+
+@frappe.whitelist()
 def update_repayment_summary(loan_id):
     """Refresh repayment summary fields from repayment schedule."""
     if not loan_id:
