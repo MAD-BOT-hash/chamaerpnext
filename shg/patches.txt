@@ -21,3 +21,4 @@ shg.shg.patches.update_repayment_summary_hybrid
 shg.shg.patches.update_repayment_summary_hybrid_v2
 shg.shg.patches.install_refresh_summary_script
 shg.shg.patches.update_summary_to_python_module
+shg.shg.patches.repayment_refresh_module_and_ui
