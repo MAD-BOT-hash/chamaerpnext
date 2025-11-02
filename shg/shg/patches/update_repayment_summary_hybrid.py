@@ -152,19 +152,24 @@ def _install_api():
 
 # --- 4) One-time backfill of existing loans
 def _backfill_existing():
+    from frappe.utils import flt, getdate, today  # ✅ FIX: import added here
+
     for d in frappe.get_all("SHG Loan", pluck="name"):
         loan = frappe.get_doc("SHG Loan", d)
-        # mimic the compute body quickly
         rows = loan.get("repayment_schedule") or []
+
         if not rows:
             loan.flags.ignore_validate_update_after_submit = True
             loan.db_set({
-                "monthly_installment": 0, "total_payable": 0, "total_repaid": 0,
-                "overdue_amount": 0, "balance_amount": flt(loan.loan_amount or 0),
+                "monthly_installment": 0,
+                "total_payable": 0,
+                "total_repaid": 0,
+                "overdue_amount": 0,
+                "balance_amount": flt(loan.loan_amount or 0),
                 "next_due_date": None
             }, update_modified=False)
             continue
-        from frappe.utils import flt, getdate, today
+
         total_payment = sum(flt(getattr(r, "total_payment", 0)) for r in rows)
         total_paid    = sum(flt(getattr(r, "amount_paid", 0))  for r in rows)
         today_d = getdate(today())
