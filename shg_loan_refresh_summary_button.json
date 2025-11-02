@@ -1,11 +1,7 @@
 {
   "doctype": "Client Script",
-  "name": "SHG Loan Refresh Summary Button",
   "dt": "SHG Loan",
   "view": "Form",
   "enabled": 1,
-  "script_type": "Client",
-  "module": "SHG",
-  "app": "shg",
-  "script": "frappe.ui.form.on('SHG Loan', {\n    refresh: function(frm) {\n        if (frm.doc.docstatus === 1 && frm.doc.status === 'Disbursed') {\n            frm.add_custom_button(__('🔄 Refresh Repayment Summary'), function() {\n                if (!frm.doc.name) {\n                    frappe.msgprint(__('Please save the Loan first.'));\n                    return;\n                }\n\n                frappe.call({\n                    method: 'shg.shg.doctype.shg_loan.shg_loan.update_repayment_summary',\n                    args: { loan_id: frm.doc.name },\n                    callback: function(r) {\n                        frm.reload_doc();\n                        frappe.show_alert({\n                            message: __('Repayment summary refreshed successfully.'),\n                            indicator: 'green'\n                        });\n                    }\n                });\n            }).addClass('btn-primary');\n        }\n    }\n});"
+  "script": "frappe.ui.form.on('SHG Loan', {\n  refresh(frm) {\n    if (!frm.doc.__islocal) {\n      frm.add_custom_button('🔄 Refresh Summary', async () => {\n        try {\n          frm.dashboard.set_headline(__('Refreshing repayment summary...'));\n          const r = await frappe.call({\n            method: 'shg_loan_refresh_summary',\n            args: { name: frm.doc.name }\n          });\n          const v = (r && r.message) || {};\n          // Push values to the form\n          frm.set_value('monthly_installment', v.monthly_installment || 0);\n          frm.set_value('total_payable', v.total_payable || 0);\n          frm.set_value('balance_amount', v.balance_amount || 0);\n          frm.set_value('total_repaid', v.total_repaid || 0);\n          frm.set_value('overdue_amount', v.overdue_amount || 0);\n          await frm.save();\n          frm.refresh_fields(['monthly_installment','total_payable','balance_amount','total_repaid','overdue_amount']);\n          frm.dashboard.set_headline(__('✅ Repayment summary refreshed'));\n        } catch (e) {\n          console.error(e);\n          frappe.msgprint({\n            title: __('Refresh Summary Error'),\n            message: __('Failed to refresh repayment summary. Check error log.'),\n            indicator: 'red'\n          });\n        }\n      });\n    }\n  }\n});"
 }
