@@ -1,0 +1,9 @@
+{
+  "doctype": "List View Settings",
+  "name": "SHG Loan",
+  "fields": [],
+  "order_by": "creation desc",
+  "filters": [],
+  "add_fields": ["balance_amount", "overdue_amount", "total_payable", "total_repaid", "docstatus"],
+  "get_indicator": "if (!doc.docstatus) return [__(\"Draft\"), \"gray\", \"docstatus,=,0\"];\nlet total = doc.total_payable || 0;\nlet paid = doc.total_repaid || 0;\nlet overdue = doc.overdue_amount || 0;\nlet balance = doc.balance_amount || 0;\nlet percent = total > 0 ? Math.round((paid / total) * 100) : 0;\nif (balance <= 0) return [__(`${percent}% Paid ✔️`), \"green\", `name,=,${doc.name}`];\nif (overdue > 0) return [__(`${percent}% Paid – Overdue: Sh ${overdue}`), \"red\", `name,=,${doc.name}`];\nreturn [__(`${percent}% Paid – Bal: Sh ${balance}`), \"orange\", `name,=,${doc.name}`];"
+}

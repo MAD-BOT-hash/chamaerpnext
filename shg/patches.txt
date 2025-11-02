@@ -16,3 +16,4 @@ shg.shg.patches.fix_draft_loan_journal_entries
 shg.shg.patches.add_disbursed_on_field
 shg.shg.patches.update_shg_loan_form_layout
 shg.shg.patches.auto_summary_hooks_patch
+shg.shg.patches.auto_summary_hooks_patch_v2
