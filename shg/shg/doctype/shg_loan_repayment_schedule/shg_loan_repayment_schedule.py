@@ -14,7 +14,15 @@ class SHGLoanRepaymentSchedule(Document):
         # Refresh parent loan summary
         if self.parent:
             loan = frappe.get_doc("SHG Loan", self.parent)
-            if hasattr(loan, "update_repayment_summary"):
+            # Use a safer approach instead of hasattr for Server Script compatibility
+            try:
+                # Try to get the method - if it doesn't exist, this will raise an AttributeError
+                loan.update_repayment_summary
+                method_exists = True
+            except AttributeError:
+                method_exists = False
+            
+            if method_exists:
                 loan.update_repayment_summary()
 
         frappe.msgprint(f"✅ Installment {self.name} marked as Paid ({amount_to_pay})")

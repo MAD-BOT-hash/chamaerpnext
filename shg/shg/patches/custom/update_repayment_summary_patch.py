@@ -15,7 +15,15 @@ def execute():
     # ----------------------------------------------------------------------
     # 1️⃣ Add helper function to SHG Loan (if not already present)
     # ----------------------------------------------------------------------
-    if not hasattr(frappe.get_doc("DocType", "SHG Loan"), "update_repayment_summary"):
+    # Use a safer approach instead of hasattr for Server Script compatibility
+    try:
+        # Try to get the method - if it doesn't exist, this will raise an AttributeError
+        frappe.get_doc("DocType", "SHG Loan").update_repayment_summary
+        method_exists = True
+    except AttributeError:
+        method_exists = False
+    
+    if not method_exists:
         frappe.msgprint("✅ Adding update_repayment_summary() to SHG Loan runtime class...")
 
         def update_repayment_summary(self):
@@ -65,7 +73,15 @@ def execute():
             # Refresh parent loan summary
             if self.parent:
                 loan = frappe.get_doc("SHG Loan", self.parent)
-                if hasattr(loan, "update_repayment_summary"):
+                # Use a safer approach instead of hasattr for Server Script compatibility
+                try:
+                    # Try to get the method - if it doesn't exist, this will raise an AttributeError
+                    loan.update_repayment_summary
+                    method_exists = True
+                except AttributeError:
+                    method_exists = False
+                
+                if method_exists:
                     loan.update_repayment_summary()
 
             frappe.msgprint(f"✅ Installment {self.name} marked as Paid ({amount_to_pay})")

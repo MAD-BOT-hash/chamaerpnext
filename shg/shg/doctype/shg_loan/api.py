@@ -17,7 +17,15 @@ def refresh_repayment_summary(loan_name: str):
     loan.reload()
 
     # If summary method exists in class, use it
-    if hasattr(loan, "update_repayment_summary"):
+    # Use a safer approach instead of hasattr for Server Script compatibility
+    try:
+        # Try to get the method - if it doesn't exist, this will raise an AttributeError
+        loan.update_repayment_summary
+        method_exists = True
+    except AttributeError:
+        method_exists = False
+    
+    if method_exists:
         loan.update_repayment_summary()
         loan.save(ignore_permissions=True)
         frappe.db.commit()
