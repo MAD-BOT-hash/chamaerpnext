@@ -22,111 +22,149 @@ class SHGLoanRepayment(Document):
                 f"Repayment ({self.total_paid}) exceeds remaining balance ({loan_doc.balance_amount})."
             )
 
+        # Auto-calculate repayment breakdown
+        self.calculate_repayment_breakdown()
+
     def on_submit(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
-        remaining_amount = flt(self.total_paid or 0)
         
-        # If the loan has schedule rows, auto-allocate self.total_paid oldest-first across schedules
-        if loan_doc.get("repayment_schedule"):
-            # Sort schedule rows by due date (oldest first)
-            schedule_rows = sorted(loan_doc.get("repayment_schedule"), key=lambda x: x.due_date)
-            
-            for row in schedule_rows:
-                if remaining_amount <= 0:
-                    break
-                    
-                if flt(row.unpaid_balance) > 0:
-                    # Allocate amount to this row
-                    alloc = min(flt(row.unpaid_balance), remaining_amount)
-                    row.amount_paid = flt(row.amount_paid or 0) + alloc
-                    row.unpaid_balance = flt(row.unpaid_balance) - alloc
-                    remaining_amount -= alloc
-                    
-                    # Update status
-                    if row.unpaid_balance <= 0:
-                        row.status = "Paid"
-                    else:
-                        row.status = "Partially Paid"
-                        
-                    # Save the updated row
-                    row.db_update()
-            
-            # Recalculate loan outstanding after payment
-            loan_doc.recalculate_outstanding_after_payment()
-        else:
-            # Fallback to simple balance logic
-            loan_doc.flags.ignore_validate_update_after_submit = True
-            loan_doc.balance_amount = flt(loan_doc.balance_amount or 0) - flt(self.total_paid or 0)
-            loan_doc.status = (
-                "Paid" if loan_doc.balance_amount == 0 else "Partially Paid"
-            )
-
-        loan_doc.last_repayment_date = self.posting_date
-        loan_doc.save(ignore_permissions=True)
-        frappe.db.commit()
-
-        # Update repayment summary fields
-        try:
-            # Use our new API method to refresh the repayment summary
-            from shg.shg.doctype.shg_loan.api import refresh_repayment_summary
-            refresh_repayment_summary(loan_doc.name)
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Failed to update repayment summary")
-            # Fallback to the old method
-            try:
-                loan_doc.update_repayment_summary()
-            except Exception as e2:
-                frappe.log_error(frappe.get_traceback(), "Failed to update repayment summary with fallback method")
-
-        loan_doc.add_comment(
-            "Edit",
-            f"Repayment {self.name} applied ({self.total_paid}). Remaining balance: {loan_doc.balance_amount}",
-        )
-
+        # Update the loan repayment schedule
+        self.update_repayment_schedule(loan_doc)
+        
+        # Update loan summary
+        self.update_loan_summary(loan_doc)
+        
+        # Post to GL if needed
+        self.post_to_ledger(loan_doc)
+        
         frappe.msgprint(
-            f"✅ Loan {loan_doc.name} updated. Remaining balance: {loan_doc.balance_amount}"
+            f"✅ Loan repayment {self.name} processed successfully. Remaining balance: {loan_doc.balance_amount}"
         )
 
     def on_cancel(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
         
-        # If the loan has schedule rows, reverse the allocations
-        if loan_doc.get("repayment_schedule"):
-            # Find schedule rows that were affected by this repayment
-            # This is a simplified approach - in a real implementation, you might want to track
-            # which repayment affected which schedule rows
-            for row in loan_doc.get("repayment_schedule"):
-                if row.payment_entry and frappe.db.exists("Payment Entry", row.payment_entry):
-                    pe = frappe.get_doc("Payment Entry", row.payment_entry)
-                    if pe.reference_no == self.name:
-                        # Reverse this payment
-                        row.amount_paid = flt(row.amount_paid or 0) - flt(pe.paid_amount or 0)
-                        row.unpaid_balance = flt(row.total_due) - flt(row.amount_paid or 0)
-                        if row.unpaid_balance <= 0:
-                            row.status = "Paid"
-                        elif row.amount_paid > 0:
-                            row.status = "Partially Paid"
-                        else:
-                            row.status = "Pending"
-                        row.db_update()
+        # Reverse the repayment schedule updates
+        self.reverse_repayment_schedule(loan_doc)
+        
+        # Update loan summary
+        self.update_loan_summary(loan_doc)
+        
+        frappe.msgprint(f"⚠️ Loan repayment {self.name} cancelled. Balance restored to {loan_doc.balance_amount}")
+
+    def update_repayment_schedule(self, loan_doc):
+        """Update the repayment schedule based on this repayment."""
+        remaining_amount = flt(self.total_paid)
+        
+        if not loan_doc.get("repayment_schedule"):
+            frappe.throw(f"Loan {loan_doc.name} has no repayment schedule.")
             
-            # Recalculate loan outstanding after payment reversal
-            loan_doc.recalculate_outstanding_after_payment()
-        else:
-            # Fallback to simple balance logic
-            loan_doc.flags.ignore_validate_update_after_submit = True
-            loan_doc.balance_amount = flt(loan_doc.balance_amount or 0) + flt(self.total_paid or 0)
-            loan_doc.status = "Disbursed"
-            
+        # Sort schedule rows by due date (oldest first)
+        schedule_rows = sorted(loan_doc.get("repayment_schedule"), key=lambda x: getdate(x.due_date))
+        
+        updated_rows = []
+        
+        for row in schedule_rows:
+            if remaining_amount <= 0:
+                break
+                
+            if flt(row.unpaid_balance) > 0:
+                # Allocate amount to this row
+                alloc = min(flt(row.unpaid_balance), remaining_amount)
+                row.amount_paid = flt(row.amount_paid or 0) + alloc
+                row.unpaid_balance = flt(row.unpaid_balance) - alloc
+                remaining_amount -= alloc
+                
+                # Update status
+                if row.unpaid_balance <= 0:
+                    row.status = "Paid"
+                else:
+                    row.status = "Partially Paid"
+                
+                # Save the updated row
+                row.db_update()
+                updated_rows.append(row)
+        
+        # Update last repayment date
+        loan_doc.last_repayment_date = self.posting_date
         loan_doc.save(ignore_permissions=True)
         frappe.db.commit()
 
-        loan_doc.add_comment(
-            "Edit",
-            f"⚠️ Repayment {self.name} cancelled. Balance restored to {loan_doc.balance_amount}",
-        )
+    def reverse_repayment_schedule(self, loan_doc):
+        """Reverse the repayment schedule updates when cancelling."""
+        # Find schedule rows that were affected by this repayment
+        for row in loan_doc.get("repayment_schedule"):
+            if row.payment_entry == self.name:
+                # Reverse this payment
+                row.amount_paid = flt(row.amount_paid or 0) - flt(self.total_paid or 0)
+                row.unpaid_balance = flt(row.total_due) - flt(row.amount_paid or 0)
+                if row.unpaid_balance <= 0:
+                    row.status = "Paid"
+                elif row.amount_paid > 0:
+                    row.status = "Partially Paid"
+                else:
+                    row.status = "Pending"
+                row.payment_entry = None
+                row.db_update()
+        
+        # Clear last repayment date if this was the last payment
+        loan_doc.last_repayment_date = None
+        loan_doc.save(ignore_permissions=True)
+        frappe.db.commit()
 
-        frappe.msgprint(f"⚠️ Loan {loan_doc.name} balance restored after cancellation.")
+    def update_loan_summary(self, loan_doc):
+        """Update loan summary fields after repayment."""
+        try:
+            # Use our new API method to refresh the repayment summary
+            from shg.shg.api.repayment_refresh import refresh_repayment_summary
+            result = refresh_repayment_summary(loan_doc.name)
+            
+            # Reload the loan to get updated values
+            loan_doc.reload()
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "Failed to update repayment summary")
+            # Fallback to manual calculation
+            self.calculate_loan_summary_manually(loan_doc)
+
+    def calculate_loan_summary_manually(self, loan_doc):
+        """Fallback method to calculate loan summary manually."""
+        if not loan_doc.get("repayment_schedule"):
+            return
+            
+        total_repaid = 0.0
+        balance_amount = 0.0
+        overdue_amount = 0.0
+        next_due_date = None
+        last_repayment_date = None
+        
+        today_date = getdate(today())
+        
+        for row in loan_doc.get("repayment_schedule"):
+            total_repaid += flt(row.amount_paid or 0)
+            balance_amount += flt(row.unpaid_balance or 0)
+            
+            # Check for overdue payments
+            if row.status == "Overdue" or (getdate(row.due_date) < today_date and flt(row.unpaid_balance) > 0):
+                overdue_amount += flt(row.unpaid_balance or 0)
+            
+            # Find next due date
+            if flt(row.unpaid_balance) > 0 and (not next_due_date or getdate(row.due_date) < getdate(next_due_date)):
+                next_due_date = row.due_date
+        
+        # Update loan document
+        loan_doc.flags.ignore_validate_update_after_submit = True
+        loan_doc.total_repaid = total_repaid
+        loan_doc.balance_amount = balance_amount
+        loan_doc.overdue_amount = overdue_amount
+        loan_doc.next_due_date = next_due_date
+        loan_doc.save(ignore_permissions=True)
+        frappe.db.commit()
+
+    def post_to_ledger(self, loan_doc):
+        """Post repayment to ledger."""
+        # This is a simplified implementation - in a real system, you would create
+        # the appropriate journal entries or payment entries here
+        pass
 
     # --------------------------
     # REPAYMENT BREAKDOWN
@@ -138,16 +176,19 @@ class SHGLoanRepayment(Document):
         This method is called from the frontend via JavaScript.
         """
         if not self.loan or not self.total_paid:
-            return {
-                "principal_amount": 0,
-                "interest_amount": 0,
-                "penalty_amount": 0,
-                "balance_after_payment": 0
-            }
+            self.principal_amount = 0
+            self.interest_amount = 0
+            self.penalty_amount = 0
+            self.outstanding_balance = 0
+            self.balance_after_payment = 0
+            return
 
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
         outstanding_balance = flt(loan_doc.balance_amount)
         amount_paid = flt(self.total_paid)
+        
+        self.outstanding_balance = outstanding_balance
+        self.balance_after_payment = max(0, outstanding_balance - amount_paid)
 
         # Get settings for penalty calculation
         settings = frappe.get_single("SHG Settings")
@@ -182,20 +223,16 @@ class SHGLoanRepayment(Document):
         amount_after_interest = max(0, amount_after_penalty - interest_amount)
         principal_amount = amount_after_interest
 
-        # Calculate balance after payment
-        balance_after_payment = outstanding_balance - principal_amount
-
-        # Ensure monetary values are rounded to 2 decimal places
-        penalty_amount = round(float(penalty_amount), 2)
-        interest_amount = round(float(interest_amount), 2)
-        principal_amount = round(float(principal_amount), 2)
-        balance_after_payment = round(float(balance_after_payment), 2)
+        # Set the calculated values
+        self.penalty_amount = round(penalty_amount, 2)
+        self.interest_amount = round(interest_amount, 2)
+        self.principal_amount = round(principal_amount, 2)
 
         return {
-            "penalty_amount": penalty_amount,
-            "interest_amount": interest_amount,
-            "principal_amount": principal_amount,
-            "balance_after_payment": balance_after_payment
+            "penalty_amount": self.penalty_amount,
+            "interest_amount": self.interest_amount,
+            "principal_amount": self.principal_amount,
+            "balance_after_payment": self.balance_after_payment
         }
 
 

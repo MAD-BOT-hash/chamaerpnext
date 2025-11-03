@@ -25,3 +25,4 @@ shg.shg.patches.repayment_refresh_module_and_ui
 shg.shg.patches.update_summary_to_python_module
 shg.shg.patches.update_repayment_summary_hybrid_v2
 shg.shg.patches.patch_remove_old_gl_logic
+shg.shg.patches.update_loan_repayment_schedule_link
