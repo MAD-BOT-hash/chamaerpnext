@@ -115,6 +115,13 @@ frappe.ui.form.on('SHG Contribution', {
                 dialog.show();
             }, __('Actions'));
         }
+        
+        // Add button to get unpaid invoices for the member
+        if (frm.doc.member && frm.doc.docstatus === 0) {
+            frm.add_custom_button(__('Get Unpaid Invoices'), function() {
+                frm.trigger('get_unpaid_invoices');
+            }, __('Actions'));
+        }
     },
     
     member: function(frm) {
@@ -205,6 +212,27 @@ frappe.ui.form.on('SHG Contribution', {
             frm.refresh();
         }
     },
+    
+    get_unpaid_invoices: function(frm) {
+        if (!frm.doc.member) {
+            frappe.msgprint(__('Please select a member first.'));
+            return;
+        }
+        
+        frappe.call({
+            method: "shg.shg.api.get_unpaid_contribution_invoices",
+            args: {
+                member: frm.doc.member
+            },
+            callback: function(r) {
+                if (r.message) {
+                    // do something with results
+                    console.log(r.message);
+                    frappe.msgprint(__('Found {0} unpaid invoices for this member', [r.message.length]));
+                }
+            }
+        });
+    }
 });
 
 function get_suggested_contribution_amount(frm) {

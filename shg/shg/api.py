@@ -6,10 +6,31 @@ from frappe import _
 from frappe.utils import flt, today
 
 @frappe.whitelist()
-def get_unpaid_contribution_invoices(filters=None):
-    """API endpoint to fetch unpaid contribution invoices"""
-    if filters is None:
+def get_unpaid_contribution_invoices(member=None, filters=None):
+    """
+    Fetch unpaid or partially paid contribution invoices for a specific member.
+    
+    Args:
+        member (str, optional): Member ID to fetch invoices for
+        filters (dict, optional): Additional filters to apply
+        
+    Returns:
+        list: List of unpaid contribution invoices
+    """
+    # Handle both calling conventions
+    if isinstance(member, dict):
+        # Called with filters as first argument
+        filters = member
+        member = None
+    elif member and not filters:
+        # Called with member as first argument
+        filters = {"member": member}
+    elif not filters:
         filters = {}
+        
+    # Validate that member is provided
+    if not member and "member" not in filters:
+        frappe.throw("Member is required to fetch unpaid invoices.")
         
     # Default filters for unpaid invoices
     default_filters = {
