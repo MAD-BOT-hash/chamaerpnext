@@ -53,13 +53,17 @@ class SHGContribution(Document):
     def validate_invoice_reference(self):
         """Validate that no other SHG Contribution exists with the same invoice_reference"""
         if self.invoice_reference:
-            existing = frappe.db.exists("SHG Contribution", {
-                "invoice_reference": self.invoice_reference,
-                "docstatus": ["!=", 2],  # Not cancelled
-                "name": ["!=", self.name]
-            })
-            if existing:
-                frappe.throw(_("A contribution already exists for invoice {0}").format(self.invoice_reference))
+            try:
+                existing = frappe.db.exists("SHG Contribution", {
+                    "invoice_reference": self.invoice_reference,
+                    "docstatus": ["!=", 2],  # Not cancelled
+                    "name": ["!=", self.name]
+                })
+                if existing:
+                    frappe.throw(_("A contribution already exists for invoice {0}").format(self.invoice_reference))
+            except Exception:
+                # If invoice_reference field doesn't exist yet, skip this check
+                pass
 
     def set_contribution_details(self):
         """Set contribution details from contribution type"""

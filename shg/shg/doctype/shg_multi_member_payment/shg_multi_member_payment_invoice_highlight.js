@@ -23,7 +23,7 @@ function highlight_closed_invoices(frm) {
                 frappe.db.get_value('SHG Contribution Invoice', row.invoice, ['is_closed', 'status'])
                     .then(function(r) {
                         if (r.message) {
-                            var is_closed = r.message.is_closed;
+                            var is_closed = r.message.is_closed || 0;
                             var status = r.message.status;
                             
                             // Highlight closed invoices
@@ -47,6 +47,10 @@ function highlight_closed_invoices(frm) {
                                 }
                             }
                         }
+                    })
+                    .catch(function(error) {
+                        // Handle case where field doesn't exist yet
+                        console.log("Field may not exist yet: ", error);
                     });
             }
         });

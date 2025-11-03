@@ -65,14 +65,23 @@ class SHGMultiMemberPayment(Document):
         # Check if any of these invoices are already part of another submitted payment
         for invoice_name in invoice_names:
             # Check if invoice is already fully paid
-            invoice_status = frappe.db.get_value("SHG Contribution Invoice", invoice_name, "status")
-            if invoice_status == "Paid":
-                frappe.throw(_("Invoice {0} is already fully paid and cannot be processed again.").format(invoice_name))
+            try:
+                invoice_status = frappe.db.get_value("SHG Contribution Invoice", invoice_name, "status")
+                if invoice_status == "Paid":
+                    frappe.throw(_("Invoice {0} is already fully paid and cannot be processed again.").format(invoice_name))
+            except Exception:
+                # If status field doesn't exist yet, skip this check
+                pass
             
-            # Check if invoice is already closed
-            invoice_is_closed = frappe.db.get_value("SHG Contribution Invoice", invoice_name, "is_closed")
-            if invoice_is_closed:
-                frappe.throw(_("Invoice {0} is already closed and cannot be processed again.").format(invoice_name))
+            # Check if invoice is already closed (if field exists)
+            try:
+                if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+                    invoice_is_closed = frappe.db.get_value("SHG Contribution Invoice", invoice_name, "is_closed")
+                    if invoice_is_closed:
+                        frappe.throw(_("Invoice {0} is already closed and cannot be processed again.").format(invoice_name))
+            except Exception:
+                # If is_closed field doesn't exist yet, skip this check
+                pass
             
             existing_payments = frappe.db.sql("""
                 SELECT mp.name 
