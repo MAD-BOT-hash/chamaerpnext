@@ -6,64 +6,22 @@ from frappe import _
 from frappe.utils import flt, today
 
 @frappe.whitelist()
-def get_unpaid_contribution_invoices(member=None, filters=None):
-    """
-    Fetch unpaid or partially paid contribution invoices for a specific member.
-    
-    Args:
-        member (str, optional): Member ID to fetch invoices for
-        filters (dict, optional): Additional filters to apply
-        
-    Returns:
-        list: List of unpaid contribution invoices
-    """
-    # Handle both calling conventions
-    if isinstance(member, dict):
-        # Called with filters as first argument
-        filters = member
-        member = None
-    elif member and not filters:
-        # Called with member as first argument
-        filters = {"member": member}
-    elif not filters:
-        filters = {}
-        
-    # Validate that member is provided
-    if not member and "member" not in filters:
+def get_unpaid_contribution_invoices(member):
+    """Fetch unpaid or partially paid invoices for a given member"""
+    if not member:
         frappe.throw("Member is required to fetch unpaid invoices.")
-        
-    # Default filters for unpaid invoices
-    default_filters = {
-        "status": ["in", ["Unpaid", "Partially Paid"]],
-        "is_closed": 0,
-        "docstatus": 1
-    }
     
-    # Merge with provided filters
-    final_filters = {**default_filters, **filters}
-    
-    invoices = frappe.get_all(
+    return frappe.get_all(
         "SHG Contribution Invoice",
-        filters=final_filters,
-        fields=[
-            "name as invoice",
-            "member",
-            "member_name",
-            "contribution_type",
-            "invoice_date",
-            "due_date",
-            "amount",
-            "paid_amount",
-            "status"
-        ],
-        order_by="invoice_date DESC"
+        filters={
+            "member": member,
+            "docstatus": 1,
+            "status": ["in", ["Unpaid", "Partially Paid"]],
+            "is_closed": 0
+        },
+        fields=["name", "invoice_date", "amount", "status"]
     )
-    
-    # Calculate outstanding amount for each invoice
-    for invoice in invoices:
-        invoice["outstanding_amount"] = flt(invoice["amount"]) - flt(invoice["paid_amount"] or 0)
-        
-    return invoices
+
 
 @frappe.whitelist()
 def create_multi_member_payment(invoice_data, payment_date, payment_method, account, company, description=None):
