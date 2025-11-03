@@ -37,7 +37,9 @@ def generate_schedule(loan_name):
     for row_data in schedule:
         loan.append("repayment_schedule", row_data)
     
-    loan.save()
+    # Allow updates on submitted loans
+    loan.flags.ignore_validate_update_after_submit = True
+    loan.save(ignore_permissions=True)
     
     return {
         "status": "success",
@@ -110,7 +112,9 @@ def refresh_repayment_summary(loan_name):
     if loan.total_payable and loan.loan_period_months:
         loan.monthly_installment = loan.total_payable / loan.loan_period_months
     
-    loan.save()
+    # Allow updates on submitted loans
+    loan.flags.ignore_validate_update_after_submit = True
+    loan.save(ignore_permissions=True)
     
     return totals
 
@@ -144,9 +148,8 @@ def get_member_loan_statement(member=None, loan_name=None, date_from=None, date_
             {"member": member, "docstatus": 1}, 
             "name"
         )
-        if not loan_name:
-            frappe.throw(_("No active loan found for this member."))
-        loan = frappe.get_doc("SHG Loan", loan_name)
+        if loan_name:
+            loan = frappe.get_doc("SHG Loan", loan_name)
     
     # Ensure we have a loan
     if not loan:
@@ -183,60 +186,21 @@ def get_member_loan_statement(member=None, loan_name=None, date_from=None, date_
     
     summary = {
         "loan_id": loan.name,
-        "member_name": loan.member_name,
-        "loan_amount": loan.loan_amount,
-        "interest_rate": loan.interest_rate,
-        "interest_type": loan.interest_type,
-        "repayment_start_date": loan.repayment_start_date,
-        "monthly_installment": loan.monthly_installment,
-        "total_payable": loan.total_payable,
-        "total_repaid": loan.total_repaid,
-        "balance_amount": loan.balance_amount,
-        "overdue_amount": loan.overdue_amount,
-        "next_due_date": loan.next_due_date,
-        "last_repayment_date": loan.last_repayment_date
+        "member_name": getattr(loan, "member_name", ""),
+        "loan_amount": getattr(loan, "loan_amount", 0),
+        "interest_rate": getattr(loan, "interest_rate", 0),
+        "interest_type": getattr(loan, "interest_type", ""),
+        "repayment_start_date": getattr(loan, "repayment_start_date", None),
+        "monthly_installment": getattr(loan, "monthly_installment", 0),
+        "total_payable": getattr(loan, "total_payable", 0),
+        "total_repaid": getattr(loan, "total_repaid", 0),
+        "balance_amount": getattr(loan, "balance_amount", 0),
+        "overdue_amount": getattr(loan, "overdue_amount", 0),
+        "next_due_date": getattr(loan, "next_due_date", None),
+        "last_repayment_date": getattr(loan, "last_repayment_date", None)
     }
     
     return {
-        "loan_details": summary,
-        "repayment_schedule": schedule,
-        "count": len(schedule)
-    }
-
-@frappe.whitelist()
-def mark_installment_paid(loan_name, schedule_row, amount):
-    """
-    Mark a specific installment as paid.
-    
-    Args:
-        loan_name (str): Name of the loan document
-        schedule_row (str): Name of the schedule row
-        amount (float): Amount to mark as paid
-        
-    Returns:
-        dict: Status and message
-    """
-    if not loan_name or not schedule_row:
-        frappe.throw(_("Loan name and schedule row are required"))
-        
-    # Get the schedule row
-    schedule_doc = frappe.get_doc("SHG Loan Repayment Schedule", schedule_row)
-    
-    if schedule_doc.parent != loan_name:
-        frappe.throw(_("Schedule row does not belong to the specified loan"))
-        
-    # Mark as paid
-    amount_to_pay = flt(amount or schedule_doc.total_payment)
-    schedule_doc.amount_paid = amount_to_pay
-    schedule_doc.unpaid_balance = max(0, flt(schedule_doc.total_payment) - amount_to_pay)
-    schedule_doc.status = "Paid" if schedule_doc.unpaid_balance == 0 else "Partially Paid"
-    schedule_doc.actual_payment_date = frappe.utils.today()
-    schedule_doc.save()
-    
-    # Refresh loan summary
-    refresh_repayment_summary(loan_name)
-    
-    return {
-        "status": "success",
-        "message": _("Installment marked as paid successfully")
+        "loan": summary,
+        "schedule": schedule
     }
