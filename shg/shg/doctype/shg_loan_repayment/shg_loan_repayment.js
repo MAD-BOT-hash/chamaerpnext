@@ -16,11 +16,9 @@ frappe.ui.form.on("SHG Loan Repayment", {
             // Add button to calculate repayment breakdown
             frm.add_custom_button(__('Calculate Breakdown'), function() {
                 if (frm.doc.loan && frm.doc.total_paid) {
-                    frappe.call({
-                        method: "shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.calculate_repayment_breakdown",
-                        args: {
-                            doc: frm.doc
-                        },
+                    frm.call({
+                        method: 'calculate_repayment_breakdown',
+                        doc: frm.doc,
                         callback: function(r) {
                             if (r.message) {
                                 frm.set_value("principal_amount", r.message.principal_amount);
@@ -64,11 +62,9 @@ frappe.ui.form.on("SHG Loan Repayment", {
     total_paid: function(frm) {
         if (frm.doc.loan && frm.doc.total_paid) {
             // Auto-calculate breakdown when total paid changes
-            frappe.call({
-                method: "shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.calculate_repayment_breakdown",
-                args: {
-                    doc: frm.doc
-                },
+            frm.call({
+                method: 'calculate_repayment_breakdown',
+                doc: frm.doc,
                 callback: function(r) {
                     if (r.message) {
                         frm.set_value("principal_amount", r.message.principal_amount);
