@@ -201,8 +201,8 @@ def get_unpaid_fines(member):
     fines = frappe.get_all(
         "SHG Meeting Fine",
         filters={"member": member, "status": ["!=", "Paid"]},
-        fields=["name", "meeting_date", "fine_reason", "fine_amount", "fine_description"],
-        order_by="meeting_date desc",
+        fields=["name", "fine_date", "fine_reason", "fine_amount", "fine_description"],
+        order_by="fine_date desc",
     )
     return fines
 
@@ -232,14 +232,9 @@ def update_invoice_status(invoice_name, paid_amount):
                 invoice.db_set("status", "Paid")
                 # Also update the Sales Invoice status
                 sales_invoice.db_set("status", "Paid")
-                # Auto-close the invoice if the field exists
-                try:
-                    if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
-                        invoice.db_set("is_closed", 1)
-                        frappe.logger().info(f"Invoice {invoice_name} marked as closed after full payment")
-                except Exception:
-                    # If is_closed field doesn't exist yet, skip this step
-                    pass
+                # Auto-close the invoice
+                invoice.db_set("is_closed", 1)
+                frappe.logger().info(f"Invoice {invoice_name} marked as closed after full payment")
             elif new_outstanding < sales_invoice.grand_total:
                 invoice.db_set("status", "Partially Paid")
                 # Also update the Sales Invoice status

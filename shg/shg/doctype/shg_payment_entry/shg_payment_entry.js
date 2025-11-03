@@ -175,7 +175,7 @@ function open_fine_payment_dialog(frm) {
                 <tr>
                     <td><input type="checkbox" class="fine-check" data-name="${f.name}" data-amount="${f.fine_amount}"></td>
                     <td>${f.name}</td>
-                    <td>${f.meeting_date || ''}</td>
+                    <td>${f.fine_date || ''}</td>
                     <td>${f.fine_reason || ''}</td>
                     <td>${f.fine_amount || 0}</td>
                     <td>${f.fine_description || ''}</td>

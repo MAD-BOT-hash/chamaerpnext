@@ -1,6 +1,81 @@
 import frappe
 from frappe import _
 
+def create_parent_account(company, account_type, parent_account_name):
+    """Create parent account if it doesn't exist"""
+    company_abbr = frappe.db.get_value("Company", company, "abbr")
+    
+    # Determine parent account based on account type
+    if account_type in ["members", "loans_receivable"]:
+        # These go under Accounts Receivable
+        ar_parent = frappe.db.get_value("Account", {"account_name": "Accounts Receivable", "company": company}, "name")
+        if not ar_parent:
+            ar_parent = frappe.db.get_value("Account", {"account_name": f"Accounts Receivable - {company_abbr}", "company": company}, "name")
+        
+        if not ar_parent:
+            frappe.throw(f"No 'Accounts Receivable' group account found for {company}.")
+            
+        # Account properties based on type
+        account_props = {
+            "members": {
+                "account_type": "Receivable",
+                "is_group": 1,
+                "root_type": "Asset"
+            },
+            "loans_receivable": {
+                "account_type": "Receivable",
+                "is_group": 1,
+                "root_type": "Asset"
+            }
+        }
+        
+        props = account_props[account_type]
+        
+        # Create the parent account
+        parent_doc = frappe.get_doc({
+            "doctype": "Account",
+            "account_name": parent_account_name.split(" - ")[0],  # Remove company suffix
+            "company": company,
+            "parent_account": ar_parent,
+            "is_group": props["is_group"],
+            "account_type": props["account_type"],
+            "report_type": "Balance Sheet" if props["root_type"] == "Asset" else "Profit and Loss",
+            "root_type": props["root_type"]
+        })
+        parent_doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+        
+    elif account_type in ["contributions", "income", "fines"]:
+        # These go under Income
+        income_parent = frappe.db.get_value("Account", {"account_name": "Income", "company": company}, "name")
+        if not income_parent:
+            income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": company}, "name")
+        
+        if not income_parent:
+            frappe.throw(f"No 'Income' group account found for {company}.")
+            
+        # Account properties
+        props = {
+            "account_type": "Income Account",
+            "is_group": 1,
+            "root_type": "Income"
+        }
+        
+        # Create the parent account
+        parent_doc = frappe.get_doc({
+            "doctype": "Account",
+            "account_name": parent_account_name.split(" - ")[0],  # Remove company suffix
+            "company": company,
+            "parent_account": income_parent,
+            "is_group": props["is_group"],
+            "account_type": props["account_type"],
+            "report_type": "Profit and Loss",
+            "root_type": props["root_type"]
+        })
+        parent_doc.insert(ignore_permissions=True)
+        frappe.db.commit()
+
+
 def get_account(company, account_type, member_id=None):
     """Return a valid account under SHG COA structure."""
     company_abbr = frappe.db.get_value("Company", company, "abbr")
@@ -19,7 +94,8 @@ def get_account(company, account_type, member_id=None):
     # Ensure parent account exists
     parent = coa_map.get(account_type)
     if not frappe.db.exists("Account", {"account_name": parent, "company": company}):
-        frappe.throw(f"Parent account '{parent}' not found. Please create it under Accounts Receivable.")
+        # Auto-create parent account if missing
+        create_parent_account(company, account_type, parent)
 
     # For member-level accounts
     if member_id:

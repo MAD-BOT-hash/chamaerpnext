@@ -14,6 +14,7 @@ def get_unpaid_contribution_invoices(filters=None):
     # Default filters for unpaid invoices
     default_filters = {
         "status": ["in", ["Unpaid", "Partially Paid"]],
+        "is_closed": 0,
         "docstatus": 1
     }
     
