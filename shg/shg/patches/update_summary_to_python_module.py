@@ -1,13 +1,17 @@
 import frappe
-from frappe.utils import flt
 
 MODULE_PATH = "shg/shg/doctype/shg_loan/api.py"
 MODULE_CONTENT = """
 import frappe
 from frappe.utils import flt
 
+@frappe.whitelist()
 def refresh_repayment_summary(loan_name: str):
     \"\"\"Refresh repayment summary and detail values for SHG Loan specified by loan_name.\"\"\"
+    # Validate input
+    if not loan_name:
+        frappe.throw("Loan name is required", title="Invalid Input")
+        
     try:
         loan = frappe.get_doc("SHG Loan", loan_name)
     except frappe.DoesNotExistError:
@@ -21,7 +25,7 @@ def refresh_repayment_summary(loan_name: str):
         loan.update_repayment_summary()
         loan.save(ignore_permissions=True)
         frappe.db.commit()
-        return
+        return {"status": "success"}
 
     # Fallback: update summary manually from child repayment table
     total_principal = 0
@@ -29,9 +33,9 @@ def refresh_repayment_summary(loan_name: str):
     total_paid = 0
     overdue_amount = 0
 
-    for row in loan.get("repayment_details"):
-        total_principal += flt(row.principal_amount)
-        total_interest += flt(row.interest_amount)
+    for row in loan.get("repayment_schedule", []):
+        total_principal += flt(row.principal_component)
+        total_interest += flt(row.interest_component)
         total_paid += flt(row.amount_paid)
 
         if row.status and row.status.lower() == "overdue":
@@ -45,6 +49,8 @@ def refresh_repayment_summary(loan_name: str):
 
     loan.save(ignore_permissions=True)
     frappe.db.commit()
+    
+    return {"status": "success"}
 """
 
 CLIENT_SCRIPT_NAME = "SHG Loan | Refresh Summary Button"
@@ -52,18 +58,27 @@ CLIENT_SCRIPT_CONTENT = """
 frappe.ui.form.on("SHG Loan", {
     refresh(frm) {
         if (!frm.is_new()) {
-            frm.add_custom_button("🔄 Refresh Summary", () => {
+            frm.add_custom_button("📊 Recalculate Loan Summary (SHG)", () => {
                 frappe.call({
                     method: "shg.shg.doctype.shg_loan.api.refresh_repayment_summary",
                     args: { loan_name: frm.doc.name },
-                    callback() {
-                        frm.reload_doc();
-                        frappe.msgprint("Repayment Summary Refreshed ✅");
+                    callback(r) {
+                        if (r.message && r.message.status === "success") {
+                            frm.reload_doc();
+                            frappe.msgprint("📊 Repayment Summary Refreshed Successfully");
+                        }
                     }
                 });
-            });
+            }, "Actions");
+            
+            // Optional: small header indicator on refresh
+            if (frm.doc.balance_amount) {
+                frm.dashboard.set_headline(
+                    `Outstanding: ${format_currency(frm.doc.balance_amount, "KES")}`
+                );
+            }
         }
-    },
+    }
 });
 """
 

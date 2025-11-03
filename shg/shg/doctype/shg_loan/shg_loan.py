@@ -267,22 +267,51 @@ class SHGLoan(Document):
 
     def update_repayment_summary(self):
         """Refresh repayment summary fields from repayment schedule."""
+        # Allow updates on submitted loans
+        self.flags.ignore_validate_update_after_submit = True
+        
         schedule = self.get("repayment_schedule") or frappe.get_all(
             "SHG Loan Repayment Schedule",
             filters={"parent": self.name},
-            fields=["total_payment", "amount_paid", "unpaid_balance", "status"]
+            fields=["total_payment", "amount_paid", "unpaid_balance", "status", "due_date"]
         )
 
         total_payable = sum(flt(r.get("total_payment")) for r in schedule)
         total_repaid = sum(flt(r.get("amount_paid")) for r in schedule)
         overdue_amount = sum(flt(r.get("unpaid_balance")) for r in schedule if r.get("status") == "Overdue")
         balance = total_payable - total_repaid
+        
+        # Calculate next due date (first pending/overdue installment)
+        next_due_date = None
+        last_repayment_date = None
+        
+        # Sort schedule by due date
+        sorted_schedule = sorted(schedule, key=lambda x: x.get("due_date") or frappe.utils.getdate())
+        
+        # Find next due date
+        for r in sorted_schedule:
+            if r.get("status") in ["Pending", "Overdue"] and flt(r.get("unpaid_balance")) > 0:
+                next_due_date = r.get("due_date")
+                break
+                
+        # Find last repayment date (latest paid installment)
+        paid_schedule = [r for r in sorted_schedule if r.get("status") == "Paid"]
+        if paid_schedule:
+            last_repayment_date = paid_schedule[-1].get("due_date")
+
+        # Set monthly installment from first schedule row if available
+        monthly_installment = 0
+        if sorted_schedule:
+            monthly_installment = flt(sorted_schedule[0].get("total_payment"))
 
         self.db_set({
             "total_payable": round(total_payable, 2),
             "total_repaid": round(total_repaid, 2),
             "overdue_amount": round(overdue_amount, 2),
-            "balance_amount": round(balance, 2)
+            "balance_amount": round(balance, 2),
+            "monthly_installment": round(monthly_installment, 2),
+            "next_due_date": next_due_date,
+            "last_repayment_date": last_repayment_date
         })
 
 

@@ -1,5 +1,5 @@
 shg.shg.patches.detect_and_fix_legacy_gl_entries
-shg.patches.patch_remove_old_gl_logic
+shg.shg.patches.patch_remove_old_gl_logic
 shg.shg.patches.patch_add_missing_member_fields
 shg.patches.add_sales_invoice_custom_fields
 shg.shg.patches.patch_install_payment_entry_doctypes
@@ -22,3 +22,5 @@ shg.shg.patches.update_repayment_summary_hybrid_v2
 shg.shg.patches.install_refresh_summary_script
 shg.shg.patches.update_summary_to_python_module
 shg.shg.patches.repayment_refresh_module_and_ui
+shg.shg.patches.update_summary_to_python_module
+shg.shg.patches.update_repayment_summary_hybrid_v2

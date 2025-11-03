@@ -67,9 +67,16 @@ class SHGLoanRepayment(Document):
 
         # Update repayment summary fields
         try:
-            loan_doc.update_repayment_summary()
+            # Use our new API method to refresh the repayment summary
+            from shg.shg.doctype.shg_loan.api import refresh_repayment_summary
+            refresh_repayment_summary(loan_doc.name)
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), "Failed to update repayment summary")
+            # Fallback to the old method
+            try:
+                loan_doc.update_repayment_summary()
+            except Exception as e2:
+                frappe.log_error(frappe.get_traceback(), "Failed to update repayment summary with fallback method")
 
         loan_doc.add_comment(
             "Edit",
