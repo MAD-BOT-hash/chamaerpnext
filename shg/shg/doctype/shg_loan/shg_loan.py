@@ -289,31 +289,59 @@ class SHGLoan(Document):
         # Allow updates on submitted loans
         self.flags.ignore_validate_update_after_submit = True
         
+        # Compute repayment summary
+        summary = self.compute_repayment_summary()
+        
+        # Update loan fields with computed values
+        self.total_repaid = flt(summary["total_repaid"], 2)
+        self.balance_amount = flt(summary["balance_amount"], 2)
+        self.overdue_amount = flt(summary["overdue_amount"], 2)
+        self.next_due_date = summary["next_due_date"]
+        self.last_repayment_date = summary["last_repayment_date"]
+        self.monthly_installment = flt(summary["monthly_installment"], 2)
+        
+        # Save the document
+        self.save(ignore_permissions=True)
+
+    def compute_repayment_summary(self):
+        """Compute repayment summary from repayment schedule child table.
+        
+        Returns:
+            dict: Summary with total_repaid, balance_amount, overdue_amount, etc.
+        """
+        # Get schedule from child table
         schedule = self.get("repayment_schedule") or frappe.get_all(
             "SHG Loan Repayment Schedule",
             filters={"parent": self.name},
-            fields=["total_payment", "amount_paid", "unpaid_balance", "status", "due_date"]
+            fields=["total_payment", "amount_paid", "unpaid_balance", "status", "due_date", "actual_payment_date"]
         )
 
+        # Calculate totals from schedule
         total_payable = sum(flt(r.get("total_payment")) for r in schedule)
         total_repaid = sum(flt(r.get("amount_paid")) for r in schedule)
-        overdue_amount = sum(flt(r.get("unpaid_balance")) for r in schedule if r.get("status") == "Overdue")
-        balance = total_payable - total_repaid
+        balance = sum(flt(r.get("unpaid_balance")) for r in schedule)
         
+        # Calculate overdue amount
+        overdue_amount = 0
+        today_date = getdate(nowdate())
+        for r in schedule:
+            due_date = getdate(r.get("due_date")) if r.get("due_date") else today_date
+            # Overdue if not paid and due date is in the past
+            if r.get("status") != "Paid" and due_date < today_date and flt(r.get("unpaid_balance")) > 0:
+                overdue_amount += flt(r.get("unpaid_balance"))
+
         # Calculate next due date (first pending/overdue installment)
         next_due_date = None
-        last_repayment_date = None
-        
         # Sort schedule by due date
         sorted_schedule = sorted(schedule, key=lambda x: x.get("due_date") or frappe.utils.getdate())
-        
         # Find next due date
         for r in sorted_schedule:
             if r.get("status") in ["Pending", "Overdue"] and flt(r.get("unpaid_balance")) > 0:
                 next_due_date = r.get("due_date")
                 break
-                
+
         # Find last repayment date (latest paid installment)
+        last_repayment_date = None
         paid_schedule = [r for r in sorted_schedule if r.get("status") == "Paid"]
         if paid_schedule:
             # Find the latest actual_payment_date among paid installments
@@ -337,16 +365,15 @@ class SHGLoan(Document):
         if sorted_schedule:
             monthly_installment = flt(sorted_schedule[0].get("total_payment"))
 
-        self.db_set({
-            "total_payable": round(total_payable, 2),
-            "total_repaid": round(total_repaid, 2),
-            "overdue_amount": round(overdue_amount, 2),
-            "balance_amount": round(balance, 2),
-            "monthly_installment": round(monthly_installment, 2),
+        return {
+            "total_payable": flt(total_payable, 2),
+            "total_repaid": flt(total_repaid, 2),
+            "balance_amount": flt(balance, 2),
+            "overdue_amount": flt(overdue_amount, 2),
             "next_due_date": next_due_date,
-            "last_repayment_date": last_repayment_date
-        })
-
+            "last_repayment_date": last_repayment_date,
+            "monthly_installment": flt(monthly_installment, 2)
+        }
 
 @frappe.whitelist()
 def refresh_repayment_summary(loan_name):

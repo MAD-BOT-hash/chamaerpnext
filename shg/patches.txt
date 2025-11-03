@@ -32,3 +32,4 @@ shg.shg.patches.update_loan_schedule_field_permissions
 shg.shg.patches.fix_loan_refresh_summary_script
 shg.shg.patches.recreate_shg_loan_repayment
 shg.shg.patches.fix_loan_schedule_permissions
+shg.shg.patches.ensure_repayment_summary_update

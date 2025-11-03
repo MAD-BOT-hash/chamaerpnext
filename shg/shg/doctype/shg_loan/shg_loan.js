@@ -38,6 +38,10 @@ frappe.ui.form.on("SHG Loan", {
                         if (r.message) {
                             frappe.msgprint("Repayment summary refreshed successfully");
                             frm.reload_doc();
+                            // Update dashboard headline after reload
+                            setTimeout(function() {
+                                set_loan_header_indicator(frm);
+                            }, 1000);
                         }
                     }
                 });
