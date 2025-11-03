@@ -7,7 +7,7 @@
   "editable_grid": 1,
   "track_changes": 1,
   "engine": "InnoDB",
-  "autoname": "autoincrement",
+  "autoname": "hash",
   "fields": [
     {
       "fieldname": "installment_no",
@@ -70,7 +70,8 @@
       "fieldtype": "Currency",
       "options": "KES",
       "in_list_view": 1,
-      "columns": 2
+      "columns": 2,
+      "read_only": 1
     },
     {
       "fieldname": "loan_balance",
@@ -83,7 +84,7 @@
       "fieldname": "status",
       "label": "Status",
       "fieldtype": "Select",
-      "options": "\nPending\nPaid\nOverdue",
+      "options": "\nPending\nPaid\nPartially Paid\nOverdue",
       "in_list_view": 0,
       "default": "Pending"
     },
@@ -93,6 +94,20 @@
       "fieldtype": "Link",
       "options": "Payment Entry",
       "in_list_view": 0
+    },
+    {
+      "fieldname": "actual_payment_date",
+      "label": "Actual Payment Date",
+      "fieldtype": "Date",
+      "in_list_view": 0,
+      "read_only": 1
+    },
+    {
+      "fieldname": "reversed",
+      "label": "Reversed",
+      "fieldtype": "Check",
+      "in_list_view": 0,
+      "read_only": 1
     }
   ],
   "permissions": [
