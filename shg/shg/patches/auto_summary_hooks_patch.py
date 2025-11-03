@@ -40,7 +40,15 @@ def execute():
         script="""
 frappe.msgprint("Auto-updating EMI, totals...")
 
-if hasattr(doc, 'update_repayment_summary') and callable(doc.update_repayment_summary):
+# Use a safer approach instead of hasattr for Server Script compatibility
+try:
+    # Try to get the method - if it doesn't exist, this will raise an AttributeError
+    doc.update_repayment_summary
+    method_exists = True
+except AttributeError:
+    method_exists = False
+
+if method_exists and callable(doc.update_repayment_summary):
     doc.update_repayment_summary()
 """
     )
@@ -56,7 +64,15 @@ if hasattr(doc, 'update_repayment_summary') and callable(doc.update_repayment_su
 loan_id = doc.loan
 if loan_id:
     loan = frappe.get_doc("SHG Loan", loan_id)
-    if hasattr(loan, 'update_repayment_summary'):
+    # Use a safer approach instead of hasattr for Server Script compatibility
+    try:
+        # Try to get the method - if it doesn't exist, this will raise an AttributeError
+        loan.update_repayment_summary
+        method_exists = True
+    except AttributeError:
+        method_exists = False
+    
+    if method_exists:
         loan.update_repayment_summary()
         loan.save()
 """
@@ -73,7 +89,15 @@ import frappe
 @frappe.whitelist()
 def refresh_repayment_summary(loan_id):
     loan = frappe.get_doc("SHG Loan", loan_id)
-    if hasattr(loan, 'update_repayment_summary'):
+    # Use a safer approach instead of hasattr for Server Script compatibility
+    try:
+        # Try to get the method - if it doesn't exist, this will raise an AttributeError
+        loan.update_repayment_summary
+        method_exists = True
+    except AttributeError:
+        method_exists = False
+    
+    if method_exists:
         loan.update_repayment_summary()
         loan.save()
     return {"ok": True}
