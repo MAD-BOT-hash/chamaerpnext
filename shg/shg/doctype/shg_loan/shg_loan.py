@@ -313,7 +313,7 @@ class SHGLoan(Document):
         schedule = self.get("repayment_schedule") or frappe.get_all(
             "SHG Loan Repayment Schedule",
             filters={"parent": self.name},
-            fields=["total_payment", "amount_paid", "unpaid_balance", "status", "due_date", "actual_payment_date"]
+            fields=["total_payment", "total_due", "amount_paid", "unpaid_balance", "status", "due_date", "actual_payment_date", "principal_component", "interest_component"]
         )
 
         # Calculate totals from schedule
