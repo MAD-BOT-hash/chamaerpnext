@@ -205,3 +205,56 @@ def get_unpaid_fines(member):
         order_by="meeting_date desc",
     )
     return fines
+
+def update_invoice_status(invoice_name, paid_amount):
+    """
+    Update contribution invoice status after payment with proper ERPNext v15 logic
+    
+    Args:
+        invoice_name (str): SHG Contribution Invoice name
+        paid_amount (float): Amount paid
+    """
+    try:
+        # Get the invoice
+        invoice = frappe.get_doc("SHG Contribution Invoice", invoice_name)
+        
+        if invoice.sales_invoice:
+            # Update linked Sales Invoice
+            sales_invoice = frappe.get_doc("Sales Invoice", invoice.sales_invoice)
+            new_outstanding = sales_invoice.outstanding_amount - paid_amount
+            
+            # Ensure we don't go below zero
+            new_outstanding = max(0, new_outstanding)
+            sales_invoice.db_set("outstanding_amount", new_outstanding)
+            
+            # Update invoice status based on outstanding amount
+            if new_outstanding <= 0:
+                invoice.db_set("status", "Paid")
+                # Also update the Sales Invoice status
+                sales_invoice.db_set("status", "Paid")
+                # Auto-close the invoice
+                invoice.db_set("is_closed", 1)
+                frappe.logger().info(f"Invoice {invoice_name} marked as closed after full payment")
+            elif new_outstanding < sales_invoice.grand_total:
+                invoice.db_set("status", "Partially Paid")
+                # Also update the Sales Invoice status
+                sales_invoice.db_set("status", "Partially Paid")
+            else:
+                invoice.db_set("status", "Unpaid")
+                # Also update the Sales Invoice status
+                sales_invoice.db_set("status", "Unpaid")
+                
+        # Update member financial summary
+        member = frappe.get_doc("SHG Member", invoice.member)
+        total_unpaid = (member.total_unpaid_contributions or 0) - paid_amount
+        member.db_set("total_unpaid_contributions", max(0, total_unpaid))
+        
+        # Recalculate member's financial summary to ensure consistency
+        member.update_financial_summary()
+        
+        # Reload the invoice to reflect changes
+        invoice.reload()
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Update Invoice Status Failed")
+        frappe.throw(_("Failed to update invoice status: {0}").format(str(e)))

@@ -8,6 +8,7 @@ class SHGContribution(Document):
     def validate(self):
         self.validate_amount()
         self.validate_duplicate()
+        self.validate_invoice_reference()
         self.set_contribution_details()
         self.calculate_unpaid_amount()
         
@@ -20,7 +21,7 @@ class SHGContribution(Document):
             self.amount_paid = round(flt(self.amount_paid), 2)
         if self.unpaid_amount:
             self.unpaid_amount = round(flt(self.unpaid_amount), 2)
-        
+            
     def before_validate(self):
         """Ensure company is populated from SHG Settings."""
         from shg.shg.utils.company_utils import get_default_company
@@ -49,6 +50,17 @@ class SHGContribution(Document):
         if existing:
             frappe.throw(_("A contribution already exists for this member on this date"))
             
+    def validate_invoice_reference(self):
+        """Validate that no other SHG Contribution exists with the same invoice_reference"""
+        if self.invoice_reference:
+            existing = frappe.db.exists("SHG Contribution", {
+                "invoice_reference": self.invoice_reference,
+                "docstatus": ["!=", 2],  # Not cancelled
+                "name": ["!=", self.name]
+            })
+            if existing:
+                frappe.throw(_("A contribution already exists for invoice {0}").format(self.invoice_reference))
+
     def set_contribution_details(self):
         """Set contribution details from contribution type"""
         if self.contribution_type_link:

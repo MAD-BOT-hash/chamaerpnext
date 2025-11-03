@@ -57,13 +57,23 @@ class SHGMultiMemberPayment(Document):
             frappe.throw(_("Payment method cannot be 'Not Specified'. Please select a valid payment method."))
             
     def validate_duplicate_invoices(self):
-        """Prevent duplicate invoices in the same payment entry"""
+        """Prevent duplicate invoices in the same payment entry and prevent paid invoices from being reprocessed"""
         invoice_names = [invoice.invoice for invoice in self.invoices]
         if len(invoice_names) != len(set(invoice_names)):
             frappe.throw(_("Duplicate invoices found. Each invoice can only be selected once."))
             
         # Check if any of these invoices are already part of another submitted payment
         for invoice_name in invoice_names:
+            # Check if invoice is already fully paid
+            invoice_status = frappe.db.get_value("SHG Contribution Invoice", invoice_name, "status")
+            if invoice_status == "Paid":
+                frappe.throw(_("Invoice {0} is already fully paid and cannot be processed again.").format(invoice_name))
+            
+            # Check if invoice is already closed
+            invoice_is_closed = frappe.db.get_value("SHG Contribution Invoice", invoice_name, "is_closed")
+            if invoice_is_closed:
+                frappe.throw(_("Invoice {0} is already closed and cannot be processed again.").format(invoice_name))
+            
             existing_payments = frappe.db.sql("""
                 SELECT mp.name 
                 FROM `tabSHG Multi Member Payment` mp

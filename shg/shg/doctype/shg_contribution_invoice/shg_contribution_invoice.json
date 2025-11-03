@@ -1,236 +1,198 @@
-{
- "actions": [],
- "allow_rename": 1,
- "autoname": "naming_series:",
- "creation": "2025-10-13 10:00:00",
- "doctype": "DocType",
- "engine": "InnoDB",
- "field_order": [
-  "naming_series",
-  "invoice_details_section",
-  "member",
-  "member_name",
-  "invoice_date",
-  "supplier_invoice_date",
-  "due_date",
-  "column_break_4",
-  "contribution_type",
-  "qty",
-  "rate",
-  "amount",
-  "payment_method",
-  "status",
-  "description",
-  "accounting_section",
-  "sales_invoice",
-  "linked_sales_invoice",
-  "linked_shg_contribution",
-  "late_fee_amount",
-  "payment_reference",
-  "posted_to_gl",
-  "posted_on",
-  "posted_to_contribution"
- ],
- "fields": [
-  {
-   "fieldname": "naming_series",
-   "fieldtype": "Select",
-   "label": "Naming Series",
-   "options": "CONTINV-.YYYY.-.#####",
-   "reqd": 1
-  },
-  {
-   "fieldname": "invoice_details_section",
-   "fieldtype": "Section Break",
-   "label": "Invoice Details"
-  },
-  {
-   "fieldname": "member",
-   "fieldtype": "Link",
-   "label": "Member",
-   "options": "SHG Member",
-   "reqd": 1
-  },
-  {
-   "fieldname": "member_name",
-   "fieldtype": "Data",
-   "label": "Member Name",
-   "read_only": 1,
-   "fetch_from": "member.member_name"
-  },
-  {
-   "fieldname": "invoice_date",
-   "fieldtype": "Date",
-   "label": "Invoice Date",
-   "reqd": 1,
-   "default": "Today"
-  },
-  {
-   "fieldname": "supplier_invoice_date",
-   "fieldtype": "Date",
-   "label": "Supplier Invoice Date",
-   "description": "Used for posting and due dates in Sales Invoice creation"
-  },
-  {
-   "fieldname": "due_date",
-   "fieldtype": "Date",
-   "label": "Due Date",
-   "reqd": 1,
-   "default": "Today"
-  },
-  {
-   "fieldname": "column_break_4",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "contribution_type",
-   "fieldtype": "Link",
-   "label": "Contribution Type",
-   "options": "SHG Contribution Type"
-  },
-  {
-   "fieldname": "qty",
-   "fieldtype": "Float",
-   "label": "Quantity",
-   "default": "1",
-   "precision": 2
-  },
-  {
-   "fieldname": "rate",
-   "fieldtype": "Currency",
-   "label": "Rate (KES)",
-   "precision": 2
-  },
-  {
-   "fieldname": "amount",
-   "fieldtype": "Currency",
-   "label": "Amount (KES)",
-   "reqd": 1,
-   "precision": 2
-  },
-  {
-   "fieldname": "payment_method",
-   "fieldtype": "Select",
-   "label": "Payment Method",
-   "options": "Cash\nMobile Money\nMpesa\nBank Transfer\nCheque",
-   "default": "Mpesa"
-  },
-  {
-   "fieldname": "status",
-   "fieldtype": "Select",
-   "label": "Status",
-   "options": "Draft\nUnpaid\nPaid\nOverdue\nCancelled",
-   "default": "Unpaid",
-   "reqd": 1
-  },
-  {
-   "fieldname": "description",
-   "fieldtype": "Small Text",
-   "label": "Description"
-  },
-  {
-   "fieldname": "accounting_section",
-   "fieldtype": "Section Break",
-   "label": "Accounting"
-  },
-  {
-   "fieldname": "sales_invoice",
-   "fieldtype": "Link",
-   "label": "Sales Invoice",
-   "options": "Sales Invoice",
-   "read_only": 1
-  },
-  {
-   "fieldname": "linked_sales_invoice",
-   "fieldtype": "Link",
-   "label": "Linked Sales Invoice",
-   "options": "Sales Invoice",
-   "read_only": 1
-  },
-  {
-   "fieldname": "linked_shg_contribution",
-   "fieldtype": "Link",
-   "label": "Linked SHG Contribution",
-   "options": "SHG Contribution",
-   "read_only": 1
-  },
-  {
-   "fieldname": "late_fee_amount",
-   "fieldtype": "Currency",
-   "label": "Late Fee Amount",
-   "read_only": 1,
-   "precision": 2
-  },
-  {
-   "fieldname": "payment_reference",
-   "fieldtype": "Link",
-   "label": "Payment Reference",
-   "options": "Payment Entry",
-   "read_only": 1
-  },
-  {
-   "fieldname": "posted_to_gl",
-   "fieldtype": "Check",
-   "label": "Posted to GL",
-   "read_only": 1
-  },
-  {
-   "fieldname": "posted_on",
-   "fieldtype": "Datetime",
-   "label": "Posted On",
-   "read_only": 1
-  },
-  {
-   "fieldname": "posted_to_contribution",
-   "label": "Posted to Contribution",
-   "fieldtype": "Check",
-   "default": 0
-  }
- ],
- "is_submittable": 1,
- "links": [],
- "modified": "2025-10-13 10:00:00",
- "modified_by": "Administrator",
- "module": "SHG",
- "name": "SHG Contribution Invoice",
- "naming_rule": "By \"Naming Series\" field",
- "owner": "Administrator",
- "permissions": [
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "SHG Admin",
-   "share": 1,
-   "submit": 1,
-   "write": 1
-  },
-  {
-   "create": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "SHG Treasurer",
-   "share": 1,
-   "submit": 1,
-   "write": 1
-  },
-  {
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "SHG Auditor"
-  }
- ],
- "sort_field": "modified",
- "sort_order": "DESC",
- "track_changes": 1
+ {
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "naming_series:",
+  "creation": "2025-10-13 10:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "naming_series",
+    "invoice_details_section",
+    "member",
+    "member_name",
+    "invoice_date",
+    "supplier_invoice_date",
+    "due_date",
+    "column_break_4",
+    "contribution_type",
+    "qty",
+    "rate",
+    "amount",
+    "payment_method",
+    "status",
+    "description",
+    "accounting_section",
+    "sales_invoice",
+    "linked_sales_invoice",
+    "linked_shg_contribution",
+    "late_fee_amount",
+    "payment_reference",
+    "posted_to_gl",
+    "posted_on",
+    "posted_to_contribution",
+    "is_closed"
+  ],
+  "fields": [
+    {
+      "fieldname": "naming_series",
+      "fieldtype": "Select",
+      "label": "Naming Series",
+      "options": "CONTINV-.YYYY.-.#####",
+      "reqd": 1
+    },
+    {
+      "fieldname": "invoice_details_section",
+      "fieldtype": "Section Break",
+      "label": "Invoice Details"
+    },
+    {
+      "fieldname": "member",
+      "fieldtype": "Link",
+      "label": "Member",
+      "options": "SHG Member",
+      "reqd": 1
+    },
+    {
+      "fieldname": "member_name",
+      "fieldtype": "Data",
+      "label": "Member Name",
+      "read_only": 1,
+      "fetch_from": "member.member_name"
+    },
+    {
+      "fieldname": "invoice_date",
+      "fieldtype": "Date",
+      "label": "Invoice Date",
+      "reqd": 1,
+      "default": "Today"
+    },
+    {
+      "fieldname": "supplier_invoice_date",
+      "fieldtype": "Date",
+      "label": "Supplier Invoice Date",
+      "description": "Used for posting and due dates in Sales Invoice creation"
+    },
+    {
+      "fieldname": "due_date",
+      "fieldtype": "Date",
+      "label": "Due Date",
+      "reqd": 1,
+      "default": "Today"
+    },
+    {
+      "fieldname": "column_break_4",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "contribution_type",
+      "fieldtype": "Link",
+      "label": "Contribution Type",
+      "options": "SHG Contribution Type"
+    },
+    {
+      "fieldname": "qty",
+      "fieldtype": "Float",
+      "label": "Quantity",
+      "default": "1",
+      "precision": 2
+    },
+    {
+      "fieldname": "rate",
+      "fieldtype": "Currency",
+      "label": "Rate (KES)",
+      "precision": 2
+    },
+    {
+      "fieldname": "amount",
+      "fieldtype": "Currency",
+      "label": "Amount (KES)",
+      "reqd": 1,
+      "precision": 2
+    },
+    {
+      "fieldname": "payment_method",
+      "fieldtype": "Select",
+      "label": "Payment Method",
+      "options": "Cash\nMobile Money\nMpesa\nBank Transfer\nCheque",
+      "default": "Mpesa"
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Draft\nUnpaid\nPaid\nOverdue\nCancelled",
+      "default": "Unpaid",
+      "reqd": 1
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Small Text",
+      "label": "Description"
+    },
+    {
+      "fieldname": "accounting_section",
+      "fieldtype": "Section Break",
+      "label": "Accounting"
+    },
+    {
+      "fieldname": "sales_invoice",
+      "fieldtype": "Link",
+      "label": "Sales Invoice",
+      "options": "Sales Invoice",
+      "read_only": 1
+    },
+    {
+      "fieldname": "linked_sales_invoice",
+      "fieldtype": "Link",
+      "label": "Linked Sales Invoice",
+      "options": "Sales Invoice",
+      "read_only": 1
+    },
+    {
+      "fieldname": "linked_shg_contribution",
+      "fieldtype": "Link",
+      "label": "Linked SHG Contribution",
+      "options": "SHG Contribution",
+      "read_only": 1
+    },
+    {
+      "fieldname": "late_fee_amount",
+      "fieldtype": "Currency",
+      "label": "Late Fee Amount",
+      "read_only": 1,
+      "precision": 2
+    },
+    {
+      "fieldname": "payment_reference",
+      "fieldtype": "Link",
+      "label": "Payment Reference",
+      "options": "Payment Entry",
+      "read_only": 1
+    },
+    {
+      "fieldname": "posted_to_gl",
+      "fieldtype": "Check",
+      "label": "Posted to GL",
+      "read_only": 1
+    },
+    {
+      "fieldname": "posted_on",
+      "fieldtype": "Datetime",
+      "label": "Posted On",
+      "read_only": 1
+    },
+    {
+      "fieldname": "posted_to_contribution",
+      "label": "Posted to Contribution",
+      "fieldtype": "Check",
+      "default": 0
+    },
+    {
+      "fieldname": "is_closed",
+      "label": "Is Closed",
+      "fieldtype": "Check",
+      "default": 0,
+      "read_only": 1
+    }
+  ],
 }
