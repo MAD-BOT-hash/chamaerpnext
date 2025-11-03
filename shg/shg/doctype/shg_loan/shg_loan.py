@@ -3,6 +3,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import today, add_months, flt, now_datetime, getdate, nowdate
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
+from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
 
 class SHGLoan(Document):
     """SHG Loan controller with automatic ledger and repayment schedule posting."""
@@ -32,6 +33,7 @@ class SHGLoan(Document):
             self.sync_group_allocations_total()
 
         self.run_eligibility_checks()
+        self.calculate_repayment_details()
 
     # ---------------------------------------------------
     # GROUP LOAN LOGIC
@@ -96,6 +98,65 @@ class SHGLoan(Document):
                     _check(r.member)
         elif self.member:
             _check(self.member)
+
+    # ---------------------------------------------------
+    # REPAYMENT CALCULATIONS
+    # ---------------------------------------------------
+    def calculate_repayment_details(self):
+        """Compute installment and total payable."""
+        if not self.loan_amount or not self.interest_rate or not self.loan_period_months:
+            return
+            
+        if self.interest_type == "Flat Rate":
+            calc = self.calculate_flat_interest()
+            self.monthly_installment = calc["monthly_installment"]
+            self.total_payable = calc["total_amount"]
+            self.total_interest_payable = calc["total_interest"]
+        else:
+            emi = self.calculate_emi()
+            self.monthly_installment = emi
+            self.total_payable = emi * self.loan_period_months
+            # Calculate total interest for reducing balance
+            self.total_interest_payable = self.total_payable - self.loan_amount
+
+    def calculate_emi(self):
+        """Calculate EMI for reducing balance loans."""
+        principal = flt(self.loan_amount)
+        annual_rate = flt(self.interest_rate)
+        months = int(self.loan_period_months)
+        
+        if months <= 0:
+            return 0
+            
+        # Monthly interest rate
+        monthly_rate = annual_rate / 100.0 / 12.0
+        
+        # If interest rate is 0, simple division
+        if monthly_rate == 0:
+            return principal / months
+            
+        # EMI formula: P * r * (1 + r)^n / ((1 + r)^n - 1)
+        emi = principal * monthly_rate * ((1 + monthly_rate) ** months) / (((1 + monthly_rate) ** months) - 1)
+        return emi
+
+    def calculate_flat_interest(self):
+        """Calculate total interest for flat rate loans."""
+        principal = flt(self.loan_amount)
+        annual_rate = flt(self.interest_rate)
+        months = int(self.loan_period_months)
+        
+        # Total interest = Principal * Rate * Time
+        total_interest = principal * (annual_rate / 100.0) * (months / 12.0)
+        total_amount = principal + total_interest
+        monthly_installment = total_amount / months if months > 0 else 0
+        monthly_interest = total_interest / months if months > 0 else 0
+        
+        return {
+            "total_interest": total_interest,
+            "monthly_interest": monthly_interest,
+            "total_amount": total_amount,
+            "monthly_installment": monthly_installment
+        }
 
     # ---------------------------------------------------
     # POST TO LEDGER
@@ -186,57 +247,15 @@ class SHGLoan(Document):
         interest_type = getattr(self, "interest_type", "Reducing Balance")
 
         if interest_type == "Flat Rate":
-            self._generate_flat_rate_schedule(principal, months, start)
+            schedule = generate_flat_rate_schedule(principal, self.interest_rate, months, start)
         else:
-            self._generate_reducing_balance_schedule(principal, months, start)
+            schedule = generate_reducing_balance_schedule(principal, self.interest_rate, months, start)
 
-        frappe.msgprint(_("✅ Repayment schedule created with {0} installments.").format(months))
+        # Add schedule rows to loan
+        for row_data in schedule:
+            self.append("repayment_schedule", row_data)
 
-    def _generate_flat_rate_schedule(self, principal, months, start):
-        rate = flt(self.interest_rate)
-        total_interest = principal * (rate / 100) * (months / 12)
-        total = principal + total_interest
-        monthly = total / months
-        principal_part = principal / months
-        interest_part = monthly - principal_part
-        outstanding = principal
-        date = start
-
-        for i in range(1, months + 1):
-            outstanding -= principal_part
-            self.append("repayment_schedule", {
-                "installment_no": i,
-                "due_date": date,
-                "principal_component": round(principal_part, 2),
-                "interest_component": round(interest_part, 2),
-                "total_payment": round(monthly, 2),
-                "loan_balance": round(outstanding, 2),
-                "status": "Pending"
-            })
-            date = add_months(date, 1)
-        self.db_set("balance_amount", round(principal, 2))
-
-    def _generate_reducing_balance_schedule(self, principal, months, start):
-        r = flt(self.interest_rate) / 100.0 / 12.0
-        emi = principal * r * ((1 + r) ** months) / (((1 + r) ** months) - 1) if r else principal / months
-        outstanding = principal
-        date = start
-
-        for i in range(1, months + 1):
-            interest = outstanding * r
-            principal_part = emi - interest
-            outstanding -= principal_part
-            self.append("repayment_schedule", {
-                "installment_no": i,
-                "due_date": date,
-                "principal_component": round(principal_part, 2),
-                "interest_component": round(interest, 2),
-                "total_payment": round(emi, 2),
-                "loan_balance": round(outstanding, 2),
-                "status": "Pending"
-            })
-            date = add_months(date, 1)
-        self.db_set("balance_amount", round(principal, 2))
+        frappe.msgprint(_("✅ Repayment schedule created with {0} installments.").format(len(schedule)))
 
     @frappe.whitelist()
     def mark_all_due_as_paid(self):
@@ -297,7 +316,12 @@ class SHGLoan(Document):
         # Find last repayment date (latest paid installment)
         paid_schedule = [r for r in sorted_schedule if r.get("status") == "Paid"]
         if paid_schedule:
-            last_repayment_date = paid_schedule[-1].get("due_date")
+            # Find the latest actual_payment_date among paid installments
+            for r in paid_schedule:
+                if hasattr(r, 'actual_payment_date') and r.actual_payment_date:
+                    payment_date = getdate(r.actual_payment_date)
+                    if not last_repayment_date or payment_date > last_repayment_date:
+                        last_repayment_date = payment_date
 
         # Set monthly installment from first schedule row if available
         monthly_installment = 0
@@ -318,35 +342,8 @@ class SHGLoan(Document):
 @frappe.whitelist()
 def refresh_repayment_summary(loan_name):
     """Recalculate repayment summary from schedule and update loan fields."""
-    loan = frappe.get_doc("SHG Loan", loan_name)
-    schedule = loan.repayment_schedule or []
-
-    totals = {
-        "principal": 0.0,
-        "interest": 0.0,
-        "total_payable": 0.0,
-        "amount_paid": 0.0,
-        "unpaid_balance": 0.0,
-    }
-
-    for row in schedule:
-        totals["principal"]      += float(row.get("principal_amount") or row.get("principal_component") or 0)
-        totals["interest"]       += float(row.get("interest_amount") or row.get("interest_component") or 0)
-        totals["total_payable"]  += float(row.get("total_payment") or 0)
-        totals["amount_paid"]    += float(row.get("amount_paid") or 0)
-        totals["unpaid_balance"] += float(row.get("unpaid_balance") or 0)
-
-    loan.total_payable = totals["total_payable"]
-    loan.total_repaid = totals["amount_paid"]
-    loan.balance_amount = totals["unpaid_balance"]
-    loan.overdue_amount = max(0.0, totals["unpaid_balance"] - (loan.total_payable - loan.total_repaid))
-
-    # For monthly installment, take first row or division
-    if loan.total_payable and loan.loan_period_months:
-        loan.monthly_installment = loan.total_payable / loan.loan_period_months
-
-    loan.db_update()
-    return totals
+    from shg.shg.api.loan import refresh_repayment_summary as api_refresh_summary
+    return api_refresh_summary(loan_name)
 
 
 @frappe.whitelist()
@@ -366,65 +363,8 @@ def get_member_loan_statement(loan_id=None, member=None):
     Returns loan + repayment schedule for a given member or loan_id.
     Either argument is accepted.
     """
-    if not (loan_id or member):
-        frappe.throw(_("Either Member or Loan ID is required."))
-
-    # Initialize loan variable
-    loan = None
-    
-    # Try loading by loan_id first
-    if loan_id:
-        loan = frappe.get_doc("SHG Loan", loan_id)
-    elif member:
-        # fallback: get latest active loan for that member
-        loan_name = frappe.db.get_value(
-            "SHG Loan", 
-            {"member": member, "docstatus": 1}, 
-            "name"
-        )
-        if not loan_name:
-            frappe.throw(_("No active loan found for this member."))
-        loan = frappe.get_doc("SHG Loan", loan_name)
-    
-    # Ensure we have a loan
-    if not loan:
-        frappe.throw(_("Either Member or Loan ID is required."))
-
-    # Build repayment details
-    schedule = frappe.get_all(
-        "SHG Loan Repayment Schedule",
-        filters={"parent": loan.name},
-        fields=[
-            "installment_no",
-            "due_date",
-            "principal_component as principal_amount",
-            "interest_component as interest_amount",
-            "total_payment",
-            "amount_paid",
-            "unpaid_balance",
-            "status"
-        ],
-        order_by="installment_no asc"
-    )
-
-    summary = {
-        "loan_id": loan.name,
-        "member_name": loan.member_name,
-        "loan_amount": loan.loan_amount,
-        "interest_rate": loan.interest_rate,
-        "repayment_start_date": loan.repayment_start_date,
-        "monthly_installment": loan.monthly_installment,
-        "total_payable": loan.total_payable,
-        "total_repaid": loan.total_repaid,
-        "balance_amount": loan.balance_amount,
-        "overdue_amount": loan.overdue_amount,
-    }
-
-    return {
-        "loan_details": summary,
-        "repayment_schedule": schedule,
-        "count": len(schedule)
-    }
+    from shg.shg.api.loan import get_member_loan_statement as api_get_statement
+    return api_get_statement(loan_name=loan_id, member=member)
 
 
 def before_save(doc, method=None):
@@ -432,8 +372,7 @@ def before_save(doc, method=None):
     for field in ["loan_amount", "monthly_installment", "total_payable", "balance_amount"]:
         if getattr(doc, field, None):
             setattr(doc, field, round(flt(getattr(doc, field)), 2))
-    if hasattr(doc, "calculate_repayment_details"):
-        doc.calculate_repayment_details()
+    doc.calculate_repayment_details()
 
 def check_member_eligibility(doc):
     """Ensure member is active and eligible."""
@@ -444,18 +383,6 @@ def check_member_eligibility(doc):
     member_status = frappe.db.get_value("SHG Member", doc.member, "membership_status")
     if member_status != "Active":
         frappe.throw(f"Member {doc.member} is not active.")
-
-def calculate_repayment_details(doc):
-    """Compute installment and total payable."""
-    if not doc.loan_amount or not doc.interest_rate or not doc.loan_period_months:
-        return
-    monthly_rate = (doc.interest_rate / 100) / 12
-    if monthly_rate and doc.loan_period_months:
-        doc.monthly_installment = (
-            doc.loan_amount * monthly_rate *
-            (1 + monthly_rate) ** doc.loan_period_months
-        ) / ((1 + monthly_rate) ** doc.loan_period_months - 1)
-    doc.total_payable = doc.monthly_installment * doc.loan_period_months
 
 def validate_loan(doc, method=None):
     doc.validate()

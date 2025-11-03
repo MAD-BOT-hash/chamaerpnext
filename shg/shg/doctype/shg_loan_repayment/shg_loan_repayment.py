@@ -4,6 +4,7 @@
 import frappe
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, today, add_days
+from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 class SHGLoanRepayment(Document):
     def validate(self):
@@ -50,6 +51,15 @@ class SHGLoanRepayment(Document):
         # Update loan summary
         self.update_loan_summary(loan_doc)
         
+        # Cancel the payment entry if it exists
+        if self.payment_entry:
+            try:
+                pe = frappe.get_doc("Payment Entry", self.payment_entry)
+                if pe.docstatus == 1:
+                    pe.cancel()
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), f"Failed to cancel Payment Entry {self.payment_entry}")
+        
         frappe.msgprint(f"⚠️ Loan repayment {self.name} cancelled. Balance restored to {loan_doc.balance_amount}")
 
     def update_repayment_schedule(self, loan_doc):
@@ -78,8 +88,12 @@ class SHGLoanRepayment(Document):
                 # Update status
                 if row.unpaid_balance <= 0:
                     row.status = "Paid"
+                    row.actual_payment_date = self.posting_date
                 else:
                     row.status = "Partially Paid"
+                
+                # Link this repayment to the schedule row
+                row.payment_entry = self.name
                 
                 # Save the updated row
                 row.db_update()
@@ -97,7 +111,7 @@ class SHGLoanRepayment(Document):
             if row.payment_entry == self.name:
                 # Reverse this payment
                 row.amount_paid = flt(row.amount_paid or 0) - flt(self.total_paid or 0)
-                row.unpaid_balance = flt(row.total_due) - flt(row.amount_paid or 0)
+                row.unpaid_balance = flt(row.total_due or row.total_payment) - flt(row.amount_paid or 0)
                 if row.unpaid_balance <= 0:
                     row.status = "Paid"
                 elif row.amount_paid > 0:
@@ -105,6 +119,7 @@ class SHGLoanRepayment(Document):
                 else:
                     row.status = "Pending"
                 row.payment_entry = None
+                row.actual_payment_date = None
                 row.db_update()
         
         # Clear last repayment date if this was the last payment
@@ -116,7 +131,7 @@ class SHGLoanRepayment(Document):
         """Update loan summary fields after repayment."""
         try:
             # Use our new API method to refresh the repayment summary
-            from shg.shg.api.repayment_refresh import refresh_repayment_summary
+            from shg.shg.api.loan import refresh_repayment_summary
             result = refresh_repayment_summary(loan_doc.name)
             
             # Reload the loan to get updated values
@@ -161,10 +176,52 @@ class SHGLoanRepayment(Document):
         frappe.db.commit()
 
     def post_to_ledger(self, loan_doc):
-        """Post repayment to ledger."""
-        # This is a simplified implementation - in a real system, you would create
-        # the appropriate journal entries or payment entries here
-        pass
+        """Post repayment to ledger by creating a Payment Entry."""
+        try:
+            # Get member details
+            member = frappe.get_doc("SHG Member", loan_doc.member)
+            customer = member.customer or loan_doc.member
+            
+            # Get or create member receivable account
+            company = loan_doc.company or frappe.db.get_single_value("SHG Settings", "company")
+            member_account = get_or_create_member_receivable(loan_doc.member, company)
+            
+            # Create Payment Entry
+            pe = frappe.new_doc("Payment Entry")
+            pe.payment_type = "Receive"
+            pe.company = company
+            pe.posting_date = self.posting_date
+            pe.paid_from = member_account
+            pe.paid_from_account_type = "Receivable"
+            pe.paid_from_account_currency = frappe.db.get_value("Account", member_account, "account_currency")
+            pe.paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account") or "Cash - " + frappe.db.get_value("Company", company, "abbr")
+            pe.paid_to_account_type = "Cash"
+            pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency")
+            pe.paid_amount = flt(self.total_paid)
+            pe.received_amount = flt(self.total_paid)
+            pe.allocate_payment_amount = 1
+            pe.party_type = "Customer"
+            pe.party = customer
+            pe.remarks = f"Loan repayment for {self.loan}"
+            
+            # Add reference to the loan
+            pe.append("references", {
+                "reference_doctype": "SHG Loan",
+                "reference_name": self.loan,
+                "allocated_amount": flt(self.total_paid)
+            })
+            
+            pe.insert(ignore_permissions=True)
+            pe.submit()
+            
+            # Link the payment entry to this repayment
+            self.db_set("payment_entry", pe.name)
+            
+            frappe.msgprint(f"✅ Payment Entry {pe.name} created successfully.")
+            
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "Failed to create Payment Entry for loan repayment")
+            frappe.throw(f"Failed to create Payment Entry: {str(e)}")
 
     # --------------------------
     # REPAYMENT BREAKDOWN

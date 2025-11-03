@@ -63,7 +63,8 @@ scheduler_events = {
         "shg.tasks.send_daily_reminders",
         "shg.tasks.calculate_loan_penalties",
         "shg.tasks.generate_billable_contribution_invoices",
-        "shg.shg.doctype.shg_contribution.shg_contribution.update_overdue_contributions"
+        "shg.shg.doctype.shg_contribution.shg_contribution.update_overdue_contributions",
+        "shg.shg.utils.loan_utils.flag_overdue_loans"
     ],
     "weekly": [
         "shg.tasks.send_weekly_contribution_reminders"
@@ -83,7 +84,7 @@ after_install = "shg.install.after_install"
 doctype_js = {
     "SHG Member": "public/js/shg_member.js",
     "SHG Contribution": "public/js/shg_contribution.js",
-    "SHG Loan": "public/js/shg_loan.js",
+    "SHG Loan": "shg/shg/doctype/shg_loan/shg_loan.js",
     "SHG Loan Repayment": "shg/shg/doctype/shg_loan_repayment/shg_loan_repayment.js",
     "SHG Meeting": "public/js/shg_meeting.js",
     "SHG Member Attendance": "public/js/shg_member_attendance.js",
@@ -125,7 +126,11 @@ whitelisted_methods = [
     "shg.shg.api.create_multi_member_payment",
     "shg.api.payments.receive_multiple_payments",
     "shg.shg.utils.payment_utils.receive_multiple_payments",
-    "shg.api.create_payment_entry_from_invoice"
+    "shg.api.create_payment_entry_from_invoice",
+    "shg.shg.api.loan.generate_schedule",
+    "shg.shg.api.loan.refresh_repayment_summary",
+    "shg.shg.api.loan.get_member_loan_statement",
+    "shg.shg.api.loan.mark_installment_paid"
 ]
 
 # Patches
@@ -133,5 +138,7 @@ patches = [
     "shg.patches.add_actual_payment_fields.execute",
     "shg.patches.update_repayment_schedule_fields.execute",
     "shg.shg.patches.custom.update_repayment_summary_patch.execute",
-    "shg.shg.patches.add_disbursed_on_field.execute"
+    "shg.shg.patches.add_disbursed_on_field.execute",
+    "shg.shg.patches.add_disbursed_on_field_to_loan.execute",
+    "shg.shg.patches.ensure_loan_doctype_fields.execute"
 ]

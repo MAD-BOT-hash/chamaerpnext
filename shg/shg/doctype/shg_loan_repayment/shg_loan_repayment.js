@@ -45,6 +45,17 @@ frappe.ui.form.on("SHG Loan Repayment", {
                 frm.set_value("member", loan_doc.member);
                 frm.set_value("member_name", loan_doc.member_name);
                 frm.set_value("outstanding_balance", loan_doc.balance_amount);
+                
+                // Suggest amount = next installment unpaid
+                if (loan_doc.repayment_schedule) {
+                    for (let row of loan_doc.repayment_schedule) {
+                        if (row.unpaid_balance > 0) {
+                            frm.set_value("total_paid", row.unpaid_balance);
+                            break;
+                        }
+                    }
+                }
+                
                 frm.refresh_fields();
             });
         }
