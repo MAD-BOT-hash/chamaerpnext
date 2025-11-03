@@ -1,0 +1,7 @@
+{
+    "doctype": "Client Script",
+    "name": "SHG Loan - Refresh Summary Button",
+    "dt": "SHG Loan",
+    "script": "frappe.ui.form.on('SHG Loan', {\n  refresh(frm) {\n    // Button\n    frm.add_custom_button('📊 Recalculate Loan Summary (SHG)', () => {\n      if (!frm.doc.name) return;\n      frappe.call({\n        method: 'shg.shg.doctype.shg_loan.api.refresh_repayment_summary',\n        args: { loan_name: frm.doc.name },\n        freeze: true,\n        freeze_message: __('Updating repayment summary...'),\n        callback: () => frm.reload_doc()\n      });\n    }).addClass('btn-primary');\n\n    // Header indicator + dashboard progress\n    const total = flt(frm.doc.total_payable || 0);\n    const paid  = flt(frm.doc.total_repaid || 0);\n    const bal   = Math.max(total - paid, 0);\n    const overdue = flt(frm.doc.overdue_amount || 0);\n\n    if (total > 0) {\n      const pct = Math.min(Math.round((paid / total) * 100), 100);\n      frm.dashboard.add_progress(__('Repayment Progress'), [\n        { title: __('Paid'), percent: pct, progress_class: 'progress-bar-success' }\n      ]);\n    }\n\n    frm.dashboard.set_headline(__('Outstanding: {0}{1}', [\n      frappe.format(bal, { fieldtype: 'Currency' }),\n      overdue > 0 ? __(' • Overdue: {0}', [frappe.format(overdue, { fieldtype: 'Currency' })]) : ''\n    ]));\n  }\n});",
+    "enabled": 1
+}

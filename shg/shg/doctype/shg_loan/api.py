@@ -12,6 +12,7 @@ def refresh_repayment_summary(loan_name: str):
         loan = frappe.get_doc("SHG Loan", loan_name)
     except frappe.DoesNotExistError:
         frappe.throw(f"Loan '{loan_name}' not found", title="Loan Not Found")
+        return
 
     # Ensure doc is fresh
     loan.reload()
@@ -20,13 +21,15 @@ def refresh_repayment_summary(loan_name: str):
     # Use a safer approach instead of hasattr for Server Script compatibility
     try:
         # Try to get the method - if it doesn't exist, this will raise an AttributeError
-        loan.update_repayment_summary
+        method = loan.update_repayment_summary
         method_exists = True
     except AttributeError:
         method_exists = False
     
     if method_exists:
         loan.update_repayment_summary()
+        # Allow updates on submitted loans
+        loan.flags.ignore_validate_update_after_submit = True
         loan.save(ignore_permissions=True)
         frappe.db.commit()
         return {"status": "success"}
@@ -42,8 +45,25 @@ def refresh_repayment_summary(loan_name: str):
         total_interest += flt(row.interest_component)
         total_paid += flt(row.amount_paid)
 
-        if row.status and row.status.lower() == "overdue":
-            overdue_amount += flt(row.unpaid_balance)
+        # Use a safer approach instead of hasattr for Server Script compatibility
+        try:
+            status = getattr(row, 'status', None)
+            has_status = status is not None
+        except AttributeError:
+            has_status = False
+            status = None
+        
+        if has_status and status and status.lower() == "overdue":
+            # Use a safer approach instead of hasattr for Server Script compatibility
+            try:
+                unpaid_balance = getattr(row, 'unpaid_balance', 0)
+                has_unpaid_balance = unpaid_balance is not None
+            except AttributeError:
+                has_unpaid_balance = False
+                unpaid_balance = 0
+            
+            if has_unpaid_balance:
+                overdue_amount += flt(unpaid_balance)
 
     loan.total_principal = total_principal
     loan.total_interest = total_interest
@@ -51,6 +71,8 @@ def refresh_repayment_summary(loan_name: str):
     loan.overdue_amount = overdue_amount
     loan.balance_amount = (total_principal + total_interest) - total_paid
 
+    # Allow updates on submitted loans
+    loan.flags.ignore_validate_update_after_submit = True
     loan.save(ignore_permissions=True)
     frappe.db.commit()
     
