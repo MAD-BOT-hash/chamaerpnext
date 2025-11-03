@@ -318,8 +318,17 @@ class SHGLoan(Document):
         if paid_schedule:
             # Find the latest actual_payment_date among paid installments
             for r in paid_schedule:
-                if hasattr(r, 'actual_payment_date') and r.actual_payment_date:
-                    payment_date = getdate(r.actual_payment_date)
+                # Use a safer approach instead of hasattr for Server Script compatibility
+                try:
+                    # Try to get the attribute - if it doesn't exist, this will raise an AttributeError
+                    actual_payment_date = r.actual_payment_date
+                    has_actual_payment_date = True
+                except AttributeError:
+                    has_actual_payment_date = False
+                    actual_payment_date = None
+                
+                if has_actual_payment_date and actual_payment_date:
+                    payment_date = getdate(actual_payment_date)
                     if not last_repayment_date or payment_date > last_repayment_date:
                         last_repayment_date = payment_date
 

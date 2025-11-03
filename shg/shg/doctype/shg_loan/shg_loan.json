@@ -299,13 +299,15 @@
             "fieldname": "last_repayment_date",
             "fieldtype": "Date",
             "label": "Last Repayment Date",
-            "read_only": 1
+            "read_only": 1,
+            "allow_on_submit": 1
         },
         {
             "fieldname": "next_due_date",
             "fieldtype": "Date",
             "label": "Next Due Date",
-            "read_only": 1
+            "read_only": 1,
+            "allow_on_submit": 1
         },
         {
             "fieldname": "total_repaid",

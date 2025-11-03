@@ -28,3 +28,4 @@ shg.shg.patches.patch_remove_old_gl_logic
 shg.shg.patches.update_loan_repayment_schedule_link
 shg.shg.patches.add_disbursed_on_field_to_loan
 shg.shg.patches.ensure_loan_doctype_fields
+shg.shg.patches.update_loan_schedule_field_permissions
