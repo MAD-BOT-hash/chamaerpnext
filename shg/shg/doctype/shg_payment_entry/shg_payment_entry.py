@@ -53,6 +53,11 @@ class SHGPaymentEntry(Document):
     def on_submit(self):
         """Process payment on submission"""
         self.process_payment()
+        self.update_linked_invoices()
+
+    def on_cancel(self):
+        """Reopen invoices when payment entry is cancelled"""
+        self.reopen_linked_invoices()
         
     def process_payment(self):
         """Process the payment and update related records with proper ERPNext v15 logic"""
@@ -190,6 +195,58 @@ class SHGPaymentEntry(Document):
         
         # Recalculate member's financial summary to ensure consistency
         member.update_financial_summary()
+
+    def update_linked_invoices(self):
+        """Update SHG Contribution Invoices as Paid and Closed after payment submission"""
+        try:
+            # Loop through allocated references in payment entry
+            for entry in self.payment_entries:
+                if entry.invoice_type == "SHG Contribution Invoice" and entry.invoice:
+                    invoice = frappe.get_doc("SHG Contribution Invoice", entry.invoice)
+                    
+                    # Update status and close the invoice
+                    invoice.db_set("status", "Paid", update_modified=False)
+                    if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+                        invoice.db_set("is_closed", 1, update_modified=False)
+                    else:
+                        # Try to set via custom field
+                        try:
+                            invoice.db_set("is_closed", 1, update_modified=False)
+                        except Exception:
+                            pass  # Field might not exist yet
+
+                    frappe.db.commit()
+                    frappe.msgprint(f"✅ Invoice {invoice.name} marked as Paid and Closed")
+
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "Failed to update invoices after SHG Payment Entry submission")
+            frappe.throw("Failed to update related invoices. Please check system logs.")
+
+    def reopen_linked_invoices(self):
+        """Reopen SHG Contribution Invoices when payment entry is cancelled"""
+        try:
+            # Loop through allocated references in payment entry
+            for entry in self.payment_entries:
+                if entry.invoice_type == "SHG Contribution Invoice" and entry.invoice:
+                    invoice = frappe.get_doc("SHG Contribution Invoice", entry.invoice)
+                    
+                    # Reopen the invoice
+                    invoice.db_set("status", "Unpaid", update_modified=False)
+                    if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+                        invoice.db_set("is_closed", 0, update_modified=False)
+                    else:
+                        # Try to set via custom field
+                        try:
+                            invoice.db_set("is_closed", 0, update_modified=False)
+                        except Exception:
+                            pass  # Field might not exist yet
+
+                    frappe.db.commit()
+                    frappe.msgprint(f"✅ Invoice {invoice.name} reopened")
+
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "Failed to reopen invoices after SHG Payment Entry cancellation")
+            frappe.throw("Failed to reopen related invoices. Please check system logs.")
 
 # ----------------------
 # API endpoint for dialog

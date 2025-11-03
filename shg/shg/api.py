@@ -11,14 +11,28 @@ def get_unpaid_contribution_invoices(member):
     if not member:
         frappe.throw("Member is required to fetch unpaid invoices.")
     
+    # Base filters
+    filters = {
+        "member": member,
+        "docstatus": 1,
+        "status": ["in", ["Unpaid", "Partially Paid"]]
+    }
+    
+    # Add is_closed filter if the column exists
+    if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+        filters["is_closed"] = 0
+    else:
+        # Try to filter by custom field if it exists
+        try:
+            # This will work if the custom field has been added
+            filters["is_closed"] = 0
+        except Exception:
+            # If neither standard nor custom field exists, just filter by status
+            pass
+    
     return frappe.get_all(
         "SHG Contribution Invoice",
-        filters={
-            "member": member,
-            "docstatus": 1,
-            "status": ["in", ["Unpaid", "Partially Paid"]],
-            "is_closed": 0
-        },
+        filters=filters,
         fields=["name", "invoice_date", "amount", "status"]
     )
 
