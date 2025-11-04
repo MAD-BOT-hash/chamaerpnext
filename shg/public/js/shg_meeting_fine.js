@@ -22,6 +22,15 @@ frappe.ui.form.on('SHG Meeting Fine', {
                 }
             });
         }
+        
+        // Add "Mark as Paid" button if the doctype is not yet paid or submitted
+        if (frm.doc.docstatus === 0 && frm.doc.status !== 'Paid') {
+            frm.add_custom_button(__('Mark as Paid'), () => {
+                frm.set_value('status', 'Paid');
+                frm.set_value('paid_date', frappe.datetime.get_today());
+                frm.save();
+            });
+        }
     },
     
     fine_reason: function(frm) {
