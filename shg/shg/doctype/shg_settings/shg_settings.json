@@ -119,6 +119,12 @@
    "options": "Cash\nMobile Money\nMpesa\nBank Transfer\nCheque"
   },
   {
+   "fieldname": "default_contribution_type",
+   "fieldtype": "Link",
+   "label": "Default Contribution Type",
+   "options": "SHG Contribution Type"
+  },
+  {
    "default": "30",
    "description": "Number of days after invoice date when payment is due",
    "fieldname": "default_credit_period_days",

@@ -9,6 +9,7 @@ class SHGContribution(Document):
         self.validate_amount()
         self.validate_duplicate()
         self.validate_invoice_reference()
+        self.validate_contribution_type()
         self.set_contribution_details()
         self.calculate_unpaid_amount()
         
@@ -64,6 +65,30 @@ class SHGContribution(Document):
             except Exception:
                 # If invoice_reference field doesn't exist yet, skip this check
                 pass
+
+    def validate_contribution_type(self):
+        """Validate contribution type and handle 'Invoice Payment' translation"""
+        # Handle 'Invoice Payment' type by translating it to a valid type
+        if self.contribution_type == "Invoice Payment":
+            # Try to get a default type from settings
+            default_type = frappe.db.get_single_value("SHG Settings", "default_contribution_type")
+            if default_type and frappe.db.exists("SHG Contribution Type", default_type):
+                self.contribution_type = default_type
+            else:
+                # Fallback to 'Special Assessment' or 'Regular Weekly'
+                if frappe.db.exists("SHG Contribution Type", "Special Assessment"):
+                    self.contribution_type = "Special Assessment"
+                else:
+                    self.contribution_type = "Regular Weekly"
+        
+        # Validate that the contribution type exists (if provided)
+        if self.contribution_type:
+            # Check if it's a valid contribution type
+            if not frappe.db.exists("SHG Contribution Type", self.contribution_type):
+                frappe.throw(_(f"Invalid contribution type: {self.contribution_type}"))
+        elif not self.contribution_type_link:
+            # If no type is provided and no link, set a default
+            self.contribution_type = "Regular Weekly"
 
     def set_contribution_details(self):
         """Set contribution details from contribution type"""

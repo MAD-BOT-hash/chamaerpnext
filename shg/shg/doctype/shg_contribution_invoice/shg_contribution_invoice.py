@@ -11,6 +11,7 @@ class SHGContributionInvoice(Document):
         self.validate_qty()
         self.validate_rate()
         self.validate_amount()
+        self.validate_contribution_type()
         self.set_description()
         self.validate_payment_method()
         
@@ -108,6 +109,25 @@ class SHGContributionInvoice(Document):
         if not self.payment_method or self.payment_method not in valid_methods:
             default_method = frappe.db.get_single_value("SHG Settings", "default_payment_method") or "Mpesa"
             self.payment_method = default_method
+            
+    def validate_contribution_type(self):
+        """Validate that the contribution type exists and is valid"""
+        if self.contribution_type:
+            # Check if it's a valid contribution type
+            if not frappe.db.exists("SHG Contribution Type", self.contribution_type):
+                frappe.throw(_(f"Invalid contribution type: {self.contribution_type}"))
+        else:
+            # If no contribution type is provided, use default from settings or fallback
+            default_type = frappe.db.get_single_value("SHG Settings", "default_contribution_type")
+            if default_type and frappe.db.exists("SHG Contribution Type", default_type):
+                self.contribution_type = default_type
+            else:
+                # Fallback to 'Regular Weekly' if available
+                if frappe.db.exists("SHG Contribution Type", "Regular Weekly"):
+                    self.contribution_type = "Regular Weekly"
+                else:
+                    # If no valid types exist, set to None and let downstream handle it
+                    self.contribution_type = None
             
     def on_submit(self):
         """Handle submission of SHG Contribution Invoice"""
@@ -275,12 +295,32 @@ def create_contribution_from_invoice(doc, method=None):
         # Use invoice_date as the reference date
         invoice_date = getdate(doc.invoice_date or today())
         
+        # Determine contribution type
+        contribution_type = doc.contribution_type
+        
+        # If we have a linked Sales Invoice, try to get contribution type from it
+        if doc.sales_invoice:
+            sales_invoice = frappe.get_doc("Sales Invoice", doc.sales_invoice)
+            if hasattr(sales_invoice, 'shg_contribution_type') and sales_invoice.shg_contribution_type:
+                contribution_type = sales_invoice.shg_contribution_type
+        
+        # Validate contribution type
+        if contribution_type:
+            # Check if it's a valid contribution type
+            if not frappe.db.exists("SHG Contribution Type", contribution_type):
+                # If invalid, fallback to default
+                contribution_type = "Regular Weekly"
+                frappe.msgprint(_(f"Invalid contribution type '{doc.contribution_type}' - using default 'Regular Weekly'"))
+        else:
+            # If no contribution type, use default
+            contribution_type = "Regular Weekly"
+
         # Create new SHG Contribution
         contribution = frappe.get_doc({
             "doctype": "SHG Contribution",
             "member": doc.member,                 # Link field
             "member_name": doc.member_name,
-            "contribution_type": doc.contribution_type,
+            "contribution_type": contribution_type,
             "contribution_date": invoice_date,
             "posting_date": invoice_date,
             "amount": flt(doc.amount or 0),
@@ -369,12 +409,24 @@ def generate_multiple_contribution_invoices(contribution_type=None, amount=None,
             if due_date_val < invoice_date:
                 due_date_val = invoice_date
             
+            # Validate contribution type
+            validated_contribution_type = contribution_type
+            if contribution_type:
+                # Check if it's a valid contribution type
+                if not frappe.db.exists("SHG Contribution Type", contribution_type):
+                    # If invalid, fallback to default
+                    validated_contribution_type = "Regular Weekly"
+                    frappe.msgprint(_(f"Invalid contribution type '{contribution_type}' - using default 'Regular Weekly' for {member.member_name}"))
+            else:
+                # If no contribution type, use default
+                validated_contribution_type = "Regular Weekly"
+
             # Create SHG Contribution Invoice
             invoice = frappe.get_doc({
                 "doctype": "SHG Contribution Invoice",
                 "member": member.name,
                 "member_name": member.member_name,
-                "contribution_type": contribution_type,
+                "contribution_type": validated_contribution_type,
                 "qty": safe_qty,
                 "rate": safe_rate,
                 "amount": safe_amount,
@@ -416,12 +468,32 @@ def create_linked_contribution(invoice_doc):
         # Use invoice_date as the reference date
         invoice_date = getdate(invoice_doc.invoice_date or today())
         
+        # Determine contribution type
+        contribution_type = invoice_doc.contribution_type
+        
+        # If we have a linked Sales Invoice, try to get contribution type from it
+        if invoice_doc.sales_invoice:
+            sales_invoice = frappe.get_doc("Sales Invoice", invoice_doc.sales_invoice)
+            if hasattr(sales_invoice, 'shg_contribution_type') and sales_invoice.shg_contribution_type:
+                contribution_type = sales_invoice.shg_contribution_type
+        
+        # Validate contribution type
+        if contribution_type:
+            # Check if it's a valid contribution type
+            if not frappe.db.exists("SHG Contribution Type", contribution_type):
+                # If invalid, fallback to default
+                contribution_type = "Regular Weekly"
+                frappe.msgprint(_(f"Invalid contribution type '{invoice_doc.contribution_type}' - using default 'Regular Weekly'"))
+        else:
+            # If no contribution type, use default
+            contribution_type = "Regular Weekly"
+
         # Create new SHG Contribution in draft status
         contribution = frappe.get_doc({
             "doctype": "SHG Contribution",
             "member": invoice_doc.member,
             "member_name": invoice_doc.member_name,
-            "contribution_type": invoice_doc.contribution_type,
+            "contribution_type": contribution_type,
             "contribution_date": invoice_date,
             "posting_date": invoice_date,
             "qty": safe_qty,
@@ -670,6 +742,26 @@ def post_to_contribution(docname):
     from shg.shg.utils.account_utils import get_or_create_member_account
     account = get_or_create_member_account(member, company)
 
+    # Determine contribution type
+    contribution_type = doc.contribution_type
+    
+    # If we have a linked Sales Invoice, try to get contribution type from it
+    if doc.sales_invoice:
+        sales_invoice = frappe.get_doc("Sales Invoice", doc.sales_invoice)
+        if hasattr(sales_invoice, 'shg_contribution_type') and sales_invoice.shg_contribution_type:
+            contribution_type = sales_invoice.shg_contribution_type
+    
+    # Validate contribution type
+    if contribution_type:
+        # Check if it's a valid contribution type
+        if not frappe.db.exists("SHG Contribution Type", contribution_type):
+            # If invalid, fallback to default
+            contribution_type = "Regular Weekly"
+            frappe.msgprint(_(f"Invalid contribution type '{doc.contribution_type}' - using default 'Regular Weekly'"))
+    else:
+        # If no contribution type, use default
+        contribution_type = "Regular Weekly"
+
     # Create Contribution entry
     contribution = frappe.new_doc("SHG Contribution")
     contribution.member = member.name
@@ -677,7 +769,7 @@ def post_to_contribution(docname):
     contribution.amount = doc.amount or 0
     contribution.posting_date = frappe.utils.nowdate()
     contribution.reference_invoice = doc.name
-    contribution.contribution_type = "Invoice Payment"
+    contribution.contribution_type = contribution_type
     contribution.insert(ignore_permissions=True)
     contribution.submit()
 
@@ -685,14 +777,7 @@ def post_to_contribution(docname):
     frappe.db.set_value("SHG Contribution Invoice", docname, "posted_to_contribution", 1)
 
     frappe.db.commit()
+    frappe.msgprint(_(f"Contribution recorded under type: {contribution_type}"))
     return {"contribution": contribution.name}
 
-@frappe.whitelist()
-def validate_contribution_invoice(doc, method=None):
-    """Validate SHG Contribution Invoice before submission."""
-    frappe.msgprint("Validating contribution invoice...")
 
-@frappe.whitelist()
-def create_contribution_from_invoice(doc, method=None):
-    """Auto-create contribution record from invoice."""
-    frappe.msgprint("Creating contribution record...")
