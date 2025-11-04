@@ -194,9 +194,28 @@ class SHGContribution(Document):
             # Create a Journal Entry for this contribution (default)
             from shg.shg.utils.gl_utils import create_contribution_journal_entry, update_document_with_journal_entry
             
-            # Use the new account helper
-            from shg.shg.utils.account_utils import get_account
-            member_account = get_account(self.company, "contributions", self.member)
+            # Use the new safe account helper
+            from shg.shg.utils.account_utils import get_account, get_or_create_account
+            
+            # Get company abbreviation
+            company_abbr = frappe.db.get_value("Company", self.company, "abbr")
+            
+            # Get parent income account
+            income_parent = frappe.db.get_value("Account", {"account_name": "Income", "company": self.company}, "name")
+            if not income_parent:
+                income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": self.company}, "name")
+            
+            # Create or get contributions income account using safe helper
+            income_account = get_or_create_account(
+                self.company,
+                f"SHG Contributions - {company_abbr}",
+                income_parent,
+                "Income Account",
+                "Income"
+            )
+            
+            # Get member account using existing helper
+            member_account = get_account(self.company, "members", self.member)
             
             # Get customer for the member
             customer = frappe.db.get_value("SHG Member", self.member, "customer")
@@ -219,7 +238,6 @@ class SHGContribution(Document):
             })
 
             # Credit: contributions income account
-            income_account = get_account(self.company, "contributions")
             je.append("accounts", {
                 "account": income_account,
                 "debit_in_account_currency": 0,

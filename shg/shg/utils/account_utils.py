@@ -114,52 +114,68 @@ def get_account(company, account_type, member_id=None):
     
     return frappe.db.get_value("Account", {"account_name": parent, "company": company})
 
-def get_or_create_account(account_name, company, parent_account=None, account_type=None, is_group=0, root_type=None):
+def get_or_create_account(company, account_name, parent, account_type, root_type):
     """
-    Get an account by name, trying both plain name and company-suffixed name.
-    If not found, create it under the specified parent account.
+    Safely get or create an account with idempotent behavior.
+    Checks for existing accounts before creating new ones.
     
     Args:
-        account_name (str): The base account name (e.g., "SHG Contributions")
-        company (str): The company name
-        parent_account (str): The parent account to create under if account doesn't exist
-        account_type (str): The account type for creation
-        is_group (int): Whether the account is a group account
-        root_type (str): The root type for the account (Asset, Liability, Equity, Income, Expense)
+        company (str): Company name
+        account_name (str): Account name to check/create
+        parent (str): Parent account name
+        account_type (str): Type of account
+        root_type (str): Root type (Asset, Liability, Equity, Income, Expense)
         
     Returns:
-        str: The name of the found or created account
+        str: Name of existing or newly created account
     """
-    # Get company abbreviation
-    company_abbr = frappe.get_value("Company", company, "abbr")
+    # Normalize account name by removing company suffix if present
+    company_abbr = frappe.db.get_value("Company", company, "abbr")
+    base_account_name = account_name.split(" - ")[0] if " - " in account_name else account_name
     
-    # First, try to find the account with the plain name
-    account = frappe.db.get_value("Account", {"account_name": account_name, "company": company})
+    # Check for existing account with exact name
+    existing = frappe.db.get_value("Account", {
+        "account_name": account_name,
+        "company": company
+    })
     
-    # If not found, try with company suffix (using abbreviation)
-    if not account:
-        suffixed_name = f"{account_name} - {company_abbr}"
-        account = frappe.db.get_value("Account", {"account_name": suffixed_name, "company": company})
+    if existing:
+        return existing
     
-    # If still not found, create it
-    if not account:
-        try:
-            account_doc = frappe.get_doc({
-                "doctype": "Account",
-                "company": company,
-                "account_name": account_name,
-                "parent_account": parent_account,
-                "account_type": account_type,
-                "is_group": is_group,
-                "root_type": root_type
+    # Also check for account with company suffix pattern
+    if company_abbr:
+        suffixed_name = f"{base_account_name} - {company_abbr}"
+        if suffixed_name != account_name:
+            existing_suffixed = frappe.db.get_value("Account", {
+                "account_name": suffixed_name,
+                "company": company
             })
-            account_doc.insert()
-            account = account_doc.name
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), f"SHG - Account Creation Failed: {account_name}")
-            frappe.throw(_(f"Failed to create account {account_name}: {str(e)}"))
+            if existing_suffixed:
+                return existing_suffixed
     
-    return account
+    # Create account if none exists
+    try:
+        account_doc = frappe.get_doc({
+            "doctype": "Account",
+            "company": company,
+            "account_name": account_name,
+            "parent_account": parent,
+            "account_type": account_type,
+            "root_type": root_type,
+            "is_group": 0  # Always create as leaf node for posting
+        })
+        account_doc.insert(ignore_permissions=True)
+        return account_doc.name
+    except frappe.DuplicateEntryError:
+        # Race condition protection
+        frappe.clear_last_message()
+        return frappe.db.get_value("Account", {
+            "account_name": account_name,
+            "company": company
+        })
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"SHG - Account Creation Failed: {account_name}")
+        frappe.throw(_(f"Failed to create account {account_name}: {str(e)}"))
 
 def get_or_create_member_account(member, company):
     """
@@ -194,12 +210,11 @@ def get_or_create_shg_contributions_account(company):
         income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": company}, "name")
     
     return get_or_create_account(
-        "SHG Contributions",
         company,
-        parent_account=income_parent,
-        account_type="Income Account",
-        is_group=0,
-        root_type="Income"
+        "SHG Contributions",
+        income_parent,
+        "Income Account",
+        "Income"
     )
 
 def get_or_create_shg_loans_account(company):
@@ -221,12 +236,11 @@ def get_or_create_shg_loans_account(company):
         loans_parent = frappe.db.get_value("Account", {"account_name": f"Loans and Advances (Assets) - {company_abbr}", "company": company}, "name")
     
     return get_or_create_account(
-        "Loans Disbursed",
         company,
-        parent_account=loans_parent,
-        account_type="Receivable",
-        is_group=0,
-        root_type="Asset"
+        "Loans Disbursed",
+        loans_parent,
+        "Receivable",
+        "Asset"
     )
 
 def get_or_create_shg_interest_income_account(company):
@@ -248,12 +262,11 @@ def get_or_create_shg_interest_income_account(company):
         income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": company}, "name")
     
     return get_or_create_account(
-        "SHG Interest Income",
         company,
-        parent_account=income_parent,
-        account_type="Income Account",
-        is_group=0,
-        root_type="Income"
+        "SHG Interest Income",
+        income_parent,
+        "Income Account",
+        "Income"
     )
 
 def get_or_create_shg_penalty_income_account(company):
@@ -275,12 +288,11 @@ def get_or_create_shg_penalty_income_account(company):
         income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": company}, "name")
     
     return get_or_create_account(
-        "SHG Penalty Income",
         company,
-        parent_account=income_parent,
-        account_type="Income Account",
-        is_group=0,
-        root_type="Income"
+        "SHG Penalty Income",
+        income_parent,
+        "Income Account",
+        "Income"
     )
 
 def get_or_create_shg_parent_account(company):
@@ -302,10 +314,9 @@ def get_or_create_shg_parent_account(company):
         ar_parent = frappe.db.get_value("Account", {"account_name": f"Accounts Receivable - {company_abbr}", "company": company}, "name")
     
     return get_or_create_account(
-        "SHG Members",
         company,
-        parent_account=ar_parent,
-        account_type="Receivable",
-        is_group=1,
-        root_type="Asset"
+        "SHG Members",
+        ar_parent,
+        "Receivable",
+        "Asset"
     )
