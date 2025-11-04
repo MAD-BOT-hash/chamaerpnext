@@ -67,14 +67,23 @@ def update_invoice_status(invoice_name, paid_amount):
                 invoice.db_set("status", "Paid")
                 # Also update the Sales Invoice status
                 sales_invoice.db_set("status", "Paid")
+                # Auto-close the invoice when fully paid
+                if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+                    invoice.db_set("is_closed", 1)
+                # Mark linked contribution as paid
+                invoice.mark_linked_contribution_as_paid()
             elif new_outstanding < sales_invoice.grand_total:
                 invoice.db_set("status", "Partially Paid")
                 # Also update the Sales Invoice status
                 sales_invoice.db_set("status", "Partially Paid")
+                # Reopen linked contribution if needed
+                invoice.reopen_linked_contribution()
             else:
                 invoice.db_set("status", "Unpaid")
                 # Also update the Sales Invoice status
                 sales_invoice.db_set("status", "Unpaid")
+                # Reopen linked contribution if needed
+                invoice.reopen_linked_contribution()
                 
         # Update member financial summary
         member = frappe.get_doc("SHG Member", invoice.member)

@@ -150,6 +150,15 @@ class SHGContributionInvoice(Document):
             # Link the created contribution to this invoice
             if contribution:
                 self.db_set("linked_shg_contribution", contribution.name)
+                
+        # Ensure is_closed is set to 0 for new invoices
+        if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+            self.db_set("is_closed", 0)
+                
+    def on_cancel(self):
+        """Handle cancellation of SHG Contribution Invoice"""
+        # Reopen linked contribution when invoice is cancelled
+        self.reopen_linked_contribution()
 
     def create_sales_invoice(self):
         company = frappe.db.get_single_value("SHG Settings", "company") or frappe.defaults.get_user_default("Company")
@@ -266,6 +275,57 @@ SHG Management"""
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice - Email Sending Failed")
             frappe.throw(_("Failed to send invoice email: {0}").format(str(e)))
+            
+    def mark_linked_contribution_as_paid(self):
+        """Mark the linked SHG Contribution as 'Paid' when this invoice is paid and closed."""
+        try:
+            # Safety checks
+            if not self.name:
+                return
+                
+            # Check if invoice is paid and closed
+            if self.status == "Paid" and self.get("is_closed", 0) == 1:
+                # Get the linked contribution using invoice_reference field
+                contribution_name = frappe.db.get_value("SHG Contribution", 
+                                                    {"invoice_reference": self.name})
+                
+                if contribution_name:
+                    # Safety check: ensure contribution exists
+                    if frappe.db.exists("SHG Contribution", contribution_name):
+                        contrib_doc = frappe.get_doc("SHG Contribution", contribution_name)
+                        # Only update if not already paid
+                        if contrib_doc.status != "Paid":
+                            contrib_doc.db_set("status", "Paid", update_modified=False)
+                            # Also update related fields if they exist
+                            if hasattr(contrib_doc, "posted_on"):
+                                contrib_doc.db_set("posted_on", frappe.utils.now(), update_modified=False)
+                            frappe.msgprint(f"✅ Linked Contribution {contrib_doc.name} marked as Paid")
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), f"Failed to update SHG Contribution status for invoice {self.name}")
+            
+    def reopen_linked_contribution(self):
+        """Reopen the linked SHG Contribution when this invoice is reopened."""
+        try:
+            # Safety checks
+            if not self.name:
+                return
+                
+            # Check if invoice is not paid or not closed
+            if self.status != "Paid" or self.get("is_closed", 0) != 1:
+                # Get the linked contribution using invoice_reference field
+                contribution_name = frappe.db.get_value("SHG Contribution", 
+                                                    {"invoice_reference": self.name})
+                
+                if contribution_name:
+                    # Safety check: ensure contribution exists
+                    if frappe.db.exists("SHG Contribution", contribution_name):
+                        contrib_doc = frappe.get_doc("SHG Contribution", contribution_name)
+                        # Only update if currently paid
+                        if contrib_doc.status == "Paid":
+                            contrib_doc.db_set("status", "Unpaid", update_modified=False)
+                            frappe.msgprint(f"✅ Linked Contribution {contrib_doc.name} reopened")
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), f"Failed to reopen SHG Contribution for invoice {self.name}")
             
 @frappe.whitelist()
 def create_contribution_from_invoice(doc, method=None):

@@ -199,53 +199,71 @@ class SHGPaymentEntry(Document):
     def update_linked_invoices(self):
         """Update SHG Contribution Invoices as Paid and Closed after payment submission"""
         try:
+            # Safety check
+            if not self.name:
+                return
+                
             # Loop through allocated references in payment entry
             for entry in self.payment_entries:
                 if entry.invoice_type == "SHG Contribution Invoice" and entry.invoice:
-                    invoice = frappe.get_doc("SHG Contribution Invoice", entry.invoice)
-                    
-                    # Update status and close the invoice
-                    invoice.db_set("status", "Paid", update_modified=False)
-                    if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
-                        invoice.db_set("is_closed", 1, update_modified=False)
-                    else:
-                        # Try to set via custom field
-                        try:
+                    # Safety check: ensure invoice exists
+                    if frappe.db.exists("SHG Contribution Invoice", entry.invoice):
+                        invoice = frappe.get_doc("SHG Contribution Invoice", entry.invoice)
+                        
+                        # Update status and close the invoice
+                        invoice.db_set("status", "Paid", update_modified=False)
+                        if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
                             invoice.db_set("is_closed", 1, update_modified=False)
-                        except Exception:
-                            pass  # Field might not exist yet
+                        else:
+                            # Try to set via custom field
+                            try:
+                                invoice.db_set("is_closed", 1, update_modified=False)
+                            except Exception:
+                                pass  # Field might not exist yet
+                        
+                        # Mark linked contribution as paid
+                        invoice.mark_linked_contribution_as_paid()
 
-                    frappe.db.commit()
-                    frappe.msgprint(f"✅ Invoice {invoice.name} marked as Paid and Closed")
+                        frappe.db.commit()
+                        frappe.msgprint(f"✅ Invoice {invoice.name} marked as Paid and Closed")
 
         except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Failed to update invoices after SHG Payment Entry submission")
+            frappe.log_error(frappe.get_traceback(), f"Failed to update invoices after SHG Payment Entry submission: {self.name}")
             frappe.throw("Failed to update related invoices. Please check system logs.")
 
     def reopen_linked_invoices(self):
         """Reopen SHG Contribution Invoices when payment entry is cancelled"""
         try:
+            # Safety check
+            if not self.name:
+                return
+                
             # Loop through allocated references in payment entry
             for entry in self.payment_entries:
                 if entry.invoice_type == "SHG Contribution Invoice" and entry.invoice:
-                    invoice = frappe.get_doc("SHG Contribution Invoice", entry.invoice)
-                    
-                    # Reopen the invoice
-                    invoice.db_set("status", "Unpaid", update_modified=False)
-                    if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
-                        invoice.db_set("is_closed", 0, update_modified=False)
-                    else:
-                        # Try to set via custom field
-                        try:
+                    # Safety check: ensure invoice exists
+                    if frappe.db.exists("SHG Contribution Invoice", entry.invoice):
+                        invoice = frappe.get_doc("SHG Contribution Invoice", entry.invoice)
+                        
+                        # Reopen the invoice
+                        invoice.db_set("status", "Unpaid", update_modified=False)
+                        if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
                             invoice.db_set("is_closed", 0, update_modified=False)
-                        except Exception:
-                            pass  # Field might not exist yet
+                        else:
+                            # Try to set via custom field
+                            try:
+                                invoice.db_set("is_closed", 0, update_modified=False)
+                            except Exception:
+                                pass  # Field might not exist yet
+                        
+                        # Reopen linked contribution
+                        invoice.reopen_linked_contribution()
 
-                    frappe.db.commit()
-                    frappe.msgprint(f"✅ Invoice {invoice.name} reopened")
+                        frappe.db.commit()
+                        frappe.msgprint(f"✅ Invoice {invoice.name} reopened")
 
         except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Failed to reopen invoices after SHG Payment Entry cancellation")
+            frappe.log_error(frappe.get_traceback(), f"Failed to reopen invoices after SHG Payment Entry cancellation: {self.name}")
             frappe.throw("Failed to reopen related invoices. Please check system logs.")
 
 # ----------------------
@@ -272,6 +290,14 @@ def update_invoice_status(invoice_name, paid_amount):
         paid_amount (float): Amount paid
     """
     try:
+        # Safety check
+        if not invoice_name:
+            return
+            
+        # Safety check: ensure invoice exists
+        if not frappe.db.exists("SHG Contribution Invoice", invoice_name):
+            return
+            
         # Get the invoice
         invoice = frappe.get_doc("SHG Contribution Invoice", invoice_name)
         
@@ -291,15 +317,21 @@ def update_invoice_status(invoice_name, paid_amount):
                 sales_invoice.db_set("status", "Paid")
                 # Auto-close the invoice
                 invoice.db_set("is_closed", 1)
+                # Mark linked contribution as paid
+                invoice.mark_linked_contribution_as_paid()
                 frappe.logger().info(f"Invoice {invoice_name} marked as closed after full payment")
             elif new_outstanding < sales_invoice.grand_total:
                 invoice.db_set("status", "Partially Paid")
                 # Also update the Sales Invoice status
                 sales_invoice.db_set("status", "Partially Paid")
+                # Reopen linked contribution if needed
+                invoice.reopen_linked_contribution()
             else:
                 invoice.db_set("status", "Unpaid")
                 # Also update the Sales Invoice status
                 sales_invoice.db_set("status", "Unpaid")
+                # Reopen linked contribution if needed
+                invoice.reopen_linked_contribution()
                 
         # Update member financial summary
         member = frappe.get_doc("SHG Member", invoice.member)
@@ -313,5 +345,5 @@ def update_invoice_status(invoice_name, paid_amount):
         invoice.reload()
         
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Update Invoice Status Failed")
+        frappe.log_error(frappe.get_traceback(), f"Update Invoice Status Failed for invoice {invoice_name}")
         frappe.throw(_("Failed to update invoice status: {0}").format(str(e)))
