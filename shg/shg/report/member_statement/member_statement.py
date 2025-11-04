@@ -92,17 +92,9 @@ def get_data(filters):
         LEFT JOIN (
             SELECT 
                 l.member,
-                SUM(l.loan_amount - COALESCE(repayments.total_repayment, 0)) as total_loan_balance,
+                SUM(l.loan_balance) as total_loan_balance,
                 SUM(CASE WHEN l.next_due_date < CURDATE() THEN l.balance_amount ELSE 0 END) as unpaid_loans
             FROM `tabSHG Loan` l
-            LEFT JOIN (
-                SELECT 
-                    loan,
-                    SUM(total_paid) as total_repayment
-                FROM `tabSHG Loan Repayment`
-                WHERE docstatus = 1
-                GROUP BY loan
-            ) repayments ON l.name = repayments.loan
             WHERE l.docstatus = 1 AND l.status IN ('Disbursed', 'Active') {date_condition_loans}
             GROUP BY l.member
         ) loans ON m.name = loans.member

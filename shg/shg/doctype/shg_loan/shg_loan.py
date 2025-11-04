@@ -5,8 +5,44 @@ from frappe.utils import today, add_months, flt, now_datetime, getdate, nowdate
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
 from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
 
+@frappe.whitelist()
+def get_loan_balance(loan_name):
+    """
+    Calculate loan balance by subtracting total principal repaid from loan amount.
+    
+    Args:
+        loan_name (str): Name of the SHG Loan document
+        
+    Returns:
+        float: Current loan balance
+    """
+    try:
+        # Fetch loan principal
+        loan = frappe.get_doc("SHG Loan", loan_name)
+        loan_amount = flt(loan.loan_amount)
+        
+        # Sum all principal repayments from submitted SHG Loan Repayment documents
+        total_principal_repaid = frappe.db.sql("""
+            SELECT COALESCE(SUM(rl.principal_amount), 0)
+            FROM `tabSHG Loan Repayment` rl
+            WHERE rl.loan = %s AND rl.docstatus = 1
+        """, loan_name)[0][0]
+        
+        # Calculate balance
+        balance = loan_amount - flt(total_principal_repaid)
+        return max(0, balance)  # Ensure non-negative balance
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"Failed to calculate loan balance for {loan_name}")
+        return 0.0
+
 class SHGLoan(Document):
     """SHG Loan controller with automatic ledger and repayment schedule posting."""
+
+    def onload(self):
+        """Populate loan_balance on document load."""
+        if self.name:
+            self.loan_balance = get_loan_balance(self.name)
 
     # ---------------------------------------------------
     # VALIDATION
@@ -299,6 +335,9 @@ class SHGLoan(Document):
         self.next_due_date = summary["next_due_date"]
         self.last_repayment_date = summary["last_repayment_date"]
         self.monthly_installment = flt(summary["monthly_installment"], 2)
+        
+        # Update loan balance
+        self.loan_balance = get_loan_balance(self.name)
         
         # Save the document
         self.save(ignore_permissions=True)

@@ -72,6 +72,10 @@ def refresh_repayment_summary(loan_name):
     loan.last_repayment_date = summary["last_repayment_date"]
     loan.monthly_installment = summary["monthly_installment"]
     
+    # Update loan balance
+    from shg.shg.doctype.shg_loan.shg_loan import get_loan_balance
+    loan.loan_balance = get_loan_balance(loan_name)
+    
     # Allow updates on submitted loans
     loan.flags.ignore_validate_update_after_submit = True
     loan.save(ignore_permissions=True)

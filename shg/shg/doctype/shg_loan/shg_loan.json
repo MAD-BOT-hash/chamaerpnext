@@ -42,6 +42,7 @@
         "total_payable",
         "column_break_17",
         "balance_amount",
+        "loan_balance",
         "last_repayment_date",
         "next_due_date",
         "total_repaid",
@@ -291,6 +292,14 @@
             "fieldname": "balance_amount",
             "fieldtype": "Currency",
             "label": "Balance Amount",
+            "precision": 2,
+            "read_only": 1,
+            "allow_on_submit": 1
+        },
+        {
+            "fieldname": "loan_balance",
+            "fieldtype": "Currency",
+            "label": "Loan Balance",
             "precision": 2,
             "read_only": 1,
             "allow_on_submit": 1

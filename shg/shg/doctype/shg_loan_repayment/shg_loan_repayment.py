@@ -172,6 +172,9 @@ class SHGLoanRepayment(Document):
         loan_doc.balance_amount = balance_amount
         loan_doc.overdue_amount = overdue_amount
         loan_doc.next_due_date = next_due_date
+        # Update loan balance
+        from shg.shg.doctype.shg_loan.shg_loan import get_loan_balance
+        loan_doc.loan_balance = get_loan_balance(loan_doc.name)
         loan_doc.save(ignore_permissions=True)
         frappe.db.commit()
 
