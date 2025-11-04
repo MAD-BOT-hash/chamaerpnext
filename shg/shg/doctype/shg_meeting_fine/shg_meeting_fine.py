@@ -114,8 +114,11 @@ class SHGMeetingFine(Document):
             from shg.shg.utils.account_utils import get_account
             member_account = get_account(self.company, "fines", self.member)
             
-            # Get customer for the member
+            # Get customer for the member with fallback
             customer = frappe.db.get_value("SHG Member", self.member, "customer")
+            if not customer:
+                # Fallback to member ID if no customer is linked
+                customer = self.member
             
             # Get fine income account
             income_account = get_account(self.company, "fines")
@@ -136,7 +139,9 @@ class SHGMeetingFine(Document):
                 "party": customer,
                 "debit_in_account_currency": self.fine_amount,
                 "credit_in_account_currency": 0,
-                "company": self.company
+                "company": self.company,
+                "reference_type": "SHG Meeting Fine",
+                "reference_name": self.name
             })
 
             # Credit: fines income account
@@ -144,7 +149,9 @@ class SHGMeetingFine(Document):
                 "account": income_account,
                 "debit_in_account_currency": 0,
                 "credit_in_account_currency": self.fine_amount,
-                "company": self.company
+                "company": self.company,
+                "reference_type": "SHG Meeting Fine",
+                "reference_name": self.name
             })
 
             je.insert(ignore_permissions=True)
@@ -186,13 +193,19 @@ class SHGMeetingFine(Document):
             frappe.throw(_(f"Failed to get member account: {str(e)}"))
         
     def get_member_customer(self):
-        """Get member's customer link"""
+        """Get member's customer link with fallback"""
         try:
             member = frappe.get_doc("SHG Member", self.member)
-            return member.customer
+            customer = member.customer
+            # Implement fallback logic as per specification
+            if not customer:
+                # Fallback to member ID if no customer is linked
+                customer = self.member
+            return customer
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), f"SHG Meeting Fine - Failed to get member customer for {self.member}")
-            frappe.throw(_(f"Failed to get member customer: {str(e)}"))
+            # Fallback to member ID if all else fails
+            return self.member
         
     @frappe.whitelist()
     def send_fine_notification(self):

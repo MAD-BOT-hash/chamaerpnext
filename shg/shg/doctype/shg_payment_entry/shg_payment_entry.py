@@ -132,11 +132,19 @@ class SHGPaymentEntry(Document):
             if not company:
                 frappe.throw(_("Company not set for this transaction"))
                 
-            # Get member account
-            member_account = fine.get_member_account()
+            # Get member account with auto-creation if needed
+            from shg.shg.utils.account_utils import get_or_create_member_account
+            member = frappe.get_doc("SHG Member", fine.member)
+            member_account = get_or_create_member_account(member, company)
             
             # Get fine income account
             fine_account = fine.get_fine_account(company)
+            
+            # Get member customer with fallback
+            member_customer = fine.get_member_customer()
+            if not member_customer:
+                # Fallback to member ID if no customer is linked
+                member_customer = fine.member
             
             # Create Journal Entry for the fine payment
             je = frappe.new_doc("Journal Entry")
@@ -151,7 +159,7 @@ class SHGPaymentEntry(Document):
                 "debit_in_account_currency": entry.amount,
                 "credit_in_account_currency": 0,
                 "party_type": "Customer",
-                "party": fine.get_member_customer(),
+                "party": member_customer,
                 "reference_type": "SHG Meeting Fine",
                 "reference_name": fine.name
             })
@@ -162,7 +170,7 @@ class SHGPaymentEntry(Document):
                 "debit_in_account_currency": 0,
                 "credit_in_account_currency": entry.amount,
                 "party_type": "Customer",
-                "party": fine.get_member_customer(),
+                "party": member_customer,
                 "reference_type": "SHG Meeting Fine",
                 "reference_name": fine.name
             })

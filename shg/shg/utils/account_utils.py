@@ -100,7 +100,13 @@ def get_account(company, account_type, member_id=None):
     # For member-level accounts
     if member_id:
         child_name = f"{member_id} - {company_abbr}"
-        if not frappe.db.exists("Account", {"account_name": child_name, "company": company}):
+        # Check if account already exists to prevent duplicates
+        existing_account = frappe.db.get_value("Account", {"account_name": child_name, "company": company})
+        if existing_account:
+            return existing_account
+            
+        # Create account if it doesn't exist
+        try:
             child = frappe.get_doc({
                 "doctype": "Account",
                 "account_name": child_name,
@@ -110,7 +116,11 @@ def get_account(company, account_type, member_id=None):
                 "is_group": 0
             })
             child.insert(ignore_permissions=True)
-        return frappe.db.get_value("Account", {"account_name": child_name, "company": company})
+            return child.name
+        except frappe.DuplicateEntryError:
+            # Handle race condition where account was created between check and insert
+            frappe.clear_last_message()
+            return frappe.db.get_value("Account", {"account_name": child_name, "company": company})
     
     return frappe.db.get_value("Account", {"account_name": parent, "company": company})
 
@@ -209,6 +219,14 @@ def get_or_create_shg_contributions_account(company):
     if not income_parent:
         income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": company}, "name")
     
+    # Check if account already exists to prevent duplicates
+    existing_account = frappe.db.get_value("Account", {
+        "account_name": "SHG Contributions",
+        "company": company
+    })
+    if existing_account:
+        return existing_account
+    
     return get_or_create_account(
         company,
         "SHG Contributions",
@@ -234,6 +252,14 @@ def get_or_create_shg_loans_account(company):
     loans_parent = frappe.db.get_value("Account", {"account_name": "Loans and Advances (Assets)", "company": company}, "name")
     if not loans_parent:
         loans_parent = frappe.db.get_value("Account", {"account_name": f"Loans and Advances (Assets) - {company_abbr}", "company": company}, "name")
+    
+    # Check if account already exists to prevent duplicates
+    existing_account = frappe.db.get_value("Account", {
+        "account_name": "Loans Disbursed",
+        "company": company
+    })
+    if existing_account:
+        return existing_account
     
     return get_or_create_account(
         company,
@@ -261,6 +287,14 @@ def get_or_create_shg_interest_income_account(company):
     if not income_parent:
         income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": company}, "name")
     
+    # Check if account already exists to prevent duplicates
+    existing_account = frappe.db.get_value("Account", {
+        "account_name": "SHG Interest Income",
+        "company": company
+    })
+    if existing_account:
+        return existing_account
+    
     return get_or_create_account(
         company,
         "SHG Interest Income",
@@ -287,6 +321,14 @@ def get_or_create_shg_penalty_income_account(company):
     if not income_parent:
         income_parent = frappe.db.get_value("Account", {"account_name": f"Income - {company_abbr}", "company": company}, "name")
     
+    # Check if account already exists to prevent duplicates
+    existing_account = frappe.db.get_value("Account", {
+        "account_name": "SHG Penalty Income",
+        "company": company
+    })
+    if existing_account:
+        return existing_account
+    
     return get_or_create_account(
         company,
         "SHG Penalty Income",
@@ -312,6 +354,14 @@ def get_or_create_shg_parent_account(company):
     ar_parent = frappe.db.get_value("Account", {"account_name": "Accounts Receivable", "company": company}, "name")
     if not ar_parent:
         ar_parent = frappe.db.get_value("Account", {"account_name": f"Accounts Receivable - {company_abbr}", "company": company}, "name")
+    
+    # Check if account already exists to prevent duplicates
+    existing_account = frappe.db.get_value("Account", {
+        "account_name": "SHG Members",
+        "company": company
+    })
+    if existing_account:
+        return existing_account
     
     return get_or_create_account(
         company,
