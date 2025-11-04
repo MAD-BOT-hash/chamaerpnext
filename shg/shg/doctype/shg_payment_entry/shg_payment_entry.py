@@ -159,9 +159,7 @@ class SHGPaymentEntry(Document):
                 "debit_in_account_currency": entry.amount,
                 "credit_in_account_currency": 0,
                 "party_type": "Customer",
-                "party": member_customer,
-                "reference_type": "Journal Entry",
-                "reference_name": fine.name
+                "party": member_customer
             })
             
             # Credit: Member Account
@@ -170,9 +168,7 @@ class SHGPaymentEntry(Document):
                 "debit_in_account_currency": 0,
                 "credit_in_account_currency": entry.amount,
                 "party_type": "Customer",
-                "party": member_customer,
-                "reference_type": "Journal Entry",
-                "reference_name": fine.name
+                "party": member_customer
             })
             
             je.flags.ignore_mandatory = True

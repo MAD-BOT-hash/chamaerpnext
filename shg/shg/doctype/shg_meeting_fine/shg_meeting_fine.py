@@ -139,9 +139,7 @@ class SHGMeetingFine(Document):
                 "party": customer,
                 "debit_in_account_currency": self.fine_amount,
                 "credit_in_account_currency": 0,
-                "company": self.company,
-                "reference_type": "Journal Entry",
-                "reference_name": self.name
+                "company": self.company
             })
 
             # Credit: fines income account
@@ -149,9 +147,7 @@ class SHGMeetingFine(Document):
                 "account": income_account,
                 "debit_in_account_currency": 0,
                 "credit_in_account_currency": self.fine_amount,
-                "company": self.company,
-                "reference_type": "Journal Entry",
-                "reference_name": self.name
+                "company": self.company
             })
 
             je.insert(ignore_permissions=True)
