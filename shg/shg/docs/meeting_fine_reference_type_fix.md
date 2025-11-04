@@ -2,7 +2,7 @@
 
 ## Overview
 
-This implementation fixes the Journal Entry "Reference Type" validation for SHG Meeting Fine and addresses related issues with duplicate account creation and missing link validations.
+This implementation fixes the Journal Entry "Reference Type" validation for SHG Meeting Fine by using the correct ERPNext v15 approach and addresses related issues with duplicate account creation and missing link validations.
 
 ## Changes Made
 
@@ -10,8 +10,9 @@ This implementation fixes the Journal Entry "Reference Type" validation for SHG 
 
 **File: [validation_utils.py](file:///c:/Users/user/Downloads/shg-erpnext/shg/shg/utils/validation_utils.py)**
 
-- Added "SHG Meeting Fine" to the list of valid reference types in Journal Entry and Payment Entry accounts
-- This allows SHG Meeting Fine documents to be properly linked to accounting entries without validation errors
+- Removed "SHG Meeting Fine" from the list of valid reference types (not needed)
+- Updated implementation to use "Journal Entry" as reference_type with SHG Meeting Fine name in reference_name
+- This complies with ERPNext v15 validation rules while maintaining traceability
 
 ### 2. Duplicate Account Prevention
 
@@ -69,7 +70,7 @@ This implementation fixes the Journal Entry "Reference Type" validation for SHG 
 
 ## Key Features
 
-1. **Reference Type Support**: SHG Meeting Fine is now a valid reference type in Journal Entry accounts
+1. **ERPNext v15 Compliance**: Uses "Journal Entry" as reference_type with SHG Meeting Fine name in reference_name
 2. **Duplicate Prevention**: Account creation functions now check for existing accounts before creating new ones
 3. **Customer Fallback**: Proper fallback logic ensures party information is always available
 4. **Validation Compliance**: All accounting entries pass ERPNext v15 validation requirements

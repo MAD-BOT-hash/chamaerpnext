@@ -14,8 +14,7 @@ def validate_reference_types_and_names(doc):
         "", "Sales Invoice", "Purchase Invoice", "Journal Entry", "Sales Order",
         "Purchase Order", "Expense Claim", "Asset", "Loan", "Payroll Entry",
         "Employee Advance", "Exchange Rate Revaluation", "Invoice Discounting",
-        "Fees", "Full and Final Statement", "Payment Entry", "Loan Interest Accrual",
-        "SHG Meeting Fine"
+        "Fees", "Full and Final Statement", "Payment Entry", "Loan Interest Accrual"
     ]
     
     # Check Journal Entry if it exists

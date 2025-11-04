@@ -160,7 +160,7 @@ class SHGPaymentEntry(Document):
                 "credit_in_account_currency": 0,
                 "party_type": "Customer",
                 "party": member_customer,
-                "reference_type": "SHG Meeting Fine",
+                "reference_type": "Journal Entry",
                 "reference_name": fine.name
             })
             
@@ -171,7 +171,7 @@ class SHGPaymentEntry(Document):
                 "credit_in_account_currency": entry.amount,
                 "party_type": "Customer",
                 "party": member_customer,
-                "reference_type": "SHG Meeting Fine",
+                "reference_type": "Journal Entry",
                 "reference_name": fine.name
             })
             

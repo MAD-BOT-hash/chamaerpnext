@@ -140,7 +140,7 @@ class SHGMeetingFine(Document):
                 "debit_in_account_currency": self.fine_amount,
                 "credit_in_account_currency": 0,
                 "company": self.company,
-                "reference_type": "SHG Meeting Fine",
+                "reference_type": "Journal Entry",
                 "reference_name": self.name
             })
 
@@ -150,7 +150,7 @@ class SHGMeetingFine(Document):
                 "debit_in_account_currency": 0,
                 "credit_in_account_currency": self.fine_amount,
                 "company": self.company,
-                "reference_type": "SHG Meeting Fine",
+                "reference_type": "Journal Entry",
                 "reference_name": self.name
             })
 
