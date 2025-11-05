@@ -1,39 +1,17 @@
 import frappe
+from frappe.database.schema import add_column
 
 def execute():
-    """Add loan_balance field to SHG Loan doctype."""
-    # This patch ensures the loan_balance field is properly added to the SHG Loan doctype
-    # The field should have been added via the JSON file, but this ensures it exists
+    """Add loan_balance field to SHG Loan doctype if it doesn't exist."""
     
-    try:
-        # Check if the field already exists
-        existing_field = frappe.db.exists("DocField", {
-            "parent": "SHG Loan",
-            "fieldname": "loan_balance"
-        })
-        
-        if not existing_field:
-            # Add the field if it doesn't exist
-            frappe.get_doc({
-                "doctype": "DocField",
-                "parent": "SHG Loan",
-                "parenttype": "DocType",
-                "parentfield": "fields",
-                "fieldname": "loan_balance",
-                "fieldtype": "Currency",
-                "label": "Loan Balance",
-                "precision": 2,
-                "read_only": 1,
-                "allow_on_submit": 1
-            }).insert(ignore_permissions=True)
-            
-            frappe.msgprint("Added loan_balance field to SHG Loan doctype")
-        else:
-            frappe.msgprint("loan_balance field already exists in SHG Loan doctype")
-            
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Failed to add loan_balance field to SHG Loan doctype")
-        
+    # Check if loan_balance column exists in the database
+    if not frappe.db.has_column("SHG Loan", "loan_balance"):
+        # Add the column to the database table
+        add_column("SHG Loan", "loan_balance", "Currency", precision=2)
+        frappe.logger().info("Added loan_balance column to SHG Loan doctype")
+    
+    frappe.db.commit()
+
     # Update existing loans to populate the loan_balance field
     try:
         loans = frappe.get_all("SHG Loan", filters={"docstatus": 1})
