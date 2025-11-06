@@ -65,8 +65,10 @@ frappe.ui.form.on("SHG Loan", {
         if (frm.doc.docstatus === 0 && frm.doc.loan_members) {
             frm.add_custom_button(__("Get Active Members"), function() {
                 frappe.call({
-                    method: "shg.shg.doctype.shg_loan.shg_loan.get_active_group_members",
-                    doc: frm.doc,
+                    method: 'shg.shg.doctype.shg_loan.shg_loan.get_active_group_members',
+                    args: {
+                        loan_name: frm.doc.name
+                    },
                     callback: function(r) {
                         if (r.message) {
                             // Clear existing loan members

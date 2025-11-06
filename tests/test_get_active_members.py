@@ -64,8 +64,9 @@ class TestGetActiveMembers(unittest.TestCase):
         })
         loan.insert(ignore_permissions=True)
         
-        # Call the get_active_group_members method
-        active_members = loan.get_active_group_members()
+        # Call the get_active_group_members function
+        from shg.shg.doctype.shg_loan.shg_loan import get_active_group_members
+        active_members = get_active_group_members(loan.name)
         
         # Check that we get the right number of members (3 active, 1 inactive)
         self.assertEqual(len(active_members), 3)
@@ -103,8 +104,9 @@ class TestGetActiveMembers(unittest.TestCase):
         })
         loan.insert(ignore_permissions=True)
         
-        # Call the get_active_group_members method
-        active_members = loan.get_active_group_members()
+        # Call the get_active_group_members function
+        from shg.shg.doctype.shg_loan.shg_loan import get_active_group_members
+        active_members = get_active_group_members(loan.name)
         
         # Simulate adding members to the loan_members table
         loan.loan_members = []
