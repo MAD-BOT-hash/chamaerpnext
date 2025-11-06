@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from frappe.utils import getdate
 
 def _schedule_fieldname():
     """Find the schedule child table field on SHG Loan (defaults to 'repayment_schedule')."""
@@ -41,12 +42,12 @@ def compute_inline_totals(loan):
     overdue = 0
     outstanding = 0
 
-    today = frappe.utils.today()
+    today = getdate()
 
     for row in doc.get(grid) or []:
         rem = _row_remaining(row)
         outstanding += rem
-        if row.due_date and row.due_date < today and rem > 0:
+        if row.due_date and getdate(row.due_date) < today and rem > 0:
             overdue += rem
         if int(row.pay_now or 0) == 1 and (row.amount_to_pay or 0) > 0:
             selected_to_pay += min(float(row.amount_to_pay), float(rem))
@@ -105,12 +106,12 @@ def _recompute_loan_totals(doc, grid):
     total_due_all = 0.0
     total_paid_all = 0.0
     overdue = 0.0
-    today = frappe.utils.today()
+    today = getdate()
 
     for r in doc.get(grid) or []:
         total_due_all += float(r.total_payment or 0)
         total_paid_all += float(r.amount_paid or 0)
-        if r.due_date and r.due_date < today:
+        if r.due_date and getdate(r.due_date) < today:
             remaining = _row_remaining(r)
             overdue += max(remaining, 0)
 
