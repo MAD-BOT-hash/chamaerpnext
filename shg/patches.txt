@@ -49,3 +49,4 @@ shg.shg.patches.fix_repayment_balance_calculation
 shg.shg.patches.fix_loan_balance_calculations
 shg.shg.patches.add_missing_balance_fields
 shg.shg.patches.recompute_loan_summaries_emi
+shg.shg.patches.add_inline_repayment_fields
