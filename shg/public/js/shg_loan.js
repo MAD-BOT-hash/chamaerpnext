@@ -43,7 +43,7 @@ frappe.ui.form.on("SHG Loan Repayment Schedule", {
 
 function compute_inline_totals_on_row(frm, cdt, cdn) {
   const row = locals[cdt][cdn];
-  const remaining = flt(row.total_payment) - flt(row.paid_amount);
+  const remaining = flt(row.total_payment) - flt(row.amount_paid);
   row.remaining_amount = remaining > 0 ? remaining : 0;
   cur_frm.refresh_field("repayment_schedule");
   compute_inline_totals(cur_frm);

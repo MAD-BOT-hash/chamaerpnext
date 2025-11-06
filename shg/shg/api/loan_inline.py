@@ -11,7 +11,7 @@ def _schedule_fieldname():
 
 def _row_remaining(row):
     total = (row.total_payment or 0)  # expected EMI for the row
-    paid  = (row.paid_amount or 0)
+    paid  = (row.amount_paid or 0)
     return max(total - paid, 0)
 
 @frappe.whitelist()
@@ -62,7 +62,7 @@ def post_inline_repayments(loan):
     """
     Apply selected partial payments against schedule rows.
     - Validates not exceeding per-row remaining.
-    - Updates paid_amount & status.
+    - Updates amount_paid & status.
     - Auto-closes rows when fully paid.
     - Recomputes loan-level aggregates (Total Repaid / Balance / Overdue).
     NOTE: Hook your GL/Payment Entry creation here if needed.
@@ -84,7 +84,7 @@ def post_inline_repayments(loan):
                 frappe.utils.fmt_money(amt), frappe.utils.fmt_money(remaining), (row.idx or "")
             ))
 
-        row.paid_amount = float(row.paid_amount or 0) + amt
+        row.amount_paid = float(row.amount_paid or 0) + amt
         new_remaining = _row_remaining(row)
         row.status = "Paid" if new_remaining <= 1e-9 else "Partly Paid"
         row.remaining_amount = new_remaining
@@ -109,7 +109,7 @@ def _recompute_loan_totals(doc, grid):
 
     for r in doc.get(grid) or []:
         total_due_all += float(r.total_payment or 0)
-        total_paid_all += float(r.paid_amount or 0)
+        total_paid_all += float(r.amount_paid or 0)
         if r.due_date and r.due_date < today:
             remaining = _row_remaining(r)
             overdue += max(remaining, 0)
