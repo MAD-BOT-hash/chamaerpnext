@@ -1,69 +1,32 @@
 frappe.ui.form.on("SHG Loan", {
-  refresh(frm) {
-    // Button: Pull Unpaid
-    frm.add_custom_button("Pull Unpaid Installments", async () => {
-      await frappe.call({
-        method: "shg.shg.api.loan_inline.pull_unpaid_installments",
-        args: { loan: frm.doc.name },
-        callback: (r) => {
-          frappe.show_alert({ message: `Unpaid installments fetched: ${r.message.count}`, indicator: "green" });
-          frm.reload_doc();
-        }
-      });
-    });
-
-    // Button: Post Selected Payments
-    frm.add_custom_button("Post Selected Payments", async () => {
-      await frappe.call({
-        method: "shg.shg.api.loan_inline.post_inline_repayments",
-        args: { loan: frm.doc.name },
-        callback: (r) => {
-          frappe.msgprint({
-            title: "Inline Repayments Posted",
-            message: `Rows posted: ${r.message.posted_rows}`,
-            indicator: "green"
-          });
-          frm.reload_doc();
-        }
-      });
-    });
-  },
-
-  // Recompute totals whenever the doc loads (nice first view)
-  onload_post_render(frm) {
-    compute_inline_totals(frm);
-  }
-});
-
-// Live totals when editing the schedule grid
-frappe.ui.form.on("SHG Loan Repayment Schedule", {
-  pay_now: compute_inline_totals_on_row,
-  amount_to_pay: compute_inline_totals_on_row
-});
-
-function compute_inline_totals_on_row(frm, cdt, cdn) {
-  const row = locals[cdt][cdn];
-  const remaining = flt(row.total_payment) - flt(row.amount_paid);
-  row.remaining_amount = remaining > 0 ? remaining : 0;
-  cur_frm.refresh_field("repayment_schedule");
-  compute_inline_totals(cur_frm);
-}
-
-function compute_inline_totals(frm) {
-  if (!frm || frm.is_new()) return;
-  frappe.call({
-    method: "shg.shg.api.loan_inline.compute_inline_totals",
-    freeze: false,
-    args: { loan: frm.doc.name },
-    callback: (r) => {
-      const m = r.message || {};
-      frm.set_value("inline_total_selected", m.selected || 0);
-      frm.set_value("inline_overdue", m.overdue || 0);
-      frm.set_value("inline_outstanding", m.outstanding || 0);
-      frm.refresh_fields(["inline_total_selected", "inline_overdue", "inline_outstanding"]);
+    refresh: function(frm) {
+        // Add "Pull Unpaid Installments" button
+        frm.add_custom_button(__("Pull Unpaid Installments"), function() {
+            pull_unpaid_installments(frm);
+        });
+        
+        // Add "Apply Payments" button
+        frm.add_custom_button(__("Apply Payments"), function() {
+            apply_inline_repayments(frm);
+        });
+        
+        // Keep the existing "📊 Recalculate Loan Summary (SHG)" button
+        frm.add_custom_button(__("📊 Recalculate Loan Summary (SHG)"), function() {
+            frappe.call({
+                method: "shg.shg.doctype.shg_loan.shg_loan.refresh_repayment_summary_endpoint",
+                args: {
+                    loan_name: frm.doc.name
+                },
+                callback: function(r) {
+                    if (r.message) {
+                        frappe.show_alert(__("Loan summary recalculated successfully"));
+                        frm.reload_doc();
+                    }
+                }
+            });
+        });
     }
-  });
-}
+});
 
 // Handle changes in the repayment schedule table
 frappe.ui.form.on('SHG Loan Repayment Schedule', {
@@ -72,6 +35,13 @@ frappe.ui.form.on('SHG Loan Repayment Schedule', {
     },
     
     amount_to_pay: function(frm, cdt, cdn) {
+        const row = locals[cdt][cdn];
+        // Validate that amount_to_pay doesn't exceed remaining amount
+        if (flt(row.amount_to_pay) > flt(row.remaining_amount)) {
+            frappe.msgprint(__("Amount to pay cannot exceed remaining amount"));
+            row.amount_to_pay = row.remaining_amount;
+            frm.refresh_field("repayment_schedule");
+        }
         compute_and_update_totals(frm);
     }
 });
@@ -79,12 +49,12 @@ frappe.ui.form.on('SHG Loan Repayment Schedule', {
 // Function to pull unpaid installments
 function pull_unpaid_installments(frm) {
     if (!frm.doc.name) {
-        frappe.msgprint(__('Please save the loan first.'));
+        frappe.msgprint(__("Please save the loan first."));
         return;
     }
     
     frappe.call({
-        method: 'shg.shg.api.loan_inline.pull_unpaid_installments',
+        method: "shg.shg.doctype.shg_loan.shg_loan.pull_unpaid_installments",
         args: {
             loan_name: frm.doc.name
         },
@@ -111,7 +81,7 @@ function pull_unpaid_installments(frm) {
                 });
                 
                 frm.refresh_field('repayment_schedule');
-                frappe.show_alert(__('Unpaid installments pulled successfully'));
+                frappe.show_alert(__("Unpaid installments pulled successfully"));
                 
                 // Compute and update totals
                 compute_and_update_totals(frm);
@@ -120,10 +90,10 @@ function pull_unpaid_installments(frm) {
     });
 }
 
-// Function to post selected payments
-function post_selected_payments(frm) {
+// Function to apply inline repayments
+function apply_inline_repayments(frm) {
     if (!frm.doc.name) {
-        frappe.msgprint(__('Please save the loan first.'));
+        frappe.msgprint(__("Please save the loan first."));
         return;
     }
     
@@ -134,7 +104,7 @@ function post_selected_payments(frm) {
     (frm.doc.repayment_schedule || []).forEach(function(row) {
         if (row.pay_now && flt(row.amount_to_pay) > 0) {
             repayments.push({
-                schedule_row_id: row.name,
+                rowname: row.name,
                 amount_to_pay: flt(row.amount_to_pay)
             });
             total_selected += flt(row.amount_to_pay);
@@ -142,27 +112,28 @@ function post_selected_payments(frm) {
     });
     
     if (repayments.length === 0) {
-        frappe.msgprint(__('Please select at least one installment and enter amount to pay.'));
+        frappe.msgprint(__("Please select at least one installment and enter amount to pay."));
         return;
     }
     
     // Confirm before posting
     frappe.confirm(
-        __('Are you sure you want to post payments totaling {0}?', [format_currency(total_selected)]),
+        __("Are you sure you want to post payments totaling {0}?", [format_currency(total_selected)]),
         function() {
             // User clicked "Yes"
             frappe.call({
-                method: 'shg.shg.api.loan_inline.post_inline_repayments',
+                method: "shg.shg.doctype.shg_loan.shg_loan.apply_inline_repayments",
                 args: {
                     loan_name: frm.doc.name,
-                    repayments: repayments
+                    allocations: repayments,
+                    posting_date: frappe.datetime.get_today()
                 },
                 callback: function(r) {
-                    if (r.message && r.message.status === 'success') {
+                    if (r.message && r.message.status === "success") {
                         frappe.show_alert(r.message.message);
                         frm.reload_doc();
                     } else {
-                        frappe.msgprint(__('Failed to post payments'));
+                        frappe.msgprint(__("Failed to post payments"));
                     }
                 }
             });
@@ -189,20 +160,20 @@ function compute_and_update_totals(frm) {
         
         // Check if overdue
         if (row.due_date && row.due_date < today && 
-            row.status !== 'Paid' && flt(row.unpaid_balance) > 0) {
+            row.status !== "Paid" && flt(row.unpaid_balance) > 0) {
             overdue_amount += flt(row.unpaid_balance);
         }
     });
     
     // Update parent document fields
-    frm.set_value('inline_total_selected', total_selected);
-    frm.set_value('inline_overdue', overdue_amount);
-    frm.set_value('inline_outstanding', outstanding_amount);
+    frm.set_value("inline_total_selected", total_selected);
+    frm.set_value("inline_overdue", overdue_amount);
+    frm.set_value("inline_outstanding", outstanding_amount);
     
     // Refresh the fields
-    frm.refresh_field('inline_total_selected');
-    frm.refresh_field('inline_overdue');
-    frm.refresh_field('inline_outstanding');
+    frm.refresh_field("inline_total_selected");
+    frm.refresh_field("inline_overdue");
+    frm.refresh_field("inline_outstanding");
     
     // Update EMI breakdown HTML
     update_emi_breakdown(frm, total_selected, overdue_amount, outstanding_amount);
@@ -228,11 +199,11 @@ function update_emi_breakdown(frm, total_selected, overdue_amount, outstanding_a
         </div>
     `;
     
-    frm.set_value('emi_breakdown', html);
-    frm.refresh_field('emi_breakdown');
+    frm.set_value("emi_breakdown", html);
+    frm.refresh_field("emi_breakdown");
 }
 
 // Helper function to format currency
 function format_currency(amount) {
-    return frappe.format(amount, {fieldtype: 'Currency', options: 'KES'});
+    return frappe.format(amount, {fieldtype: "Currency", options: "KES"});
 }

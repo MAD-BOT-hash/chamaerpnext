@@ -35,6 +35,12 @@ def get_columns():
             "width": 120
         },
         {
+            "label": _("Total Interest Payable"),
+            "fieldname": "total_interest_payable",
+            "fieldtype": "Currency",
+            "width": 120
+        },
+        {
             "label": _("Total Payable"),
             "fieldname": "total_payable",
             "fieldtype": "Currency",
@@ -49,6 +55,12 @@ def get_columns():
         {
             "label": _("Outstanding Balance"),
             "fieldname": "outstanding_balance",
+            "fieldtype": "Currency",
+            "width": 120
+        },
+        {
+            "label": _("Overdue Amount"),
+            "fieldname": "overdue_amount",
             "fieldtype": "Currency",
             "width": 120
         },
@@ -106,9 +118,11 @@ def get_data(filters):
             l.name as loan_id,
             l.disbursement_date,
             l.loan_amount,
+            l.total_interest_payable,
             l.total_payable,
             l.total_repaid as total_paid,
             l.balance_amount as outstanding_balance,
+            l.overdue_amount,
             l.interest_rate,
             l.loan_period_months,
             l.status,

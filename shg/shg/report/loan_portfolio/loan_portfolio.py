@@ -36,6 +36,12 @@ def get_columns():
             "width": 120
         },
         {
+            "label": _("Total Interest Payable"),
+            "fieldname": "total_interest_payable",
+            "fieldtype": "Currency",
+            "width": 120
+        },
+        {
             "label": _("Total Payable"),
             "fieldname": "total_payable",
             "fieldtype": "Currency",
@@ -58,6 +64,12 @@ def get_columns():
             "fieldname": "overdue",
             "fieldtype": "Currency",
             "width": 120
+        },
+        {
+            "label": _("Paid %"),
+            "fieldname": "paid_percentage",
+            "fieldtype": "Percent",
+            "width": 100
         },
         {
             "label": _("Interest Rate (%)"),
@@ -117,6 +129,7 @@ def get_data(filters):
             l.member,
             l.member_name,
             l.loan_amount,
+            l.total_interest_payable,
             l.total_payable,
             l.total_repaid as paid_to_date,
             l.balance_amount as outstanding,
@@ -124,6 +137,10 @@ def get_data(filters):
                 WHEN l.next_due_date < %(today)s AND l.balance_amount > 0 THEN l.overdue_amount
                 ELSE 0
             END as overdue,
+            CASE 
+                WHEN l.total_payable > 0 THEN (l.total_repaid / l.total_payable) * 100
+                ELSE 0
+            END as paid_percentage,
             l.interest_rate,
             l.loan_period_months,
             l.status,

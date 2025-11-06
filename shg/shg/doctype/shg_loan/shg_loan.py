@@ -4,6 +4,7 @@ from frappe.model.document import Document
 from frappe.utils import today, add_months, flt, now_datetime, getdate, nowdate
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
 from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
+from shg.shg.loan.services import get_unpaid_rows, allocate_payment, post_payment_entries, refresh_repayment_summary
 
 @frappe.whitelist()
 def get_loan_balance(loan_name):
@@ -258,6 +259,73 @@ def get_active_group_members(loan_name):
         }
         for m in active_members
     ]
+
+@frappe.whitelist()
+def pull_unpaid_installments(loan_name):
+    """
+    Pull unpaid installments for inline repayment.
+    
+    Args:
+        loan_name (str): Name of the SHG Loan document
+        
+    Returns:
+        list: List of unpaid schedule rows
+    """
+    return get_unpaid_rows(loan_name)
+
+@frappe.whitelist()
+def apply_inline_repayments(loan_name, allocations, posting_date=None):
+    """
+    Apply inline repayments to schedule rows.
+    
+    Args:
+        loan_name (str): Name of the SHG Loan document
+        allocations (list): List of {rowname, amount_to_pay}
+        posting_date (str): Posting date for the payment
+        
+    Returns:
+        dict: Result of the allocation
+    """
+    try:
+        # Allocate payments
+        allocation_result = allocate_payment(loan_name, allocations, posting_date)
+        
+        if allocation_result.get("status") == "success":
+            # Post payment entries
+            posting_plan = allocation_result.get("posting_plan")
+            post_result = post_payment_entries(loan_name, posting_plan)
+            
+            # Refresh loan summary
+            refresh_repayment_summary(loan_name)
+            
+            # Reload and return updated loan document
+            loan_doc = frappe.get_doc("SHG Loan", loan_name)
+            loan_doc.reload()
+            
+            return {
+                "status": "success",
+                "message": allocation_result.get("message"),
+                "loan": loan_doc.as_dict()
+            }
+        else:
+            return allocation_result
+            
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"Failed to apply inline repayments for {loan_name}")
+        frappe.throw(_("Failed to apply inline repayments: {0}").format(str(e)))
+
+@frappe.whitelist()
+def refresh_repayment_summary_endpoint(loan_name):
+    """
+    Refresh repayment summary endpoint for the client script.
+    
+    Args:
+        loan_name (str): Name of the SHG Loan document
+        
+    Returns:
+        dict: Updated loan summary
+    """
+    return refresh_repayment_summary(loan_name)
 
 
 class SHGLoan(Document):

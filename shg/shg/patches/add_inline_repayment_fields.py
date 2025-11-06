@@ -2,7 +2,10 @@ import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_field
 
 def execute():
-    """Add inline repayment fields to SHG Loan Repayment Schedule and SHG Loan."""
+    """
+    Add inline repayment fields to SHG Loan Repayment Schedule.
+    These fields enable the inline repayment workflow.
+    """
     
     # Fields for SHG Loan Repayment Schedule child table
     schedule_fields = [
@@ -11,14 +14,16 @@ def execute():
             "label": "Pay Now",
             "fieldtype": "Check",
             "insert_after": "status",
-            "allow_on_submit": 1
+            "allow_on_submit": 1,
+            "owner": "Administrator"
         },
         {
             "fieldname": "amount_to_pay",
             "label": "Amount to Pay",
             "fieldtype": "Currency",
             "insert_after": "pay_now",
-            "allow_on_submit": 1
+            "allow_on_submit": 1,
+            "owner": "Administrator"
         },
         {
             "fieldname": "remaining_amount",
@@ -26,16 +31,17 @@ def execute():
             "fieldtype": "Currency",
             "insert_after": "amount_to_pay",
             "read_only": 1,
-            "allow_on_submit": 1
+            "allow_on_submit": 1,
+            "owner": "Administrator"
         }
     ]
     
     # Add fields to SHG Loan Repayment Schedule
     for field in schedule_fields:
-        field_copy = field.copy()
-        if not frappe.db.exists("Custom Field", {"dt": "SHG Loan Repayment Schedule", "fieldname": field_copy["fieldname"]}):
-            create_custom_field("SHG Loan Repayment Schedule", field_copy)
-            frappe.msgprint(f"Added field {field_copy['fieldname']} to SHG Loan Repayment Schedule")
+        # Check if field already exists
+        if not frappe.db.exists("Custom Field", {"dt": "SHG Loan Repayment Schedule", "fieldname": field["fieldname"]}):
+            create_custom_field("SHG Loan Repayment Schedule", field)
+            frappe.msgprint(f"Added field {field['fieldname']} to SHG Loan Repayment Schedule")
     
     # Fields for SHG Loan parent document
     loan_fields = [
