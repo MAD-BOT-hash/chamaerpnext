@@ -1,0 +1,66 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2025-11-06 10:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "installment_no",
+  "old_status",
+  "new_status",
+  "old_paid",
+  "new_paid",
+  "modified_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "installment_no",
+   "fieldtype": "Int",
+   "label": "Installment No",
+   "reqd": 1
+  },
+  {
+   "fieldname": "old_status",
+   "fieldtype": "Data",
+   "label": "Old Status",
+   "reqd": 1
+  },
+  {
+   "fieldname": "new_status",
+   "fieldtype": "Data",
+   "label": "New Status",
+   "reqd": 1
+  },
+  {
+   "fieldname": "old_paid",
+   "fieldtype": "Currency",
+   "label": "Old Paid Amount",
+   "precision": 2
+  },
+  {
+   "fieldname": "new_paid",
+   "fieldtype": "Currency",
+   "label": "New Paid Amount",
+   "precision": 2
+  },
+  {
+   "fieldname": "modified_on",
+   "fieldtype": "Datetime",
+   "label": "Modified On",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-11-06 10:00:00",
+ "modified_by": "Administrator",
+ "module": "SHG",
+ "name": "Repayment Adjustment Log",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

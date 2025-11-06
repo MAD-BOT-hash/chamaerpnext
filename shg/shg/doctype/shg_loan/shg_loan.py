@@ -432,8 +432,56 @@ class SHGLoan(Document):
         schedule = self.get("repayment_schedule") or frappe.get_all(
             "SHG Loan Repayment Schedule",
             filters={"parent": self.name},
-            fields=["principal_component", "interest_component", "amount_paid", "unpaid_balance", "due_date", "status"]
+            fields=["principal_component", "interest_component", "amount_paid", "unpaid_balance", "due_date", "status", "total_payment", "installment_no", "name"]
         )
+        
+        now = frappe.utils.nowdate()
+        log_entries = []
+        
+        # Clear existing log entries
+        self.set("repayment_adjustment_log", [])
+        
+        # Update repayment schedule statuses
+        for r in schedule:
+            old_status = getattr(r, "status", "")
+            old_paid = flt(getattr(r, "amount_paid", 0))
+            total_payment = flt(getattr(r, "total_payment", 0))
+            
+            # Update status based on paid amounts and due date
+            if flt(getattr(r, "amount_paid", 0)) >= total_payment:
+                r.status = "Paid"
+                r.unpaid_balance = 0
+            elif 0 < flt(getattr(r, "amount_paid", 0)) < total_payment:
+                r.status = "Partially Paid"
+                r.unpaid_balance = total_payment - flt(getattr(r, "amount_paid", 0))
+            elif getattr(r, "due_date") and getdate(getattr(r, "due_date")) < getdate(now):
+                r.status = "Overdue"
+                r.unpaid_balance = total_payment
+            else:
+                r.status = "Unpaid"
+                r.unpaid_balance = total_payment
+                
+            # Log changes
+            if old_status != getattr(r, "status", "") or old_paid != flt(getattr(r, "amount_paid", 0)):
+                log_entry = {
+                    "installment_no": getattr(r, "installment_no", 0),
+                    "old_status": old_status,
+                    "new_status": getattr(r, "status", ""),
+                    "old_paid": old_paid,
+                    "new_paid": flt(getattr(r, "amount_paid", 0)),
+                    "modified_on": frappe.utils.now_datetime()
+                }
+                log_entries.append(log_entry)
+                
+                # Add to child table
+                self.append("repayment_adjustment_log", log_entry)
+        
+        # Update schedule in document if it's a child table
+        if self.get("repayment_schedule"):
+            for i, row in enumerate(self.get("repayment_schedule")):
+                if i < len(schedule):
+                    row.status = schedule[i].status
+                    row.unpaid_balance = schedule[i].unpaid_balance
         
         # Calculate totals
         self.total_principal_payable = sum(flt(r.get("principal_component", 0)) for r in schedule)
@@ -459,6 +507,8 @@ class SHGLoan(Document):
             self.loan_status = "Overdue"
         else:
             self.loan_status = "Active"
+            
+        return log_entries
 
     # ---------------------------------------------------
     # GROUP LOAN LOGIC

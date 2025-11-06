@@ -16,9 +16,15 @@ frappe.ui.form.on("SHG Loan", {
                 method: "shg.shg.doctype.shg_loan.shg_loan.recalculate_loan_summary",
                 args: { loan_name: frm.doc.name },
                 callback: function (r) {
-                    if (r.message) {
-                        frappe.show_alert(__("Loan summary recalculated successfully"));
-                        frm.reload_doc();
+                    frm.reload_doc();
+                    if (r.message && r.message.length > 0) {
+                        frappe.msgprint({
+                            title: __("Repayment Status Updated"),
+                            message: `Adjusted ${r.message.length} installment(s).`,
+                            indicator: "green"
+                        });
+                    } else {
+                        frappe.msgprint(__("No changes found."));
                     }
                 }
             });
