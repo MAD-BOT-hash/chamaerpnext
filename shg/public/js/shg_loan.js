@@ -10,21 +10,19 @@ frappe.ui.form.on("SHG Loan", {
             apply_inline_repayments(frm);
         });
         
-        // Keep the existing "📊 Recalculate Loan Summary (SHG)" button
-        frm.add_custom_button(__("📊 Recalculate Loan Summary (SHG)"), function() {
+        // Add "🔄 Recalculate Loan Summary (SHG)" button (visible even after submit)
+        frm.add_custom_button("🔄 Recalculate Loan Summary (SHG)", function () {
             frappe.call({
-                method: "shg.shg.doctype.shg_loan.shg_loan.refresh_repayment_summary_endpoint",
-                args: {
-                    loan_name: frm.doc.name
-                },
-                callback: function(r) {
+                method: "shg.shg.doctype.shg_loan.shg_loan.recalculate_loan_summary",
+                args: { loan_name: frm.doc.name },
+                callback: function (r) {
                     if (r.message) {
                         frappe.show_alert(__("Loan summary recalculated successfully"));
                         frm.reload_doc();
                     }
                 }
             });
-        });
+        }).addClass("btn-primary");
     }
 });
 

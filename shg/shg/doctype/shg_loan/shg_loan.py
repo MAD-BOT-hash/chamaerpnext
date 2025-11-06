@@ -327,6 +327,24 @@ def refresh_repayment_summary_endpoint(loan_name):
     """
     return refresh_repayment_summary(loan_name)
 
+@frappe.whitelist()
+def recalculate_loan_summary(loan_name):
+    """
+    Recalculate loan summary fields based on repayment schedule.
+    
+    Args:
+        loan_name (str): Name of the SHG Loan document
+        
+    Returns:
+        str: Success message
+    """
+    loan = frappe.get_doc("SHG Loan", loan_name)
+    loan.flags.ignore_validate_update_after_submit = True
+    loan.recalculate_summary()  # we'll make this a method on the DocType
+    loan.save(ignore_permissions=True)
+    frappe.db.commit()
+    return "Summary recalculated successfully"
+
 
 class SHGLoan(Document):
     """SHG Loan controller with automatic ledger and repayment schedule posting."""
@@ -405,6 +423,42 @@ class SHGLoan(Document):
         # Allow updates on submitted loans
         self.flags.ignore_validate_update_after_submit = True
         self.save(ignore_permissions=True)
+
+    def recalculate_summary(self):
+        """
+        Recalculate loan summary fields based on repayment schedule.
+        """
+        # Get repayment schedule rows
+        schedule = self.get("repayment_schedule") or frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={"parent": self.name},
+            fields=["principal_component", "interest_component", "amount_paid", "unpaid_balance", "due_date", "status"]
+        )
+        
+        # Calculate totals
+        self.total_principal_payable = sum(flt(r.get("principal_component", 0)) for r in schedule)
+        self.total_interest_payable = sum(flt(r.get("interest_component", 0)) for r in schedule)
+        self.total_payable_amount = flt(self.total_principal_payable) + flt(self.total_interest_payable)
+        self.total_amount_paid = sum(flt(r.get("amount_paid", 0)) for r in schedule)
+        self.outstanding_amount = flt(self.total_payable_amount) - flt(self.total_amount_paid)
+        
+        # Calculate overdue amount
+        overdue_amount = 0
+        today_date = getdate(nowdate())
+        for r in schedule:
+            due_date = getdate(r.get("due_date")) if r.get("due_date") else today_date
+            # Overdue if not paid and due date is in the past
+            if r.get("status") != "Paid" and due_date < today_date and flt(r.get("unpaid_balance", 0)) > 0:
+                overdue_amount += flt(r.get("unpaid_balance", 0))
+        self.overdue_amount = flt(overdue_amount, 2)
+        
+        # Update loan status based on calculations
+        if self.outstanding_amount <= 0:
+            self.loan_status = "Completed"
+        elif overdue_amount > 0:
+            self.loan_status = "Overdue"
+        else:
+            self.loan_status = "Active"
 
     # ---------------------------------------------------
     # GROUP LOAN LOGIC
