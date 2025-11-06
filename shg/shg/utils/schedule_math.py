@@ -81,12 +81,16 @@ def generate_reducing_balance_schedule(principal, annual_interest_rate, months, 
             principal_component += outstanding  # Adjust for rounding
             outstanding = 0
             
+        # Calculate total_due as principal + interest
+        total_due = principal_component + interest
+            
         schedule.append({
             "installment_no": i,
             "due_date": date,
             "principal_component": round(principal_component, 2),
             "interest_component": round(interest, 2),
             "total_payment": round(emi, 2),
+            "total_due": round(total_due, 2),  # Add total_due field
             "loan_balance": round(max(0, outstanding), 2),  # Ensure no negative balance
             "status": "Pending"
         })
@@ -123,12 +127,16 @@ def generate_flat_rate_schedule(principal, annual_interest_rate, months, start_d
         if i == months:
             outstanding = 0
             
+        # Calculate total_due as principal + interest
+        total_due = principal_component + interest_component
+            
         schedule.append({
             "installment_no": i,
             "due_date": date,
             "principal_component": round(principal_component, 2),
             "interest_component": round(interest_component, 2),
             "total_payment": round(monthly_payment, 2),
+            "total_due": round(total_due, 2),  # Add total_due field
             "loan_balance": round(max(0, outstanding), 2),  # Ensure no negative balance
             "status": "Pending"
         })

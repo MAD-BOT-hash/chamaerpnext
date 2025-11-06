@@ -40,3 +40,4 @@ shg.shg.patches.add_is_closed_field_to_contribution_invoice
 shg.shg.patches.install_invoice_highlight_client_script
 shg.shg.patches.fix_contribution_account_duplication
 shg.shg.patches.create_default_contribution_types
+shg.shg.patches.add_child_table_repayment_installment_adjustment

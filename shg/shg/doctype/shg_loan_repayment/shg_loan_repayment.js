@@ -34,61 +34,21 @@ frappe.ui.form.on("SHG Loan Repayment", {
                 }
             });
             
-            // Add button to pull unpaid installments
+            // Add button to fetch unpaid installments
             if (frm.doc.loan) {
-                frm.add_custom_button(__('Pull Unpaid Installments'), function() {
+                frm.add_custom_button(__('Fetch Unpaid Installments'), function() {
                     frm.call({
-                        method: 'pull_unpaid_installments',
+                        method: 'get_unpaid_installments',
                         doc: frm.doc,
                         callback: function(r) {
                             if (r.message) {
                                 frm.refresh_fields();
-                                frappe.msgprint("Unpaid installments pulled successfully.");
+                                frappe.msgprint("Unpaid installments fetched successfully.");
                             }
                         }
                     });
                 });
             }
-            
-            // Add button to recalculate installment balances
-            if (frm.doc.installment_adjustment && frm.doc.installment_adjustment.length > 0) {
-                frm.add_custom_button(__('Recalculate Balances'), function() {
-                    frm.call({
-                        method: 'shg.shg.api.repayment_adjustment.recalculate_installment_balances',
-                        args: {
-                            loan_repayment_name: frm.doc.name
-                        },
-                        callback: function(r) {
-                            if (r.message && r.message.status === "success") {
-                                frm.reload_doc();
-                                frappe.msgprint(r.message.message);
-                            } else if (r.message) {
-                                frappe.msgprint("Error: " + r.message.message);
-                            }
-                        }
-                    });
-                });
-            }
-        }
-        
-        // Add button to refresh installment adjustment
-        if (frm.doc.docstatus === 0 && frm.doc.loan) {
-            frm.add_custom_button(__('Refresh Installments'), function() {
-                frm.call({
-                    method: 'shg.shg.api.repayment_adjustment.refresh_installment_adjustment',
-                    args: {
-                        loan_repayment_name: frm.doc.name
-                    },
-                    callback: function(r) {
-                        if (r.message && r.message.status === "success") {
-                            frm.reload_doc();
-                            frappe.msgprint(r.message.message);
-                        } else if (r.message) {
-                            frappe.msgprint("Error: " + r.message.message);
-                        }
-                    }
-                });
-            });
         }
     },
     
@@ -140,8 +100,22 @@ frappe.ui.form.on("SHG Loan Repayment", {
 frappe.ui.form.on("SHG Repayment Installment Adjustment", {
     amount_to_repay: function(frm, cdt, cdn) {
         let row = frappe.get_doc(cdt, cdn);
-        // Auto-calculate remaining balance
-        row.remaining = flt(row.total_due) - flt(row.amount_to_repay);
+        
+        // Validate that amount to repay does not exceed unpaid balance
+        if (flt(row.amount_to_repay) > flt(row.unpaid_balance)) {
+            frappe.msgprint(`Amount to repay cannot exceed unpaid balance (${row.unpaid_balance}).`);
+            row.amount_to_repay = row.unpaid_balance;
+        }
+        
+        // Update status based on amount to repay
+        if (flt(row.amount_to_repay) >= flt(row.unpaid_balance)) {
+            row.status = "Paid";
+        } else if (flt(row.amount_to_repay) > 0) {
+            row.status = "Partially Paid";
+        } else {
+            row.status = "Pending";
+        }
+        
         frm.refresh_field("installment_adjustment");
         
         // Recalculate total paid

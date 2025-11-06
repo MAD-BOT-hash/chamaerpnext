@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from frappe.utils import flt
 
 def execute(filters=None):
     if not filters:
@@ -90,11 +91,19 @@ def get_data(filters):
             m.total_contributions,
             m.total_payments_received,
             m.total_loans_taken,
-            m.current_loan_balance,
+            COALESCE(loan_summary.total_loan_balance, 0) as current_loan_balance,
             m.credit_score,
             m.last_contribution_date,
             m.last_loan_date
         FROM `tabSHG Member` m
+        LEFT JOIN (
+            SELECT 
+                l.member,
+                SUM(COALESCE(l.total_payable, 0)) - SUM(COALESCE(l.total_repaid, 0)) as total_loan_balance
+            FROM `tabSHG Loan` l
+            WHERE l.docstatus = 1 AND l.status = 'Disbursed'
+            GROUP BY l.member
+        ) loan_summary ON m.name = loan_summary.member
         WHERE m.docstatus = 1 {conditions}
         ORDER BY m.member_name
     """

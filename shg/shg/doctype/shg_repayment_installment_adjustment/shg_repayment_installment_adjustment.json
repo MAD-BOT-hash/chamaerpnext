@@ -28,26 +28,17 @@
       "columns": 2
     },
     {
-      "fieldname": "principal_amount",
-      "label": "Principal Amount",
-      "fieldtype": "Currency",
-      "options": "KES",
-      "in_list_view": 1,
-      "read_only": 1,
-      "columns": 2
-    },
-    {
-      "fieldname": "interest_amount",
-      "label": "Interest Amount",
-      "fieldtype": "Currency",
-      "options": "KES",
-      "in_list_view": 1,
-      "read_only": 1,
-      "columns": 2
-    },
-    {
       "fieldname": "total_due",
       "label": "Total Due",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "read_only": 1,
+      "columns": 2
+    },
+    {
+      "fieldname": "unpaid_balance",
+      "label": "Unpaid Balance",
       "fieldtype": "Currency",
       "options": "KES",
       "in_list_view": 1,
@@ -65,10 +56,10 @@
       "default": 0
     },
     {
-      "fieldname": "remaining",
-      "label": "Remaining",
-      "fieldtype": "Currency",
-      "options": "KES",
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "options": "Pending\nPartially Paid\nPaid",
       "in_list_view": 1,
       "read_only": 1,
       "columns": 2

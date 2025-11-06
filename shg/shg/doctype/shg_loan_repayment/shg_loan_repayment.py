@@ -79,14 +79,19 @@ class SHGLoanRepayment(Document):
             if flt(row.amount_to_repay) < 0:
                 frappe.throw(f"Amount to repay for installment {row.installment_no} cannot be negative.")
             
-            # Validate that amount to repay does not exceed total due
-            if flt(row.amount_to_repay) > flt(row.total_due):
-                frappe.throw(f"Amount to repay for installment {row.installment_no} cannot exceed total due ({row.total_due}).")
+            # Validate that amount to repay does not exceed unpaid balance
+            if flt(row.amount_to_repay) > flt(row.unpaid_balance):
+                frappe.throw(f"Amount to repay for installment {row.installment_no} cannot exceed unpaid balance ({row.unpaid_balance}).")
             
             total_amount += flt(row.amount_to_repay)
             
-            # Auto-calculate remaining balance
-            row.remaining = flt(row.total_due) - flt(row.amount_to_repay)
+            # Update status based on amount to repay
+            if flt(row.amount_to_repay) >= flt(row.unpaid_balance):
+                row.status = "Paid"
+            elif flt(row.amount_to_repay) > 0:
+                row.status = "Partially Paid"
+            else:
+                row.status = "Pending"
         
         # Validate that total installment payments match total paid
         if flt(total_amount) != flt(self.total_paid):
@@ -373,9 +378,9 @@ class SHGLoanRepayment(Document):
         }
 
     @frappe.whitelist()
-    def pull_unpaid_installments(self):
+    def get_unpaid_installments(self):
         """
-        Pull all unpaid installments from the linked loan's repayment schedule.
+        Fetch all unpaid installments from the linked loan's repayment schedule.
         This method is called from the frontend via JavaScript.
         """
         if not self.loan:
@@ -397,10 +402,9 @@ class SHGLoanRepayment(Document):
                 "name",
                 "installment_no",
                 "due_date",
-                "principal_component",
-                "interest_component",
                 "total_due",
-                "unpaid_balance"
+                "unpaid_balance",
+                "status"
             ],
             order_by="due_date"
         )
@@ -410,11 +414,10 @@ class SHGLoanRepayment(Document):
             self.append("installment_adjustment", {
                 "installment_no": installment.installment_no,
                 "due_date": installment.due_date,
-                "principal_amount": installment.principal_component,
-                "interest_amount": installment.interest_component,
                 "total_due": installment.total_due,
+                "unpaid_balance": installment.unpaid_balance,
                 "amount_to_repay": 0,  # Default to 0, user can edit
-                "remaining": installment.unpaid_balance,
+                "status": installment.status,
                 "schedule_row_id": installment.name
             })
         
