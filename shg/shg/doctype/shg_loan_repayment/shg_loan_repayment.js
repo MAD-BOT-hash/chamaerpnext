@@ -21,7 +21,7 @@ frappe.ui.form.on('SHG Loan Repayment', {
           d.due_date = r.due_date;
           d.installment = r.total_payment;
           d.amount_paid = r.amount_paid || 0;
-          d.remaining_amount = r.remaining_amount || (r.total_payment - (r.amount_paid || 0));
+          d.unpaid_balance = r.unpaid_balance || (r.total_payment - (r.amount_paid || 0));
           d.to_pay = 0; // user may enter partial here
         });
         frm.refresh_fields('repayment_items');

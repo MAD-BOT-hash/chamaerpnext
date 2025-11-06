@@ -295,6 +295,49 @@ class SHGLoan(Document):
         self.run_eligibility_checks()
         self.calculate_repayment_details()
 
+    def update_loan_summary(self):
+        """
+        Recompute all high-level totals based on repayment schedule.
+        Must update:
+        - total_payable (sum of total_payment)
+        - total_repaid (sum of amount_paid)
+        - outstanding_balance (sum of unpaid_balance)
+        - overdue_amount (sum of unpaid_balance where due_date < today)
+        - loan_balance (same as outstanding_balance, principal+interest)
+        """
+        # Get schedule from child table
+        schedule = self.get("repayment_schedule") or frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={"parent": self.name},
+            fields=["total_payment", "amount_paid", "unpaid_balance", "status", "due_date"]
+        )
+
+        # Calculate totals from schedule
+        total_payable = sum(flt(r.get("total_payment")) for r in schedule)
+        total_repaid = sum(flt(r.get("amount_paid")) for r in schedule)
+        outstanding_balance = sum(flt(r.get("unpaid_balance")) for r in schedule)
+        
+        # Calculate overdue amount
+        overdue_amount = 0
+        today_date = getdate(nowdate())
+        for r in schedule:
+            due_date = getdate(r.get("due_date")) if r.get("due_date") else today_date
+            # Overdue if not paid and due date is in the past
+            if r.get("status") != "Paid" and due_date < today_date and flt(r.get("unpaid_balance")) > 0:
+                overdue_amount += flt(r.get("unpaid_balance"))
+
+        # Update loan fields
+        self.total_payable = flt(total_payable, 2)
+        self.total_repaid = flt(total_repaid, 2)
+        self.outstanding_balance = flt(outstanding_balance, 2)
+        self.loan_balance = flt(outstanding_balance, 2)
+        self.balance_amount = flt(outstanding_balance, 2)
+        self.overdue_amount = flt(overdue_amount, 2)
+        
+        # Allow updates on submitted loans
+        self.flags.ignore_validate_update_after_submit = True
+        self.save(ignore_permissions=True)
+
     # ---------------------------------------------------
     # GROUP LOAN LOGIC
     # ---------------------------------------------------

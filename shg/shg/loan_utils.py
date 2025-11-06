@@ -8,7 +8,7 @@ def get_schedule(loan_name):
         fields=[
             "name", "idx", "due_date",
             "principal_component", "interest_component",
-            "total_payment", "amount_paid", "remaining_amount", "status"
+            "total_payment", "amount_paid", "unpaid_balance", "status"
         ],
         order_by="due_date asc, idx asc"
     )
@@ -18,9 +18,9 @@ def compute_totals(schedule_rows):
     total_interest  = sum(flt(r.interest_component)  for r in schedule_rows)
     total_payment   = sum(flt(r.total_payment)       for r in schedule_rows)
     total_paid      = sum(flt(r.amount_paid or 0)    for r in schedule_rows)
-    loan_balance    = flt(total_payment - total_paid, 2)
+    outstanding_balance = sum(flt(r.unpaid_balance or (flt(r.total_payment) - flt(r.amount_paid or 0))) for r in schedule_rows)
     overdue         = sum(
-        flt(r.remaining_amount or (flt(r.total_payment) - flt(r.amount_paid or 0)))
+        flt(r.unpaid_balance or (flt(r.total_payment) - flt(r.amount_paid or 0)))
         for r in schedule_rows
         if (r.status not in ("Paid",) and getdate(r.due_date) < getdate(today()))
     )
@@ -29,8 +29,9 @@ def compute_totals(schedule_rows):
         total_interest=flt(total_interest, 2),
         total_payable=flt(total_payment, 2),
         total_repaid=flt(total_paid, 2),
-        loan_balance=loan_balance,
+        outstanding_balance=flt(outstanding_balance, 2),
         overdue_amount=flt(overdue, 2),
+        loan_balance=flt(outstanding_balance, 2)  # same as outstanding_balance, principal+interest
     )
 
 def update_loan_summary(loan_name):
@@ -40,8 +41,9 @@ def update_loan_summary(loan_name):
     frappe.db.set_value("SHG Loan", loan_name, {
         "total_payable": totals["total_payable"],
         "total_repaid": totals["total_repaid"],
+        "outstanding_balance": totals["outstanding_balance"],
         "loan_balance": totals["loan_balance"],        # principal + interest outstanding
-        "balance_amount": totals["loan_balance"],      # keep same meaning in UI
+        "balance_amount": totals["outstanding_balance"],      # keep same meaning in UI
         "overdue_amount": totals["overdue_amount"],
     }, update_modified=False)
 
@@ -58,12 +60,12 @@ def allocate_payment_to_schedule(loan_name, paying_amount, posting_date=None):
 
     rows = get_schedule(loan_name)
     totals = compute_totals(rows)
-    remaining_total = totals["loan_balance"]
+    outstanding_total = totals["outstanding_balance"]
 
-    if remaining_total <= 0:
+    if outstanding_total <= 0:
         frappe.throw("No outstanding balance to allocate.")
 
-    to_allocate = min(paying_amount, remaining_total)
+    to_allocate = min(paying_amount, outstanding_total)
     if to_allocate <= 0:
         return totals
 
@@ -74,13 +76,13 @@ def allocate_payment_to_schedule(loan_name, paying_amount, posting_date=None):
 
         already_paid = flt(r.amount_paid or 0)
         line_due     = flt(r.total_payment)
-        line_left    = flt(line_due - already_paid, 2)
+        line_left    = flt(r.unpaid_balance or (line_due - already_paid), 2)
 
         if line_left <= 0:
             # normalize row if needed
             if r.status != "Paid":
                 frappe.db.set_value("SHG Loan Repayment Schedule", r.name, {
-                    "remaining_amount": 0, "status": "Paid"
+                    "unpaid_balance": 0, "status": "Paid"
                 }, update_modified=False)
             continue
 
@@ -91,7 +93,7 @@ def allocate_payment_to_schedule(loan_name, paying_amount, posting_date=None):
 
         frappe.db.set_value("SHG Loan Repayment Schedule", r.name, {
             "amount_paid": new_paid,
-            "remaining_amount": max(new_left, 0),
+            "unpaid_balance": max(new_left, 0),
             "status": new_status
         }, update_modified=False)
 

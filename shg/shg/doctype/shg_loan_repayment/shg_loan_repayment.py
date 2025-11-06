@@ -12,14 +12,27 @@ class SHGLoanRepayment(Document):
         if flt(self.total_paid) <= 0:
             frappe.throw("Repayment amount must be greater than 0.")
 
+        # Recompute schedule first, then validate
+        if self.loan:
+            from shg.shg.loan_utils import get_schedule, compute_totals
+            rows = get_schedule(self.loan)
+            totals = compute_totals(rows)
+            outstanding_total = totals["outstanding_balance"]
+            
+            if flt(self.total_paid) > flt(outstanding_total):
+                frappe.throw(
+                    f"Repayment ({self.total_paid}) exceeds remaining balance ({outstanding_total})."
+                )
+
     def on_submit(self):
-        allocate_payment_to_schedule(self.loan, self.total_paid)
-        update_loan_summary(self.loan)
+        if self.loan:
+            allocate_payment_to_schedule(self.loan, self.total_paid)
+            update_loan_summary(self.loan)
 
     def on_cancel(self):
-        # OPTIONAL: reverse allocation for this repayment if you store allocation links.
-        # For a simple model, recompute from scratch:
-        recompute_from_ledger(self.loan)
+        # Recompute from ledger to maintain data integrity
+        if self.loan:
+            recompute_from_ledger(self.loan)
 
 def recompute_from_ledger(loan_name):
     """
@@ -30,7 +43,7 @@ def recompute_from_ledger(loan_name):
     # reset rows
     for r in rows:
         frappe.db.set_value("SHG Loan Repayment Schedule", r.name, {
-            "amount_paid": 0, "remaining_amount": r["total_payment"], "status": "Unpaid"
+            "amount_paid": 0, "unpaid_balance": r["total_payment"], "status": "Pending"
         }, update_modified=False)
 
     # read repayments in posting_date order
