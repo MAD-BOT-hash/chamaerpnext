@@ -462,6 +462,33 @@ def update_repayment_summary(loan_id):
 
 
 @frappe.whitelist()
+def generate_individual_loans(parent_loan):
+    """
+    Generate individual loans for all members in a group loan.
+    
+    Args:
+        parent_loan (str): Name of the parent group loan document
+        
+    Returns:
+        dict: Status and list of created loan names
+    """
+    if not parent_loan:
+        frappe.throw(_("Parent loan name is required"))
+        
+    # Get the parent loan document
+    loan_doc = frappe.get_doc("SHG Loan", parent_loan)
+    
+    # Generate individual member loans
+    created_loans = loan_doc.generate_individual_member_loans()
+    
+    return {
+        "status": "success",
+        "created": created_loans,
+        "message": _("Generated {0} individual loans").format(len(created_loans))
+    }
+
+
+@frappe.whitelist()
 def get_member_loan_statement(loan_id=None, member=None):
     """
     Returns loan + repayment schedule for a given member or loan_id.
