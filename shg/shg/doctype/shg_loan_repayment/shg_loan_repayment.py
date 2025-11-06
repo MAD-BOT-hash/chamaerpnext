@@ -28,6 +28,39 @@ class SHGLoanRepayment(Document):
                     f"Repayment ({self.total_paid}) exceeds remaining balance ({outstanding_total})."
                 )
 
+    @frappe.whitelist()
+    def fetch_unpaid_installments(self):
+        """Fetch unpaid installments from the linked loan's repayment schedule."""
+        if not self.loan:
+            frappe.msgprint("Please select a loan first.")
+            return
+
+        schedule = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={"parent": self.loan, "status": ("in", ["Unpaid", "Partially Paid", "Pending", "Overdue"])},
+            fields=["name", "installment_no", "due_date", "emi_amount", "principal_component", "interest_component", "total_payment", "amount_paid", "unpaid_balance", "status"]
+        )
+        
+        if not schedule:
+            frappe.msgprint("No unpaid installments found.")
+            return
+
+        self.set("installment_adjustment", [])
+        for row in schedule:
+            remaining = flt(row.unpaid_balance or 0)
+            self.append("installment_adjustment", {
+                "installment_no": row.installment_no,
+                "due_date": row.due_date,
+                "emi_amount": row.emi_amount or row.total_payment,
+                "principal_amount": row.principal_component,
+                "interest_amount": row.interest_component,
+                "amount_to_repay": remaining,
+                "remaining_amount": remaining,
+                "status": row.status,
+                "schedule_row_id": row.name
+            })
+        frappe.msgprint("Unpaid installments fetched successfully.")
+
     def on_submit(self):
         if self.loan:
             allocate_payment_to_schedule(self.loan, self.total_paid)

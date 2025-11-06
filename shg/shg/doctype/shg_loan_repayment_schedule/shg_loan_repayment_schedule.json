@@ -25,6 +25,15 @@
       "columns": 2
     },
     {
+      "fieldname": "emi_amount",
+      "label": "EMI Amount",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "columns": 2,
+      "read_only": 1
+    },
+    {
       "fieldname": "principal_component",
       "label": "Principal Amount",
       "fieldtype": "Currency",

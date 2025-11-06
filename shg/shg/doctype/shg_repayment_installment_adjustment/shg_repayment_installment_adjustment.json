@@ -28,8 +28,17 @@
       "columns": 2
     },
     {
+      "fieldname": "emi_amount",
+      "label": "EMI Amount",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "read_only": 1,
+      "columns": 2
+    },
+    {
       "fieldname": "principal_amount",
-      "label": "Principal Amount",
+      "label": "Principal",
       "fieldtype": "Currency",
       "options": "KES",
       "in_list_view": 1,
@@ -38,25 +47,7 @@
     },
     {
       "fieldname": "interest_amount",
-      "label": "Interest Amount",
-      "fieldtype": "Currency",
-      "options": "KES",
-      "in_list_view": 1,
-      "read_only": 1,
-      "columns": 2
-    },
-    {
-      "fieldname": "total_due",
-      "label": "Total Due",
-      "fieldtype": "Currency",
-      "options": "KES",
-      "in_list_view": 1,
-      "read_only": 1,
-      "columns": 2
-    },
-    {
-      "fieldname": "unpaid_balance",
-      "label": "Unpaid Balance",
+      "label": "Interest",
       "fieldtype": "Currency",
       "options": "KES",
       "in_list_view": 1,
@@ -65,7 +56,7 @@
     },
     {
       "fieldname": "amount_to_repay",
-      "label": "Amount to Repay",
+      "label": "Amount To Pay",
       "fieldtype": "Currency",
       "options": "KES",
       "in_list_view": 1,
@@ -74,10 +65,19 @@
       "default": 0
     },
     {
+      "fieldname": "remaining_amount",
+      "label": "Remaining Amount",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "read_only": 1,
+      "columns": 2
+    },
+    {
       "fieldname": "status",
       "label": "Status",
       "fieldtype": "Select",
-      "options": "Pending\nPartially Paid\nPaid",
+      "options": "Unpaid\nPartially Paid\nPaid\nOverdue",
       "in_list_view": 1,
       "read_only": 1,
       "columns": 2
