@@ -42,7 +42,7 @@ frappe.ui.form.on("SHG Loan Repayment", {
                         doc: frm.doc,
                         callback: function(r) {
                             if (r.message) {
-                                frm.refresh_fields();
+                                frm.refresh_field('installment_adjustment');
                                 frappe.msgprint("Unpaid installments fetched successfully.");
                             }
                         }

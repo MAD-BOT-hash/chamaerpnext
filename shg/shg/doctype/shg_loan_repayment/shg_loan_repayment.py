@@ -402,6 +402,8 @@ class SHGLoanRepayment(Document):
                 "name",
                 "installment_no",
                 "due_date",
+                "principal_component",
+                "interest_component",
                 "total_due",
                 "unpaid_balance",
                 "status"
@@ -414,6 +416,8 @@ class SHGLoanRepayment(Document):
             self.append("installment_adjustment", {
                 "installment_no": installment.installment_no,
                 "due_date": installment.due_date,
+                "principal_amount": installment.principal_component,
+                "interest_amount": installment.interest_component,
                 "total_due": installment.total_due,
                 "unpaid_balance": installment.unpaid_balance,
                 "amount_to_repay": 0,  # Default to 0, user can edit

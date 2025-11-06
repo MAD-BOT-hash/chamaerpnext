@@ -28,6 +28,24 @@
       "columns": 2
     },
     {
+      "fieldname": "principal_amount",
+      "label": "Principal Amount",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "read_only": 1,
+      "columns": 2
+    },
+    {
+      "fieldname": "interest_amount",
+      "label": "Interest Amount",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "read_only": 1,
+      "columns": 2
+    },
+    {
       "fieldname": "total_due",
       "label": "Total Due",
       "fieldtype": "Currency",
