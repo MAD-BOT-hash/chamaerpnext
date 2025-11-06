@@ -8,33 +8,80 @@ from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, gene
 @frappe.whitelist()
 def get_loan_balance(loan_name):
     """
-    Calculate loan balance by subtracting total principal repaid from loan amount.
+    Calculate loan balance by summing unpaid balances from repayment schedule.
+    This includes both principal and interest components.
     
     Args:
         loan_name (str): Name of the SHG Loan document
         
     Returns:
-        float: Current loan balance
+        float: Current loan balance (principal + interest)
     """
     try:
-        # Fetch loan principal
-        loan = frappe.get_doc("SHG Loan", loan_name)
-        loan_amount = flt(loan.loan_amount)
+        # Get all repayment schedule rows
+        schedule_rows = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={
+                "parent": loan_name,
+                "parenttype": "SHG Loan"
+            },
+            fields=["unpaid_balance"]
+        )
         
-        # Sum all principal repayments from submitted SHG Loan Repayment documents
-        total_principal_repaid = frappe.db.sql("""
-            SELECT COALESCE(SUM(rl.principal_amount), 0)
-            FROM `tabSHG Loan Repayment` rl
-            WHERE rl.loan = %s AND rl.docstatus = 1
-        """, loan_name)[0][0]
+        # Sum all unpaid balances
+        total_balance = sum(flt(row.get("unpaid_balance", 0)) for row in schedule_rows)
         
-        # Calculate balance
-        balance = loan_amount - flt(total_principal_repaid)
-        return max(0, balance)  # Ensure non-negative balance
+        return flt(total_balance, 2)
         
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), f"Failed to calculate loan balance for {loan_name}")
         return 0.0
+
+@frappe.whitelist()
+def get_outstanding_balance(loan_name):
+    """
+    Calculate outstanding loan balance with detailed breakdown.
+    
+    Args:
+        loan_name (str): Name of the SHG Loan document
+        
+    Returns:
+        dict: Contains remaining_principal, remaining_interest, and total_outstanding
+    """
+    try:
+        # Get all repayment schedule rows
+        schedule_rows = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={
+                "parent": loan_name,
+                "parenttype": "SHG Loan"
+            },
+            fields=["unpaid_balance", "principal_component", "interest_component"]
+        )
+        
+        # Calculate totals
+        remaining_principal = 0
+        remaining_interest = 0
+        total_outstanding = 0
+        
+        for row in schedule_rows:
+            remaining_principal += flt(row.get("principal_component", 0))
+            remaining_interest += flt(row.get("interest_component", 0))
+            total_outstanding += flt(row.get("unpaid_balance", 0))
+        
+        return {
+            "remaining_principal": flt(remaining_principal, 2),
+            "remaining_interest": flt(remaining_interest, 2),
+            "total_outstanding": flt(total_outstanding, 2)
+        }
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"Failed to calculate outstanding balance for {loan_name}")
+        return {
+            "remaining_principal": 0.0,
+            "remaining_interest": 0.0,
+            "total_outstanding": 0.0
+        }
 
 @frappe.whitelist()
 def get_remaining_balance(loan_name):
@@ -81,6 +128,109 @@ def get_remaining_balance(loan_name):
             "total_balance": 0.0,
             "principal_balance": 0.0,
             "interest_balance": 0.0
+        }
+
+@frappe.whitelist()
+def update_loan_summary(loan_name):
+    """
+    Update all loan summary fields to ensure synchronization with repayment schedule.
+    
+    Args:
+        loan_name (str): Name of the SHG Loan document
+        
+    Returns:
+        dict: Status of the update
+    """
+    try:
+        loan_doc = frappe.get_doc("SHG Loan", loan_name)
+        
+        # Allow updates on submitted loans
+        loan_doc.flags.ignore_validate_update_after_submit = True
+        
+        # Compute repayment summary
+        summary = loan_doc.compute_repayment_summary()
+        
+        # Update loan fields with computed values
+        loan_doc.total_repaid = flt(summary["total_repaid"], 2)
+        loan_doc.balance_amount = flt(summary["balance_amount"], 2)
+        loan_doc.overdue_amount = flt(summary["overdue_amount"], 2)
+        loan_doc.next_due_date = summary["next_due_date"]
+        loan_doc.last_repayment_date = summary["last_repayment_date"]
+        loan_doc.monthly_installment = flt(summary["monthly_installment"], 2)
+        
+        # Update loan balance using the new calculation
+        loan_doc.loan_balance = get_loan_balance(loan_name)
+        
+        # Save the document
+        loan_doc.save(ignore_permissions=True)
+        
+        return {
+            "status": "success",
+            "message": "Loan summary updated successfully"
+        }
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"Failed to update loan summary for {loan_name}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@frappe.whitelist()
+def debug_loan_balance(loan_name):
+    """
+    Debug endpoint to return detailed loan balance information.
+    
+    Args:
+        loan_name (str): Name of the SHG Loan document
+        
+    Returns:
+        dict: Detailed loan balance information
+    """
+    try:
+        # Get loan document
+        loan_doc = frappe.get_doc("SHG Loan", loan_name)
+        
+        # Get repayment schedule
+        schedule = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={"parent": loan_name},
+            fields=["*"],
+            order_by="due_date"
+        )
+        
+        # Get repayments
+        repayments = frappe.get_all(
+            "SHG Loan Repayment",
+            filters={"loan": loan_name, "docstatus": 1},
+            fields=["*"],
+            order_by="posting_date"
+        )
+        
+        # Calculate outstanding balance
+        outstanding_info = get_outstanding_balance(loan_name)
+        
+        return {
+            "loan": {
+                "name": loan_doc.name,
+                "member": loan_doc.member,
+                "loan_amount": loan_doc.loan_amount,
+                "total_payable": loan_doc.total_payable,
+                "total_repaid": loan_doc.total_repaid,
+                "balance_amount": loan_doc.balance_amount,
+                "loan_balance": loan_doc.loan_balance,
+                "overdue_amount": loan_doc.overdue_amount
+            },
+            "schedule": schedule,
+            "repayments": repayments,
+            "outstanding": outstanding_info
+        }
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"Failed to debug loan balance for {loan_name}")
+        return {
+            "status": "error",
+            "message": str(e)
         }
 
 @frappe.whitelist()

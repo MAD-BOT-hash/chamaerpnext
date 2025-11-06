@@ -5,6 +5,61 @@ from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, gene
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 @frappe.whitelist()
+def debug_loan_balance(loan_name):
+    """
+    Debug endpoint to return detailed loan balance information.
+    
+    Args:
+        loan_name (str): Name of the SHG Loan document
+        
+    Returns:
+        dict: Detailed loan balance information
+    """
+    try:
+        # Get loan document
+        loan_doc = frappe.get_doc("SHG Loan", loan_name)
+        
+        # Get repayment schedule
+        schedule = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={"parent": loan_name},
+            fields=["*"],
+            order_by="due_date"
+        )
+        
+        # Get repayments
+        repayments = frappe.get_all(
+            "SHG Loan Repayment",
+            filters={"loan": loan_name, "docstatus": 1},
+            fields=["*"],
+            order_by="posting_date"
+        )
+        
+        # Calculate outstanding balance using the new function
+        from shg.shg.doctype.shg_loan.shg_loan import get_outstanding_balance
+        outstanding_info = get_outstanding_balance(loan_name)
+        
+        return {
+            "loan": {
+                "name": loan_doc.name,
+                "member": loan_doc.member,
+                "loan_amount": loan_doc.loan_amount,
+                "total_payable": loan_doc.total_payable,
+                "total_repaid": loan_doc.total_repaid,
+                "balance_amount": loan_doc.balance_amount,
+                "loan_balance": loan_doc.loan_balance,
+                "overdue_amount": loan_doc.overdue_amount
+            },
+            "schedule": schedule,
+            "repayments": repayments,
+            "outstanding": outstanding_info
+        }
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"Failed to debug loan balance for {loan_name}")
+        frappe.throw(f"Failed to debug loan balance: {str(e)}")
+
+@frappe.whitelist()
 def generate_schedule(loan_name):
     """
     Generate repayment schedule for a loan.
