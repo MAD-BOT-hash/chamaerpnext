@@ -36,6 +36,52 @@ def get_loan_balance(loan_name):
         frappe.log_error(frappe.get_traceback(), f"Failed to calculate loan balance for {loan_name}")
         return 0.0
 
+@frappe.whitelist()
+def get_remaining_balance(loan_name):
+    """
+    Calculate remaining loan balance by summing unpaid balances from repayment schedule.
+    This includes both principal and interest components.
+    
+    Args:
+        loan_name (str): Name of the SHG Loan document
+        
+    Returns:
+        dict: Contains total_balance, principal_balance, and interest_balance
+    """
+    try:
+        # Get all repayment schedule rows
+        schedule_rows = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={
+                "parent": loan_name,
+                "parenttype": "SHG Loan"
+            },
+            fields=["unpaid_balance", "principal_component", "interest_component"]
+        )
+        
+        # Calculate totals
+        total_balance = 0
+        principal_balance = 0
+        interest_balance = 0
+        
+        for row in schedule_rows:
+            total_balance += flt(row.get("unpaid_balance", 0))
+            principal_balance += flt(row.get("principal_component", 0))
+            interest_balance += flt(row.get("interest_component", 0))
+        
+        return {
+            "total_balance": flt(total_balance, 2),
+            "principal_balance": flt(principal_balance, 2),
+            "interest_balance": flt(interest_balance, 2)
+        }
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"Failed to calculate remaining balance for {loan_name}")
+        return {
+            "total_balance": 0.0,
+            "principal_balance": 0.0,
+            "interest_balance": 0.0
+        }
 
 @frappe.whitelist()
 def get_active_group_members(loan_name):

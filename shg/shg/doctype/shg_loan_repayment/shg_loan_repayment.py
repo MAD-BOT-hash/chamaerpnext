@@ -18,7 +18,7 @@ class SHGLoanRepayment(Document):
         if loan_doc.docstatus != 1:
             frappe.throw(f"Loan {loan_doc.name} must be submitted before repayment.")
 
-        # Calculate outstanding balance on-the-fly instead of using cached value
+        # Calculate outstanding balance including both principal and interest
         outstanding_balance = self.calculate_outstanding_balance(loan_doc)
         
         if flt(self.total_paid) > flt(outstanding_balance):
@@ -36,6 +36,7 @@ class SHGLoanRepayment(Document):
         """
         Calculate outstanding balance by summing unpaid balances from repayment schedule.
         This ensures we're using real-time data instead of potentially stale cached values.
+        Includes both principal and interest components.
         """
         # Get all repayment schedule rows
         schedule_rows = frappe.get_all(
@@ -70,55 +71,6 @@ class SHGLoanRepayment(Document):
         frappe.msgprint(
             f"✅ Loan repayment {self.name} processed successfully. Remaining balance: {loan_doc.balance_amount}"
         )
-
-    def on_cancel(self):
-        loan_doc = frappe.get_doc("SHG Loan", self.loan)
-        
-        # Reverse the repayment schedule updates
-        self.reverse_repayment_schedule(loan_doc)
-        
-        # Update loan summary
-        self.update_loan_summary(loan_doc)
-        
-        # Cancel the payment entry if it exists
-        if self.payment_entry:
-            try:
-                pe = frappe.get_doc("Payment Entry", self.payment_entry)
-                if pe.docstatus == 1:
-                    pe.cancel()
-            except Exception as e:
-                frappe.log_error(frappe.get_traceback(), f"Failed to cancel Payment Entry {self.payment_entry}")
-        
-        frappe.msgprint(f"⚠️ Loan repayment {self.name} cancelled. Balance restored to {loan_doc.balance_amount}")
-
-    def validate_installment_adjustments(self):
-        """Validate installment adjustments if provided."""
-        if not self.installment_adjustment:
-            return
-            
-        total_amount = 0
-        for row in self.installment_adjustment:
-            # Validate that amount to repay is not negative
-            if flt(row.amount_to_repay) < 0:
-                frappe.throw(f"Amount to repay for installment {row.installment_no} cannot be negative.")
-            
-            # Validate that amount to repay does not exceed unpaid balance
-            if flt(row.amount_to_repay) > flt(row.unpaid_balance):
-                frappe.throw(f"Amount to repay for installment {row.installment_no} cannot exceed unpaid balance ({row.unpaid_balance}).")
-            
-            total_amount += flt(row.amount_to_repay)
-            
-            # Update status based on amount to repay
-            if flt(row.amount_to_repay) >= flt(row.unpaid_balance):
-                row.status = "Paid"
-            elif flt(row.amount_to_repay) > 0:
-                row.status = "Partially Paid"
-            else:
-                row.status = "Pending"
-        
-        # Validate that total installment payments match total paid
-        if flt(total_amount) != flt(self.total_paid):
-            frappe.throw(f"Total installment payments ({total_amount}) must equal Total Paid ({self.total_paid}).")
 
     def update_repayment_schedule_from_installments(self, loan_doc):
         """Update the repayment schedule based on installment adjustments."""
@@ -192,96 +144,26 @@ class SHGLoanRepayment(Document):
         loan_doc.save(ignore_permissions=True)
         frappe.db.commit()
 
-    def reverse_repayment_schedule(self, loan_doc):
-        """Reverse the repayment schedule updates when cancelling."""
-        # If we have installment adjustments, reverse those
-        if self.installment_adjustment:
-            for installment in self.installment_adjustment:
-                schedule_row = frappe.get_doc("SHG Loan Repayment Schedule", installment.schedule_row_id)
-                # Reverse this payment
-                schedule_row.amount_paid = flt(schedule_row.amount_paid or 0) - flt(installment.amount_to_repay)
-                schedule_row.unpaid_balance = flt(schedule_row.total_due) - flt(schedule_row.amount_paid)
-                if schedule_row.unpaid_balance <= 0:
-                    schedule_row.status = "Paid"
-                elif schedule_row.amount_paid > 0:
-                    schedule_row.status = "Partially Paid"
-                else:
-                    schedule_row.status = "Pending"
-                schedule_row.payment_entry = None
-                schedule_row.actual_payment_date = None
-                schedule_row.save(ignore_permissions=True)
-        else:
-            # Find schedule rows that were affected by this repayment
-            for row in loan_doc.get("repayment_schedule"):
-                if row.payment_entry == self.name:
-                    # Reverse this payment
-                    row.amount_paid = flt(row.amount_paid or 0) - flt(self.total_paid or 0)
-                    row.unpaid_balance = flt(row.total_due or row.total_payment) - flt(row.amount_paid or 0)
-                    if row.unpaid_balance <= 0:
-                        row.status = "Paid"
-                    elif row.amount_paid > 0:
-                        row.status = "Partially Paid"
-                    else:
-                        row.status = "Pending"
-                    row.payment_entry = None
-                    row.actual_payment_date = None
-                    row.db_update()
-        
-        # Clear last repayment date if this was the last payment
-        loan_doc.last_repayment_date = None
-        loan_doc.save(ignore_permissions=True)
-        frappe.db.commit()
-
     def update_loan_summary(self, loan_doc):
-        """Update loan summary fields after repayment."""
+        """
+        Update loan summary fields after repayment.
+        This ensures loan-level fields are synchronized with schedule-level fields.
+        """
         try:
-            # Use our new API method to refresh the repayment summary
-            from shg.shg.api.loan import refresh_repayment_summary
-            result = refresh_repayment_summary(loan_doc.name)
+            # Recalculate repayment summary
+            loan_doc.update_repayment_summary()
             
-            # Reload the loan to get updated values
-            loan_doc.reload()
+            # Also update using the new get_remaining_balance function
+            from shg.shg.doctype.shg_loan.shg_loan import get_remaining_balance
+            balance_info = get_remaining_balance(loan_doc.name)
+            
+            # Update loan fields with computed values
+            loan_doc.flags.ignore_validate_update_after_submit = True
+            loan_doc.balance_amount = flt(balance_info["total_balance"], 2)
+            loan_doc.save(ignore_permissions=True)
+            
         except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Failed to update repayment summary")
-            # Fallback to manual calculation
-            self.calculate_loan_summary_manually(loan_doc)
-
-    def calculate_loan_summary_manually(self, loan_doc):
-        """Fallback method to calculate loan summary manually."""
-        if not loan_doc.get("repayment_schedule"):
-            return
-            
-        total_repaid = 0.0
-        balance_amount = 0.0
-        overdue_amount = 0.0
-        next_due_date = None
-        last_repayment_date = None
-        
-        today_date = getdate(today())
-        
-        for row in loan_doc.get("repayment_schedule"):
-            total_repaid += flt(row.amount_paid or 0)
-            balance_amount += flt(row.unpaid_balance or 0)
-            
-            # Check for overdue payments
-            if row.status == "Overdue" or (getdate(row.due_date) < today_date and flt(row.unpaid_balance) > 0):
-                overdue_amount += flt(row.unpaid_balance or 0)
-            
-            # Find next due date
-            if flt(row.unpaid_balance) > 0 and (not next_due_date or getdate(row.due_date) < getdate(next_due_date)):
-                next_due_date = row.due_date
-        
-        # Update loan document
-        loan_doc.flags.ignore_validate_update_after_submit = True
-        loan_doc.total_repaid = total_repaid
-        loan_doc.balance_amount = balance_amount
-        loan_doc.overdue_amount = overdue_amount
-        loan_doc.next_due_date = next_due_date
-        # Update loan balance
-        from shg.shg.doctype.shg_loan.shg_loan import get_loan_balance
-        loan_doc.loan_balance = get_loan_balance(loan_doc.name)
-        loan_doc.save(ignore_permissions=True)
-        frappe.db.commit()
+            frappe.log_error(frappe.get_traceback(), f"Failed to update loan summary for {loan_doc.name}")
 
     def post_to_ledger(self, loan_doc):
         """Post repayment to ledger by creating a Payment Entry."""
