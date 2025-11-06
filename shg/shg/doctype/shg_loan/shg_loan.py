@@ -294,6 +294,29 @@ class SHGLoan(Document):
         frappe.msgprint(_("✅ Repayment schedule created with {0} installments.").format(len(schedule)))
 
     @frappe.whitelist()
+    def get_active_group_members(self):
+        """
+        Get all active members for group loan population.
+        
+        Returns:
+            list: List of active SHG members with name and member_name
+        """
+        active_members = frappe.get_all(
+            "SHG Member", 
+            filters={"membership_status": "Active"},
+            fields=["name", "member_name"]
+        )
+        
+        return [
+            {
+                "member": m.name,
+                "member_name": m.member_name,
+                "allocated_amount": 0.0
+            }
+            for m in active_members
+        ]
+
+    @frappe.whitelist()
     def mark_all_due_as_paid(self):
         """Mark all due installments as paid"""
         if not self.get("repayment_schedule"):

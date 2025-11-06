@@ -61,6 +61,36 @@ frappe.ui.form.on("SHG Loan", {
             });
         }
         
+        // Add "Get Active Members" button for group loans
+        if (frm.doc.docstatus === 0 && frm.doc.loan_members) {
+            frm.add_custom_button(__("Get Active Members"), function() {
+                frappe.call({
+                    method: "shg.shg.doctype.shg_loan.shg_loan.get_active_group_members",
+                    doc: frm.doc,
+                    callback: function(r) {
+                        if (r.message) {
+                            // Clear existing loan members
+                            frm.clear_table('loan_members');
+                            
+                            // Add active members to loan members table
+                            r.message.forEach(function(member) {
+                                var row = frm.add_child('loan_members');
+                                row.member = member.member;
+                                row.member_name = member.member_name;
+                                row.allocated_amount = member.allocated_amount || 0.0;
+                            });
+                            
+                            frm.refresh_field('loan_members');
+                            frappe.msgprint(__('Loan members list populated with active members'));
+                            
+                            // Auto-sync allocated total with loan amount if needed
+                            sync_allocated_total_with_loan_amount(frm);
+                        }
+                    }
+                });
+            }, __("Actions"));
+        }
+        
         // Set header indicator
         set_loan_header_indicator(frm);
     },
@@ -73,6 +103,11 @@ frappe.ui.form.on("SHG Loan", {
     overdue_amount: function(frm) {
         // Update header indicator when overdue amount changes
         set_loan_header_indicator(frm);
+    },
+    
+    // Auto-sync allocated total with loan amount
+    loan_amount: function(frm) {
+        sync_allocated_total_with_loan_amount(frm);
     }
 });
 
@@ -92,4 +127,20 @@ function set_loan_header_indicator(frm) {
     }
     
     frm.dashboard.set_headline_indicator(indicator[0], indicator[1]);
+}
+
+function sync_allocated_total_with_loan_amount(frm) {
+    // Only sync for group loans
+    if (!frm.doc.loan_members || frm.doc.loan_members.length === 0) return;
+    
+    // Calculate total allocated amount
+    var total_allocated = 0;
+    frm.doc.loan_members.forEach(function(row) {
+        total_allocated += flt(row.allocated_amount);
+    });
+    
+    // If loan amount is not set or is zero, set it to total allocated
+    if (!frm.doc.loan_amount || frm.doc.loan_amount === 0) {
+        frm.set_value('loan_amount', total_allocated);
+    }
 }
