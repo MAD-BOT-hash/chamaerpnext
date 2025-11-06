@@ -25,12 +25,18 @@ class SHGLoanRepayment(Document):
 
         # Auto-calculate repayment breakdown
         self.calculate_repayment_breakdown()
+        
+        # Validate installment adjustments if any
+        self.validate_installment_adjustments()
 
     def on_submit(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
         
-        # Update the loan repayment schedule
-        self.update_repayment_schedule(loan_doc)
+        # Update the repayment schedule based on installment adjustments or regular repayment
+        if self.installment_adjustment:
+            self.update_repayment_schedule_from_installments(loan_doc)
+        else:
+            self.update_repayment_schedule(loan_doc)
         
         # Update loan summary
         self.update_loan_summary(loan_doc)
@@ -61,6 +67,60 @@ class SHGLoanRepayment(Document):
                 frappe.log_error(frappe.get_traceback(), f"Failed to cancel Payment Entry {self.payment_entry}")
         
         frappe.msgprint(f"⚠️ Loan repayment {self.name} cancelled. Balance restored to {loan_doc.balance_amount}")
+
+    def validate_installment_adjustments(self):
+        """Validate installment adjustments if provided."""
+        if not self.installment_adjustment:
+            return
+            
+        total_amount = 0
+        for row in self.installment_adjustment:
+            # Validate that amount to repay is not negative
+            if flt(row.amount_to_repay) < 0:
+                frappe.throw(f"Amount to repay for installment {row.installment_no} cannot be negative.")
+            
+            # Validate that amount to repay does not exceed total due
+            if flt(row.amount_to_repay) > flt(row.total_due):
+                frappe.throw(f"Amount to repay for installment {row.installment_no} cannot exceed total due ({row.total_due}).")
+            
+            total_amount += flt(row.amount_to_repay)
+            
+            # Auto-calculate remaining balance
+            row.remaining = flt(row.total_due) - flt(row.amount_to_repay)
+        
+        # Validate that total installment payments match total paid
+        if flt(total_amount) != flt(self.total_paid):
+            frappe.throw(f"Total installment payments ({total_amount}) must equal Total Paid ({self.total_paid}).")
+
+    def update_repayment_schedule_from_installments(self, loan_doc):
+        """Update the repayment schedule based on installment adjustments."""
+        for installment in self.installment_adjustment:
+            # Get the schedule row
+            schedule_row = frappe.get_doc("SHG Loan Repayment Schedule", installment.schedule_row_id)
+            
+            # Update the schedule row with the payment
+            schedule_row.amount_paid = flt(schedule_row.amount_paid or 0) + flt(installment.amount_to_repay)
+            schedule_row.unpaid_balance = flt(schedule_row.total_due) - flt(schedule_row.amount_paid)
+            
+            # Update status
+            if schedule_row.unpaid_balance <= 0:
+                schedule_row.status = "Paid"
+                schedule_row.actual_payment_date = self.posting_date
+            elif flt(schedule_row.amount_paid) > 0:
+                schedule_row.status = "Partially Paid"
+            else:
+                schedule_row.status = "Pending"
+            
+            # Link this repayment to the schedule row
+            schedule_row.payment_entry = self.name
+            
+            # Save the updated row
+            schedule_row.save(ignore_permissions=True)
+        
+        # Update last repayment date
+        loan_doc.last_repayment_date = self.posting_date
+        loan_doc.save(ignore_permissions=True)
+        frappe.db.commit()
 
     def update_repayment_schedule(self, loan_doc):
         """Update the repayment schedule based on this repayment."""
@@ -106,21 +166,38 @@ class SHGLoanRepayment(Document):
 
     def reverse_repayment_schedule(self, loan_doc):
         """Reverse the repayment schedule updates when cancelling."""
-        # Find schedule rows that were affected by this repayment
-        for row in loan_doc.get("repayment_schedule"):
-            if row.payment_entry == self.name:
+        # If we have installment adjustments, reverse those
+        if self.installment_adjustment:
+            for installment in self.installment_adjustment:
+                schedule_row = frappe.get_doc("SHG Loan Repayment Schedule", installment.schedule_row_id)
                 # Reverse this payment
-                row.amount_paid = flt(row.amount_paid or 0) - flt(self.total_paid or 0)
-                row.unpaid_balance = flt(row.total_due or row.total_payment) - flt(row.amount_paid or 0)
-                if row.unpaid_balance <= 0:
-                    row.status = "Paid"
-                elif row.amount_paid > 0:
-                    row.status = "Partially Paid"
+                schedule_row.amount_paid = flt(schedule_row.amount_paid or 0) - flt(installment.amount_to_repay)
+                schedule_row.unpaid_balance = flt(schedule_row.total_due) - flt(schedule_row.amount_paid)
+                if schedule_row.unpaid_balance <= 0:
+                    schedule_row.status = "Paid"
+                elif schedule_row.amount_paid > 0:
+                    schedule_row.status = "Partially Paid"
                 else:
-                    row.status = "Pending"
-                row.payment_entry = None
-                row.actual_payment_date = None
-                row.db_update()
+                    schedule_row.status = "Pending"
+                schedule_row.payment_entry = None
+                schedule_row.actual_payment_date = None
+                schedule_row.save(ignore_permissions=True)
+        else:
+            # Find schedule rows that were affected by this repayment
+            for row in loan_doc.get("repayment_schedule"):
+                if row.payment_entry == self.name:
+                    # Reverse this payment
+                    row.amount_paid = flt(row.amount_paid or 0) - flt(self.total_paid or 0)
+                    row.unpaid_balance = flt(row.total_due or row.total_payment) - flt(row.amount_paid or 0)
+                    if row.unpaid_balance <= 0:
+                        row.status = "Paid"
+                    elif row.amount_paid > 0:
+                        row.status = "Partially Paid"
+                    else:
+                        row.status = "Pending"
+                    row.payment_entry = None
+                    row.actual_payment_date = None
+                    row.db_update()
         
         # Clear last repayment date if this was the last payment
         loan_doc.last_repayment_date = None
@@ -295,6 +372,53 @@ class SHGLoanRepayment(Document):
             "balance_after_payment": self.balance_after_payment
         }
 
+    @frappe.whitelist()
+    def pull_unpaid_installments(self):
+        """
+        Pull all unpaid installments from the linked loan's repayment schedule.
+        This method is called from the frontend via JavaScript.
+        """
+        if not self.loan:
+            frappe.throw("Please select a Loan first.")
+            
+        # Clear existing installment adjustments
+        self.installment_adjustment = []
+        
+        # Get unpaid installments from the loan's repayment schedule
+        unpaid_installments = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={
+                "parent": self.loan,
+                "parenttype": "SHG Loan",
+                "unpaid_balance": [">", 0],
+                "status": ["!=", "Paid"]
+            },
+            fields=[
+                "name",
+                "installment_no",
+                "due_date",
+                "principal_component",
+                "interest_component",
+                "total_due",
+                "unpaid_balance"
+            ],
+            order_by="due_date"
+        )
+        
+        # Add unpaid installments to the installment adjustment table
+        for installment in unpaid_installments:
+            self.append("installment_adjustment", {
+                "installment_no": installment.installment_no,
+                "due_date": installment.due_date,
+                "principal_amount": installment.principal_component,
+                "interest_amount": installment.interest_component,
+                "total_due": installment.total_due,
+                "amount_to_repay": 0,  # Default to 0, user can edit
+                "remaining": installment.unpaid_balance,
+                "schedule_row_id": installment.name
+            })
+        
+        return self.installment_adjustment
 
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()

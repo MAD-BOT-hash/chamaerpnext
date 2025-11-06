@@ -24,6 +24,8 @@
         "penalty_amount",
         "outstanding_balance",
         "balance_after_payment",
+        "installment_adjustment_section",
+        "installment_adjustment",
         "accounting_section",
         "voucher_type",
         "journal_entry",
@@ -146,6 +148,17 @@
             "read_only": 1
         },
         {
+            "fieldname": "installment_adjustment_section",
+            "fieldtype": "Section Break",
+            "label": "Installment Adjustment"
+        },
+        {
+            "fieldname": "installment_adjustment",
+            "fieldtype": "Table",
+            "label": "Installment Adjustment",
+            "options": "SHG Repayment Installment Adjustment"
+        },
+        {
             "fieldname": "accounting_section",
             "fieldtype": "Section Break",
             "label": "Accounting"
@@ -209,12 +222,25 @@
         },
         {
             "create": 1,
+            "delete": 1,
             "email": 1,
             "export": 1,
             "print": 1,
             "read": 1,
             "report": 1,
             "role": "SHG Treasurer",
+            "share": 1,
+            "submit": 1,
+            "write": 1
+        },
+        {
+            "create": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Accounts User",
             "share": 1,
             "submit": 1,
             "write": 1

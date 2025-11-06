@@ -1,0 +1,117 @@
+{
+  "doctype": "DocType",
+  "name": "SHG Repayment Installment Adjustment",
+  "module": "SHG",
+  "custom": 0,
+  "istable": 1,
+  "editable_grid": 1,
+  "track_changes": 1,
+  "engine": "InnoDB",
+  "autoname": "hash",
+  "fields": [
+    {
+      "fieldname": "installment_no",
+      "label": "Installment No",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "reqd": 1,
+      "read_only": 1,
+      "columns": 1
+    },
+    {
+      "fieldname": "due_date",
+      "label": "Due Date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "reqd": 1,
+      "read_only": 1,
+      "columns": 2
+    },
+    {
+      "fieldname": "principal_amount",
+      "label": "Principal Amount",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "read_only": 1,
+      "columns": 2
+    },
+    {
+      "fieldname": "interest_amount",
+      "label": "Interest Amount",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "read_only": 1,
+      "columns": 2
+    },
+    {
+      "fieldname": "total_due",
+      "label": "Total Due",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "read_only": 1,
+      "columns": 2
+    },
+    {
+      "fieldname": "amount_to_repay",
+      "label": "Amount to Repay",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "columns": 2,
+      "reqd": 1,
+      "default": 0
+    },
+    {
+      "fieldname": "remaining",
+      "label": "Remaining",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "read_only": 1,
+      "columns": 2
+    },
+    {
+      "fieldname": "schedule_row_id",
+      "label": "Schedule Row ID",
+      "fieldtype": "Link",
+      "options": "SHG Loan Repayment Schedule",
+      "read_only": 1,
+      "hidden": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Accounts User",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "SHG Admin",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "SHG Treasurer",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "sort_field": "installment_no",
+  "sort_order": "ASC"
+}
