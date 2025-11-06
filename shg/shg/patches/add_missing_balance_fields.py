@@ -20,14 +20,17 @@ def execute():
         
         # Check if custom field exists in metadata
         if not frappe.db.exists("Custom Field", {"dt": "SHG Loan", "fieldname": field["fieldname"]}):
-            # Create custom field document for UI visibility
-            custom_field = frappe.new_doc("Custom Field")
-            custom_field.dt = "SHG Loan"
-            custom_field.fieldname = field["fieldname"]
-            custom_field.label = field["label"]
-            custom_field.fieldtype = field["fieldtype"]
-            custom_field.insert_after = "modified_by"  # Safe position
-            custom_field.read_only = 1
-            custom_field.no_copy = 1
-            custom_field.insert(ignore_permissions=True)
-            frappe.msgprint(f"Added custom field {field['fieldname']} to SHG Loan UI")
+            # Check if field already exists in the DocType metadata
+            meta = frappe.get_meta("SHG Loan")
+            if not meta.has_field(field["fieldname"]):
+                # Create custom field document for UI visibility
+                custom_field = frappe.new_doc("Custom Field")
+                custom_field.dt = "SHG Loan"
+                custom_field.fieldname = field["fieldname"]
+                custom_field.label = field["label"]
+                custom_field.fieldtype = field["fieldtype"]
+                custom_field.insert_after = "modified_by"  # Safe position
+                custom_field.read_only = 1
+                custom_field.no_copy = 1
+                custom_field.insert(ignore_permissions=True)
+                frappe.msgprint(f"Added custom field {field['fieldname']} to SHG Loan UI")
