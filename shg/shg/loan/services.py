@@ -100,10 +100,10 @@ def get_unpaid_rows(loan_name):
                 "name",
                 "installment_no",
                 "due_date",
-                "emi_amount",
                 "principal_component",
                 "interest_component",
-                "paid_amount",
+                "total_payment",
+                "amount_paid",
                 "status"
             ],
             order_by="due_date asc"
@@ -111,8 +111,10 @@ def get_unpaid_rows(loan_name):
         
         # Add computed fields for inline payment
         for installment in installments:
+            # Use total_payment as fallback for emi_amount if emi_amount field doesn't exist
+            emi_amount = flt(installment.get("total_payment", 0))
             # remaining_amount is the same as unpaid_balance for display purposes
-            remaining = flt(installment.get("emi_amount", 0)) - flt(installment.get("paid_amount", 0))
+            remaining = emi_amount - flt(installment.get("amount_paid", 0))
             installment["remaining_amount"] = flt(remaining, 2)
             # Default amount_to_pay to 0
             installment["amount_to_pay"] = 0
@@ -160,8 +162,9 @@ def allocate_payment(loan_name, allocations, posting_date=None):
             schedule_row = frappe.get_doc("SHG Loan Repayment Schedule", row_name)
             
             # Validate amount doesn't exceed unpaid balance
-            emi_amount = flt(schedule_row.emi_amount)
-            paid_amount = flt(schedule_row.paid_amount)
+            # Use total_payment as fallback for emi_amount if emi_amount field doesn't exist
+            emi_amount = flt(getattr(schedule_row, "emi_amount", schedule_row.total_payment))
+            paid_amount = flt(schedule_row.amount_paid)
             remaining_balance = emi_amount - paid_amount
             
             if amount_to_pay > remaining_balance:
@@ -169,8 +172,8 @@ def allocate_payment(loan_name, allocations, posting_date=None):
                     frappe.utils.fmt_money(amount_to_pay), frappe.utils.fmt_money(remaining_balance), schedule_row.installment_no))
             
             # Calculate interest and principal components
-            interest_component = flt(schedule_row.interest_component)
-            principal_component = flt(schedule_row.principal_component)
+            interest_component = flt(getattr(schedule_row, "interest_component", 0))
+            principal_component = flt(getattr(schedule_row, "principal_component", 0))
             
             # Waterfall allocation: interest first, then principal
             interest_paid = min(amount_to_pay, interest_component - max(0, paid_amount - principal_component))
@@ -195,11 +198,12 @@ def allocate_payment(loan_name, allocations, posting_date=None):
             schedule_row = detail["schedule_row"]
             
             # Update the schedule row
-            schedule_row.paid_amount = flt(schedule_row.paid_amount) + amount_to_pay
+            schedule_row.amount_paid = flt(schedule_row.amount_paid) + amount_to_pay
             
             # Update status
-            emi_amount = flt(schedule_row.emi_amount)
-            paid_amount = flt(schedule_row.paid_amount)
+            # Use total_payment as fallback for emi_amount if emi_amount field doesn't exist
+            emi_amount = flt(getattr(schedule_row, "emi_amount", schedule_row.total_payment))
+            paid_amount = flt(schedule_row.amount_paid)
             remaining_balance = emi_amount - paid_amount
             
             if remaining_balance <= 0:
@@ -280,13 +284,14 @@ def recompute_loan_summary(loan_name):
         schedule_rows = frappe.get_all(
             "SHG Loan Repayment Schedule",
             filters={"parent": loan_name, "parenttype": "SHG Loan"},
-            fields=["emi_amount", "principal_component", "interest_component", "paid_amount", "status", "due_date"]
+            fields=["principal_component", "interest_component", "amount_paid", "status", "due_date", "total_payment"]
         )
         
         # Calculate totals
         total_interest_payable = sum(flt(row.get("interest_component", 0)) for row in schedule_rows)
-        total_payable_amount = sum(flt(row.get("emi_amount", 0)) for row in schedule_rows)
-        total_repaid = sum(flt(row.get("paid_amount", 0)) for row in schedule_rows)
+        # Use total_payment as fallback for emi_amount if emi_amount field doesn't exist
+        total_payable_amount = sum(flt(row.get("total_payment", 0)) for row in schedule_rows)
+        total_repaid = sum(flt(row.get("amount_paid", 0)) for row in schedule_rows)
         loan_balance = total_payable_amount - total_repaid
         
         # Calculate overdue amount
@@ -295,8 +300,9 @@ def recompute_loan_summary(loan_name):
         next_due_date = None
         
         for row in schedule_rows:
-            emi_amount = flt(row.get("emi_amount", 0))
-            paid_amount = flt(row.get("paid_amount", 0))
+            # Use total_payment as fallback for emi_amount if emi_amount field doesn't exist
+            emi_amount = flt(row.get("total_payment", 0))
+            paid_amount = flt(row.get("amount_paid", 0))
             remaining = emi_amount - paid_amount
             
             # Check if overdue
