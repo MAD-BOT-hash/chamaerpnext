@@ -2,7 +2,7 @@ import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_field
 
 def execute():
-    """Add EMI-related fields to SHG Loan Repayment Schedule if missing."""
+    """Add missing EMI-related fields to SHG Loan Repayment Schedule DocType."""
     fields_to_add = [
         {
             "fieldname": "emi_amount",
@@ -28,7 +28,12 @@ def execute():
     ]
 
     for df in fields_to_add:
-        # Check if field already exists to ensure idempotency
-        if not frappe.db.exists("Custom Field", {"dt": "SHG Loan Repayment Schedule", "fieldname": df["fieldname"]}):
-            create_custom_field("SHG Loan Repayment Schedule", df)
-            frappe.msgprint(f"Added field {df['fieldname']} to SHG Loan Repayment Schedule")
+        # Check if the field exists in both DB schema and UI form
+        if not frappe.db.has_column("SHG Loan Repayment Schedule", df["fieldname"]):
+            if not frappe.db.exists("Custom Field", {"dt": "SHG Loan Repayment Schedule", "fieldname": df["fieldname"]}):
+                create_custom_field("SHG Loan Repayment Schedule", df)
+                frappe.log(f"✅ Added field {df['fieldname']} to SHG Loan Repayment Schedule")
+            else:
+                frappe.log(f"⚠️ UI-level field {df['fieldname']} exists but column missing — skipping DB create")
+        else:
+            frappe.log(f"ℹ️ Field {df['fieldname']} already exists — skipping")
