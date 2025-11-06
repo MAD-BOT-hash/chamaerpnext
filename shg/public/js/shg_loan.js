@@ -1,27 +1,69 @@
-frappe.ui.form.on('SHG Loan', {
-    refresh: function(frm) {
-        if (frm.doc.docstatus === 1) {
-            // Add Pull Unpaid Installments button
-            frm.add_custom_button(__('Pull Unpaid Installments'), function() {
-                pull_unpaid_installments(frm);
-            });
-            
-            // Add Post Selected Payments button
-            frm.add_custom_button(__('Post Selected Payments'), function() {
-                post_selected_payments(frm);
-            });
+frappe.ui.form.on("SHG Loan", {
+  refresh(frm) {
+    // Button: Pull Unpaid
+    frm.add_custom_button("Pull Unpaid Installments", async () => {
+      await frappe.call({
+        method: "shg.shg.api.loan_inline.pull_unpaid_installments",
+        args: { loan: frm.doc.name },
+        callback: (r) => {
+          frappe.show_alert({ message: `Unpaid installments fetched: ${r.message.count}`, indicator: "green" });
+          frm.reload_doc();
         }
-    },
-    
-    // Trigger live totals when repayment_schedule table changes
-    repayment_schedule_add: function(frm, cdt, cdn) {
-        compute_and_update_totals(frm);
-    },
-    
-    repayment_schedule_remove: function(frm, cdt, cdn) {
-        compute_and_update_totals(frm);
-    }
+      });
+    });
+
+    // Button: Post Selected Payments
+    frm.add_custom_button("Post Selected Payments", async () => {
+      await frappe.call({
+        method: "shg.shg.api.loan_inline.post_inline_repayments",
+        args: { loan: frm.doc.name },
+        callback: (r) => {
+          frappe.msgprint({
+            title: "Inline Repayments Posted",
+            message: `Rows posted: ${r.message.posted_rows}`,
+            indicator: "green"
+          });
+          frm.reload_doc();
+        }
+      });
+    });
+  },
+
+  // Recompute totals whenever the doc loads (nice first view)
+  onload_post_render(frm) {
+    compute_inline_totals(frm);
+  }
 });
+
+// Live totals when editing the schedule grid
+frappe.ui.form.on("SHG Loan Repayment Schedule", {
+  pay_now: compute_inline_totals_on_row,
+  amount_to_pay: compute_inline_totals_on_row
+});
+
+function compute_inline_totals_on_row(frm, cdt, cdn) {
+  const row = locals[cdt][cdn];
+  const remaining = flt(row.total_payment) - flt(row.paid_amount);
+  row.remaining_amount = remaining > 0 ? remaining : 0;
+  cur_frm.refresh_field("repayment_schedule");
+  compute_inline_totals(cur_frm);
+}
+
+function compute_inline_totals(frm) {
+  if (!frm || frm.is_new()) return;
+  frappe.call({
+    method: "shg.shg.api.loan_inline.compute_inline_totals",
+    freeze: false,
+    args: { loan: frm.doc.name },
+    callback: (r) => {
+      const m = r.message || {};
+      frm.set_value("inline_total_selected", m.selected || 0);
+      frm.set_value("inline_overdue", m.overdue || 0);
+      frm.set_value("inline_outstanding", m.outstanding || 0);
+      frm.refresh_fields(["inline_total_selected", "inline_overdue", "inline_outstanding"]);
+    }
+  });
+}
 
 // Handle changes in the repayment schedule table
 frappe.ui.form.on('SHG Loan Repayment Schedule', {

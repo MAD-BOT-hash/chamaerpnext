@@ -1,234 +1,123 @@
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate, today
-from shg.shg.loan_utils import update_loan_summary
+
+def _schedule_fieldname():
+    """Find the schedule child table field on SHG Loan (defaults to 'repayment_schedule')."""
+    meta = frappe.get_meta("SHG Loan")
+    for df in meta.fields:
+        if df.fieldtype == "Table" and df.options == "SHG Loan Repayment Schedule":
+            return df.fieldname
+    return "repayment_schedule"
+
+def _row_remaining(row):
+    total = (row.total_payment or 0)  # expected EMI for the row
+    paid  = (row.paid_amount or 0)
+    return max(total - paid, 0)
 
 @frappe.whitelist()
-def pull_unpaid_installments(loan_name):
-    """
-    Populate schedule grid with unpaid/partly paid rows, compute remaining_amount.
-    
-    Args:
-        loan_name (str): Name of the SHG Loan document
-        
-    Returns:
-        list: List of unpaid installments with computed fields
-    """
-    try:
-        # Get unpaid or partially paid installments
-        installments = frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={
-                "parent": loan_name,
-                "parenttype": "SHG Loan",
-                "status": ["in", ["Pending", "Partially Paid", "Overdue"]]
-            },
-            fields=[
-                "name",
-                "installment_no",
-                "due_date",
-                "principal_component",
-                "interest_component",
-                "total_payment",
-                "amount_paid",
-                "unpaid_balance",
-                "status"
-            ],
-            order_by="due_date asc"
-        )
-        
-        # Compute remaining_amount for each installment
-        for installment in installments:
-            # remaining_amount is the same as unpaid_balance for display purposes
-            installment["remaining_amount"] = flt(installment.get("unpaid_balance", 0), 2)
-            # Default amount_to_pay to 0
-            installment["amount_to_pay"] = 0
-            # Default pay_now to False
-            installment["pay_now"] = 0
-            
-        return installments
-        
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), f"Failed to pull unpaid installments for {loan_name}")
-        frappe.throw(_("Failed to fetch unpaid installments: {0}").format(str(e)))
+def pull_unpaid_installments(loan):
+    """Fill the loan's schedule grid with only unpaid (or partly-paid) rows on the form, and compute 'remaining_amount'."""
+    doc = frappe.get_doc("SHG Loan", loan)
+    grid = _schedule_fieldname()
+    updated = []
+    for row in doc.get(grid) or []:
+        rem = _row_remaining(row)
+        row.remaining_amount = rem
+        # clear any previous selection for a fresh pull
+        row.pay_now = 0
+        row.amount_to_pay = None
+        if rem > 0:
+            updated.append(dict(name=row.name, remaining_amount=rem))
+    doc.save(ignore_permissions=True)
+    return {"count": len(updated)}
 
 @frappe.whitelist()
-def compute_inline_totals(loan_name):
-    """
-    Compute selected_to_pay, overdue, outstanding dynamically.
-    
-    Args:
-        loan_name (str): Name of the SHG Loan document
-        
-    Returns:
-        dict: Computed totals
-    """
-    try:
-        # Get all installments
-        installments = frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={
-                "parent": loan_name,
-                "parenttype": "SHG Loan"
-            },
-            fields=[
-                "total_payment",
-                "amount_paid",
-                "unpaid_balance",
-                "status",
-                "due_date"
-            ]
-        )
-        
-        # Calculate totals
-        total_selected = 0
-        overdue_amount = 0
-        outstanding_amount = 0
-        today_date = getdate(today())
-        
-        for installment in installments:
-            # Add to outstanding amount
-            outstanding_amount += flt(installment.get("unpaid_balance", 0))
-            
-            # Check if overdue
-            due_date = getdate(installment.get("due_date"))
-            if (installment.get("status") != "Paid" and 
-                due_date < today_date and 
-                flt(installment.get("unpaid_balance", 0)) > 0):
-                overdue_amount += flt(installment.get("unpaid_balance", 0))
-        
-        return {
-            "total_selected": flt(total_selected, 2),
-            "overdue_amount": flt(overdue_amount, 2),
-            "outstanding_amount": flt(outstanding_amount, 2)
-        }
-        
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), f"Failed to compute inline totals for {loan_name}")
-        frappe.throw(_("Failed to compute totals: {0}").format(str(e)))
+def compute_inline_totals(loan):
+    """Return live totals for Selected To Pay, Overdue, and Outstanding (P+I)."""
+    doc = frappe.get_doc("SHG Loan", loan)
+    grid = _schedule_fieldname()
+
+    selected_to_pay = 0
+    overdue = 0
+    outstanding = 0
+
+    today = frappe.utils.today()
+
+    for row in doc.get(grid) or []:
+        rem = _row_remaining(row)
+        outstanding += rem
+        if row.due_date and row.due_date < today and rem > 0:
+            overdue += rem
+        if int(row.pay_now or 0) == 1 and (row.amount_to_pay or 0) > 0:
+            selected_to_pay += min(float(row.amount_to_pay), float(rem))
+
+    return {
+        "selected": selected_to_pay,
+        "overdue": overdue,
+        "outstanding": outstanding
+    }
 
 @frappe.whitelist()
-def post_inline_repayments(loan_name, repayments):
+def post_inline_repayments(loan):
     """
-    Validate and apply input amounts, update paid_amount, status, and loan totals.
-    
-    Args:
-        loan_name (str): Name of the SHG Loan document
-        repayments (list): List of repayment data with schedule_row_id, amount_to_pay
-        
-    Returns:
-        dict: Status and message
+    Apply selected partial payments against schedule rows.
+    - Validates not exceeding per-row remaining.
+    - Updates paid_amount & status.
+    - Auto-closes rows when fully paid.
+    - Recomputes loan-level aggregates (Total Repaid / Balance / Overdue).
+    NOTE: Hook your GL/Payment Entry creation here if needed.
     """
-    try:
-        total_paid = 0
-        
-        # Process each repayment
-        for repayment in repayments:
-            schedule_row_id = repayment.get("schedule_row_id")
-            amount_to_pay = flt(repayment.get("amount_to_pay"))
-            
-            if amount_to_pay <= 0:
-                continue
-                
-            # Get the schedule row
-            schedule_row = frappe.get_doc("SHG Loan Repayment Schedule", schedule_row_id)
-            
-            # Validate amount doesn't exceed unpaid balance
-            unpaid_balance = flt(schedule_row.unpaid_balance)
-            if amount_to_pay > unpaid_balance:
-                frappe.throw(_("Amount to pay ({0}) exceeds unpaid balance ({1}) for installment {2}").format(
-                    amount_to_pay, unpaid_balance, schedule_row.installment_no))
-            
-            # Update the schedule row
-            schedule_row.amount_paid = flt(schedule_row.amount_paid) + amount_to_pay
-            schedule_row.unpaid_balance = flt(schedule_row.total_payment) - flt(schedule_row.amount_paid)
-            
-            # Update status
-            if schedule_row.unpaid_balance <= 0:
-                schedule_row.status = "Paid"
-                schedule_row.actual_payment_date = today()
-            elif flt(schedule_row.amount_paid) > 0:
-                schedule_row.status = "Partially Paid"
-            
-            # Save the updated row
-            schedule_row.flags.ignore_validate_update_after_submit = True
-            schedule_row.save(ignore_permissions=True)
-            
-            total_paid += amount_to_pay
-        
-        # Update loan summary
-        update_loan_summary(loan_name)
-        
-        # Reload the loan document
-        loan_doc = frappe.get_doc("SHG Loan", loan_name)
-        loan_doc.reload()
-        
-        return {
-            "status": "success",
-            "message": _("Successfully processed repayments of {0}").format(total_paid),
-            "total_paid": flt(total_paid, 2)
-        }
-        
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), f"Failed to post inline repayments for {loan_name}")
-        frappe.throw(_("Failed to process repayments: {0}").format(str(e)))
+    doc = frappe.get_doc("SHG Loan", loan)
+    grid = _schedule_fieldname()
 
-def get_installment_remaining_balance(schedule_row):
-    """
-    Calculate installment remaining balance.
-    
-    Args:
-        schedule_row (object): SHG Loan Repayment Schedule row
-        
-    Returns:
-        float: Remaining balance
-    """
-    return flt(schedule_row.total_payment) - flt(schedule_row.amount_paid)
+    changes = []
+    for row in doc.get(grid) or []:
+        if not int(row.pay_now or 0):
+            continue
+        amt = float(row.amount_to_pay or 0)
+        if amt <= 0:
+            continue
 
-def compute_aggregate_totals(loan_name):
-    """
-    Compute aggregate totals (outstanding = principal + interest unpaid).
-    
-    Args:
-        loan_name (str): Name of the SHG Loan document
-        
-    Returns:
-        dict: Aggregate totals
-    """
-    try:
-        installments = frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={
-                "parent": loan_name,
-                "parenttype": "SHG Loan"
-            },
-            fields=[
-                "principal_component",
-                "interest_component",
-                "amount_paid",
-                "unpaid_balance"
-            ]
-        )
-        
-        total_principal_unpaid = 0
-        total_interest_unpaid = 0
-        total_outstanding = 0
-        
-        for installment in installments:
-            total_principal_unpaid += flt(installment.get("principal_component", 0))
-            total_interest_unpaid += flt(installment.get("interest_component", 0))
-            total_outstanding += flt(installment.get("unpaid_balance", 0))
-            
-        return {
-            "total_principal_unpaid": flt(total_principal_unpaid, 2),
-            "total_interest_unpaid": flt(total_interest_unpaid, 2),
-            "total_outstanding": flt(total_outstanding, 2)
-        }
-        
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), f"Failed to compute aggregate totals for {loan_name}")
-        return {
-            "total_principal_unpaid": 0,
-            "total_interest_unpaid": 0,
-            "total_outstanding": 0
-        }
+        remaining = _row_remaining(row)
+        if amt > remaining + 1e-9:
+            frappe.throw(_("Repayment ({0}) exceeds remaining balance ({1}) for installment #{2}").format(
+                frappe.utils.fmt_money(amt), frappe.utils.fmt_money(remaining), (row.idx or "")
+            ))
+
+        row.paid_amount = float(row.paid_amount or 0) + amt
+        new_remaining = _row_remaining(row)
+        row.status = "Paid" if new_remaining <= 1e-9 else "Partly Paid"
+        row.remaining_amount = new_remaining
+
+        # reset inline inputs after posting
+        row.pay_now = 0
+        row.amount_to_pay = None
+
+        changes.append(dict(rowname=row.name, posted=amt, status=row.status, remaining=new_remaining))
+
+    # Recompute loan level totals (Outstanding P+I, Total Repaid, Balance)
+    _recompute_loan_totals(doc, grid)
+
+    doc.save(ignore_permissions=True)
+    return {"posted_rows": len(changes), "rows": changes}
+
+def _recompute_loan_totals(doc, grid):
+    total_due_all = 0.0
+    total_paid_all = 0.0
+    overdue = 0.0
+    today = frappe.utils.today()
+
+    for r in doc.get(grid) or []:
+        total_due_all += float(r.total_payment or 0)
+        total_paid_all += float(r.paid_amount or 0)
+        if r.due_date and r.due_date < today:
+            remaining = _row_remaining(r)
+            overdue += max(remaining, 0)
+
+    outstanding = max(total_due_all - total_paid_all, 0.0)
+
+    # Map to your existing parent fields; adjust if your fieldnames differ
+    doc.db_set("total_repaid", total_paid_all, commit=False)
+    doc.db_set("loan_balance", outstanding, commit=False)     # a.k.a. full outstanding (P + I)
+    doc.db_set("balance_amount", outstanding, commit=False)   # keep both aligned if both exist
+    doc.db_set("overdue_amount", overdue, commit=False)
