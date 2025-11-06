@@ -9,20 +9,7 @@ from shg.shg.loan_utils import allocate_payment_to_schedule, update_loan_summary
 
 class SHGLoanRepayment(Document):
     def validate(self):
-        if flt(self.total_paid) <= 0:
-            frappe.throw("Repayment amount must be greater than 0.")
-
-        # Recompute schedule first, then validate
-        if self.loan:
-            from shg.shg.loan_utils import get_schedule, compute_totals
-            rows = get_schedule(self.loan)
-            totals = compute_totals(rows)
-            outstanding_total = totals["outstanding_balance"]
-            
-            if flt(self.total_paid) > flt(outstanding_total):
-                frappe.throw(
-                    f"Repayment ({self.total_paid}) exceeds remaining balance ({outstanding_total})."
-                )
+        self.validate_repayment()
 
     def validate_repayment(self):
         """Validate repayment details."""
