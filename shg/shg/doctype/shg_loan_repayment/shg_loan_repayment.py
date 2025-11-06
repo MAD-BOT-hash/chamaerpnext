@@ -18,9 +18,12 @@ class SHGLoanRepayment(Document):
         if loan_doc.docstatus != 1:
             frappe.throw(f"Loan {loan_doc.name} must be submitted before repayment.")
 
-        if flt(self.total_paid) > flt(loan_doc.balance_amount):
+        # Calculate outstanding balance on-the-fly instead of using cached value
+        outstanding_balance = self.calculate_outstanding_balance(loan_doc)
+        
+        if flt(self.total_paid) > flt(outstanding_balance):
             frappe.throw(
-                f"Repayment ({self.total_paid}) exceeds remaining balance ({loan_doc.balance_amount})."
+                f"Repayment ({self.total_paid}) exceeds remaining balance ({outstanding_balance})."
             )
 
         # Auto-calculate repayment breakdown
@@ -28,6 +31,26 @@ class SHGLoanRepayment(Document):
         
         # Validate installment adjustments if any
         self.validate_installment_adjustments()
+
+    def calculate_outstanding_balance(self, loan_doc):
+        """
+        Calculate outstanding balance by summing unpaid balances from repayment schedule.
+        This ensures we're using real-time data instead of potentially stale cached values.
+        """
+        # Get all repayment schedule rows
+        schedule_rows = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={
+                "parent": loan_doc.name,
+                "parenttype": "SHG Loan"
+            },
+            fields=["unpaid_balance"]
+        )
+        
+        # Sum all unpaid balances
+        outstanding_balance = sum(flt(row.get("unpaid_balance", 0)) for row in schedule_rows)
+        
+        return outstanding_balance
 
     def on_submit(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
