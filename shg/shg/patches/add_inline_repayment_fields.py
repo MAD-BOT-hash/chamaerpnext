@@ -32,10 +32,10 @@ def execute():
     
     # Add fields to SHG Loan Repayment Schedule
     for field in schedule_fields:
-        if not frappe.db.exists("Custom Field", {"dt": "SHG Loan Repayment Schedule", "fieldname": field["fieldname"]}):
-            field["dt"] = "SHG Loan Repayment Schedule"
-            create_custom_field(field)
-            frappe.msgprint(f"Added field {field['fieldname']} to SHG Loan Repayment Schedule")
+        field_copy = field.copy()
+        if not frappe.db.exists("Custom Field", {"dt": "SHG Loan Repayment Schedule", "fieldname": field_copy["fieldname"]}):
+            create_custom_field("SHG Loan Repayment Schedule", field_copy)
+            frappe.msgprint(f"Added field {field_copy['fieldname']} to SHG Loan Repayment Schedule")
     
     # Fields for SHG Loan parent document
     loan_fields = [
@@ -76,7 +76,7 @@ def execute():
     
     # Add fields to SHG Loan
     for field in loan_fields:
-        if not frappe.db.exists("Custom Field", {"dt": "SHG Loan", "fieldname": field["fieldname"]}):
-            field["dt"] = "SHG Loan"
-            create_custom_field(field)
-            frappe.msgprint(f"Added field {field['fieldname']} to SHG Loan")
+        field_copy = field.copy()
+        if not frappe.db.exists("Custom Field", {"dt": "SHG Loan", "fieldname": field_copy["fieldname"]}):
+            create_custom_field("SHG Loan", field_copy)
+            frappe.msgprint(f"Added field {field_copy['fieldname']} to SHG Loan")

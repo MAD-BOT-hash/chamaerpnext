@@ -84,7 +84,7 @@ after_install = "shg.install.after_install"
 doctype_js = {
     "SHG Member": "public/js/shg_member.js",
     "SHG Contribution": "public/js/shg_contribution.js",
-    "SHG Loan": "public/js/shg_loan.js",
+    "SHG Loan": "shg/shg/client_scripts/shg_loan.js",
     "SHG Loan Repayment": "shg/shg/doctype/shg_loan_repayment/shg_loan_repayment.js",
     "SHG Meeting": "public/js/shg_meeting.js",
     "SHG Member Attendance": "public/js/shg_member_attendance.js",
