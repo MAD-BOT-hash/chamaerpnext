@@ -60,19 +60,26 @@ def get_columns():
             "fieldname": "days_90_plus",
             "fieldtype": "Currency",
             "width": 120
+        },
+        {
+            "label": _("Days Overdue"),
+            "fieldname": "days_overdue",
+            "fieldtype": "Int",
+            "width": 100
         }
     ]
 
 def get_data(filters):
     conditions = ""
+    params = {"today": getdate(today())}
+    
     if filters.get("member"):
         conditions += " AND l.member = %(member)s"
+        params["member"] = filters.get("member")
     if filters.get("loan"):
         conditions += " AND l.name = %(loan)s"
+        params["loan"] = filters.get("loan")
         
-    # Get today's date
-    today_date = getdate(today())
-    
     data = frappe.db.sql("""
         SELECT 
             l.member,
@@ -83,12 +90,16 @@ def get_data(filters):
             SUM(CASE WHEN s.due_date < %(today)s AND s.due_date >= DATE_SUB(%(today)s, INTERVAL 30 DAY) THEN s.unpaid_balance ELSE 0 END) AS days_0_30,
             SUM(CASE WHEN s.due_date < DATE_SUB(%(today)s, INTERVAL 30 DAY) AND s.due_date >= DATE_SUB(%(today)s, INTERVAL 60 DAY) THEN s.unpaid_balance ELSE 0 END) AS days_31_60,
             SUM(CASE WHEN s.due_date < DATE_SUB(%(today)s, INTERVAL 60 DAY) AND s.due_date >= DATE_SUB(%(today)s, INTERVAL 90 DAY) THEN s.unpaid_balance ELSE 0 END) AS days_61_90,
-            SUM(CASE WHEN s.due_date < DATE_SUB(%(today)s, INTERVAL 90 DAY) THEN s.unpaid_balance ELSE 0 END) AS days_90_plus
+            SUM(CASE WHEN s.due_date < DATE_SUB(%(today)s, INTERVAL 90 DAY) THEN s.unpaid_balance ELSE 0 END) AS days_90_plus,
+            CASE 
+                WHEN l.next_due_date < %(today)s THEN DATEDIFF(%(today)s, l.next_due_date)
+                ELSE 0
+            END as days_overdue
         FROM `tabSHG Loan` l
         LEFT JOIN `tabSHG Loan Repayment Schedule` s ON s.parent = l.name AND s.docstatus = 1 AND s.unpaid_balance > 0
         WHERE l.docstatus = 1 AND l.balance_amount > 0 {conditions}
-        GROUP BY l.name, l.member, l.member_name, l.balance_amount
+        GROUP BY l.name, l.member, l.member_name, l.balance_amount, l.next_due_date
         ORDER BY l.member_name
-    """.format(conditions=conditions), {"today": today_date, **filters}, as_dict=1)
+    """.format(conditions=conditions), params, as_dict=1)
     
     return data

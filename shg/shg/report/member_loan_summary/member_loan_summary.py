@@ -10,6 +10,12 @@ def execute(filters=None):
 def get_columns():
     return [
         {
+            "label": _("Member"),
+            "fieldname": "member_name",
+            "fieldtype": "Data",
+            "width": 200
+        },
+        {
             "label": _("Loan ID"),
             "fieldname": "loan_id",
             "fieldtype": "Link",
@@ -17,17 +23,10 @@ def get_columns():
             "width": 150
         },
         {
-            "label": _("Member"),
-            "fieldname": "member",
-            "fieldtype": "Link",
-            "options": "SHG Member",
-            "width": 150
-        },
-        {
-            "label": _("Member Name"),
-            "fieldname": "member_name",
-            "fieldtype": "Data",
-            "width": 200
+            "label": _("Disbursement Date"),
+            "fieldname": "disbursement_date",
+            "fieldtype": "Date",
+            "width": 120
         },
         {
             "label": _("Loan Amount"),
@@ -42,20 +41,14 @@ def get_columns():
             "width": 120
         },
         {
-            "label": _("Paid to Date"),
-            "fieldname": "paid_to_date",
+            "label": _("Total Paid"),
+            "fieldname": "total_paid",
             "fieldtype": "Currency",
             "width": 120
         },
         {
-            "label": _("Outstanding"),
-            "fieldname": "outstanding",
-            "fieldtype": "Currency",
-            "width": 120
-        },
-        {
-            "label": _("Overdue"),
-            "fieldname": "overdue",
+            "label": _("Outstanding Balance"),
+            "fieldname": "outstanding_balance",
             "fieldtype": "Currency",
             "width": 120
         },
@@ -78,16 +71,16 @@ def get_columns():
             "width": 100
         },
         {
-            "label": _("Disbursement Date"),
-            "fieldname": "disbursement_date",
-            "fieldtype": "Date",
-            "width": 120
-        },
-        {
             "label": _("Next Due Date"),
             "fieldname": "next_due_date",
             "fieldtype": "Date",
             "width": 120
+        },
+        {
+            "label": _("Days Overdue"),
+            "fieldname": "days_overdue",
+            "fieldtype": "Int",
+            "width": 100
         }
     ]
 
@@ -95,40 +88,35 @@ def get_data(filters):
     conditions = ""
     params = {"today": getdate(today())}
     
-    if filters.get("status"):
-        conditions += " AND l.status = %(status)s"
-        params["status"] = filters.get("status")
-        
     if filters.get("member"):
         conditions += " AND l.member = %(member)s"
         params["member"] = filters.get("member")
         
-    if filters.get("from_date"):
-        conditions += " AND l.disbursement_date >= %(from_date)s"
-        params["from_date"] = filters.get("from_date")
+    if filters.get("loan"):
+        conditions += " AND l.name = %(loan)s"
+        params["loan"] = filters.get("loan")
         
-    if filters.get("to_date"):
-        conditions += " AND l.disbursement_date <= %(to_date)s"
-        params["to_date"] = filters.get("to_date")
+    if filters.get("status"):
+        conditions += " AND l.status = %(status)s"
+        params["status"] = filters.get("status")
         
     query = f"""
         SELECT 
-            l.name as loan_id,
-            l.member,
             l.member_name,
+            l.name as loan_id,
+            l.disbursement_date,
             l.loan_amount,
             l.total_payable,
-            l.total_repaid as paid_to_date,
-            l.balance_amount as outstanding,
-            CASE 
-                WHEN l.next_due_date < %(today)s AND l.balance_amount > 0 THEN l.overdue_amount
-                ELSE 0
-            END as overdue,
+            l.total_repaid as total_paid,
+            l.balance_amount as outstanding_balance,
             l.interest_rate,
             l.loan_period_months,
             l.status,
-            l.disbursement_date,
-            l.next_due_date
+            l.next_due_date,
+            CASE 
+                WHEN l.next_due_date < %(today)s THEN DATEDIFF(%(today)s, l.next_due_date)
+                ELSE 0
+            END as days_overdue
         FROM `tabSHG Loan` l
         WHERE l.docstatus = 1 {conditions}
         ORDER BY l.disbursement_date DESC
