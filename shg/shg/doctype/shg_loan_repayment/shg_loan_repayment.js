@@ -1,3 +1,49 @@
+frappe.ui.form.on('SHG Loan Repayment', {
+  refresh(frm) {
+    if (!frm.doc.loan) return;
+
+    if (!frm.custom_buttons_added) {
+      frm.add_custom_button('Fetch Unpaid Installments', async () => {
+        if (!frm.doc.loan) {
+          frappe.msgprint('Select a Loan first.');
+          return;
+        }
+        const rows = await frappe.call({
+          method: 'shg.shg.api.loan.get_unpaid_installments',
+          args: { loan: frm.doc.loan }
+        });
+        // Display in a child table named "Repayment Items" (create it if you don't have it)
+        const data = rows.message || [];
+        frm.clear_table('repayment_items');
+        data.forEach(r => {
+          const d = frm.add_child('repayment_items');
+          d.schedule_row = r.name;
+          d.due_date = r.due_date;
+          d.installment = r.total_payment;
+          d.amount_paid = r.amount_paid || 0;
+          d.remaining_amount = r.remaining_amount || (r.total_payment - (r.amount_paid || 0));
+          d.to_pay = 0; // user may enter partial here
+        });
+        frm.refresh_fields('repayment_items');
+        frappe.show_alert('Unpaid installments fetched.');
+      });
+
+      frm.custom_buttons_added = true;
+    }
+  },
+
+  // helper: sum user-entered partials into `amount`
+  repayment_items_add(frm, cdt, cdn) { sum_to_pay(frm); },
+  repayment_items_remove(frm, cdt, cdn) { sum_to_pay(frm); }
+});
+
+function sum_to_pay(frm){
+  let total = 0;
+  (frm.doc.repayment_items || []).forEach(r => total += (r.to_pay || 0));
+  frm.set_value('total_paid', total);
+  frm.refresh_field('total_paid');
+}
+
 frappe.ui.form.on("SHG Loan Repayment", {
     setup: function(frm) {
         // Set query for loan field to only show submitted loans with outstanding balance

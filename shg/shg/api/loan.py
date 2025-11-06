@@ -3,6 +3,18 @@ from frappe import _
 from frappe.utils import flt, getdate, nowdate
 from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
+from shg.shg.loan_utils import allocate_payment_to_schedule, update_loan_summary, get_schedule
+
+@frappe.whitelist()
+def get_unpaid_installments(loan):
+    rows = get_schedule(loan)
+    return [r for r in rows if (r.get("status") not in ("Paid",) and flt(r.get("remaining_amount") or (flt(r["total_payment"]) - flt(r.get("amount_paid") or 0))) > 0)]
+
+@frappe.whitelist()
+def post_repayment_allocation(loan, amount):
+    amount = flt(amount)
+    totals = allocate_payment_to_schedule(loan, amount)
+    return {"message": "Repayment allocated", "totals": totals}
 
 @frappe.whitelist()
 def debug_loan_balance(loan_name):
