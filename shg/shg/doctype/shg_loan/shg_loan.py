@@ -347,29 +347,6 @@ def recalculate_loan_summary(loan_name):
         frappe.log_error(frappe.get_traceback(), f"Failed to recalculate loan summary for {loan_name}")
         frappe.throw(f"Failed to recalculate loan summary: {str(e)}")
 
-@frappe.whitelist()
-def get_active_group_members():
-    """
-    Fetch all active SHG members for group loan population.
-    
-    Returns:
-        list: List of active SHG members with name and member_name
-    """
-    try:
-        # Get all active members
-        members = frappe.get_all(
-            "SHG Member",
-            filters={
-                "membership_status": "Active"
-            },
-            fields=["name", "member_name"],
-            order_by="member_name"
-        )
-        return members
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Failed to fetch active group members")
-        frappe.throw(f"Failed to fetch active group members: {str(e)}")
-
 class SHGLoan(Document):
     """SHG Loan controller with automatic ledger and repayment schedule posting."""
 

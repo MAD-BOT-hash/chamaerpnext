@@ -42,6 +42,25 @@ frappe.ui.form.on('SHG Loan', {
                         }
                     });
                 });
+                
+                // Add Generate Individual Loans button
+                if (frm.doc.loan_members && frm.doc.loan_members.length > 0) {
+                    frm.add_custom_button(__('Generate Individual Loans'), function() {
+                        frappe.call({
+                            method: 'shg.shg.doctype.shg_loan.shg_loan.generate_individual_loans',
+                            args: {
+                                parent_loan: frm.doc.name
+                            },
+                            callback: function(r) {
+                                if (r.message && r.message.status === 'success') {
+                                    frappe.show_alert(__('{0} individual loans generated', [r.message.created.length]));
+                                } else {
+                                    frappe.msgprint(__('Failed to generate individual loans'));
+                                }
+                            }
+                        });
+                    });
+                }
             }
         }
     }

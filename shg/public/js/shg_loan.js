@@ -7,6 +7,13 @@ frappe.ui.form.on("SHG Loan", {
             });
         }
         
+        // Add "Generate Individual Loans" button for group loans
+        if (frm.doc.docstatus === 1 && frm.doc.loan_members && frm.doc.loan_members.length > 0) {
+            frm.add_custom_button(__("Generate Individual Loans"), function() {
+                generate_individual_loans(frm);
+            });
+        }
+        
         // Add "Pull Unpaid Installments" button
         frm.add_custom_button(__("Pull Unpaid Installments"), function() {
             pull_unpaid_installments(frm);
@@ -104,6 +111,46 @@ function get_active_members(frm) {
                 // Sync loan amount with members if loan amount is zero
                 sync_loan_amount_with_members(frm);
             }
+        }
+    });
+}
+
+// Function to generate individual loans from group loan
+function generate_individual_loans(frm) {
+    if (!frm.doc.name) {
+        frappe.msgprint(__("Please save the loan first."));
+        return;
+    }
+    
+    frappe.call({
+        method: "shg.shg.doctype.shg_loan.shg_loan.generate_individual_loans",
+        args: {
+            parent_loan: frm.doc.name
+        },
+        freeze: true,
+        freeze_message: __("Generating individual loans..."),
+        callback: function(r) {
+            if (r.message && r.message.status === "success") {
+                frappe.msgprint({
+                    title: __("Success"),
+                    message: r.message.message,
+                    indicator: "green"
+                });
+                frm.reload_doc();
+            } else {
+                frappe.msgprint({
+                    title: __("Error"),
+                    message: __("Failed to generate individual loans."),
+                    indicator: "red"
+                });
+            }
+        },
+        error: function(r) {
+            frappe.msgprint({
+                title: __("Error"),
+                message: __("Failed to generate individual loans. Please check the error logs."),
+                indicator: "red"
+            });
         }
     });
 }
