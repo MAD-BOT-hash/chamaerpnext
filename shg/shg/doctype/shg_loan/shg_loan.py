@@ -336,14 +336,16 @@ def recalculate_loan_summary(loan_name):
         loan_name (str): Name of the SHG Loan document
         
     Returns:
-        str: Success message
+        list: Log entries of adjustments made
     """
-    loan = frappe.get_doc("SHG Loan", loan_name)
-    loan.flags.ignore_validate_update_after_submit = True
-    loan.recalculate_summary()  # we'll make this a method on the DocType
-    loan.save(ignore_permissions=True)
-    frappe.db.commit()
-    return "Summary recalculated successfully"
+    try:
+        loan = frappe.get_doc("SHG Loan", loan_name)
+        log_entries = loan.recalculate_summary()  # This will return log entries
+        frappe.db.commit()
+        return log_entries
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"Failed to recalculate loan summary for {loan_name}")
+        frappe.throw(f"Failed to recalculate loan summary: {str(e)}")
 
 
 class SHGLoan(Document):

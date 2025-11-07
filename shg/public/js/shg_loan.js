@@ -15,6 +15,8 @@ frappe.ui.form.on("SHG Loan", {
             frappe.call({
                 method: "shg.shg.doctype.shg_loan.shg_loan.recalculate_loan_summary",
                 args: { loan_name: frm.doc.name },
+                freeze: true,
+                freeze_message: __("Recalculating loan summary..."),
                 callback: function (r) {
                     frm.reload_doc();
                     if (r.message && r.message.length > 0) {
@@ -24,8 +26,15 @@ frappe.ui.form.on("SHG Loan", {
                             indicator: "green"
                         });
                     } else {
-                        frappe.msgprint(__("No changes found."));
+                        frappe.msgprint(__("Loan summary recalculated successfully. No changes were needed."));
                     }
+                },
+                error: function(r) {
+                    frappe.msgprint({
+                        title: __("Error"),
+                        message: __("Failed to recalculate loan summary. Please check the error logs."),
+                        indicator: "red"
+                    });
                 }
             });
         }).addClass("btn-primary");
