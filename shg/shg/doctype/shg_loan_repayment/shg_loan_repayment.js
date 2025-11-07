@@ -3,46 +3,43 @@ frappe.ui.form.on('SHG Loan Repayment', {
     if (!frm.doc.loan) return;
 
     if (!frm.custom_buttons_added) {
-      frm.add_custom_button('Fetch Unpaid Installments', async () => {
+      // Add button to fetch unpaid installments for repayment breakdown
+      frm.add_custom_button(__('Fetch Unpaid Installments'), function() {
         if (!frm.doc.loan) {
           frappe.msgprint('Select a Loan first.');
           return;
         }
-        const rows = await frappe.call({
-          method: 'shg.shg.api.loan.get_unpaid_installments',
-          args: { loan: frm.doc.loan }
+        frm.call({
+          method: 'get_unpaid_installments',
+          doc: frm.doc,
+          callback: function(r) {
+            if (r.message) {
+              frm.refresh_field('repayment_breakdown');
+              frappe.show_alert('Unpaid installments loaded successfully.');
+            }
+          }
         });
-        // Display in a child table named "Repayment Items" (create it if you don't have it)
-        const data = rows.message || [];
-        frm.clear_table('repayment_items');
-        data.forEach(r => {
-          const d = frm.add_child('repayment_items');
-          d.schedule_row = r.name;
-          d.due_date = r.due_date;
-          d.installment = r.total_payment;
-          d.amount_paid = r.amount_paid || 0;
-          d.unpaid_balance = r.unpaid_balance || (r.total_payment - (r.amount_paid || 0));
-          d.to_pay = 0; // user may enter partial here
-        });
-        frm.refresh_fields('repayment_items');
-        frappe.show_alert('Unpaid installments fetched.');
+      });
+
+      // Add button to apply repayment
+      frm.add_custom_button(__('Apply Repayment'), function() {
+        if (frm.doc.total_paid > 0) {
+          frappe.confirm(
+            'Are you sure you want to apply this repayment?',
+            function() {
+              // Submit the document
+              frm.savesubmit();
+            }
+          );
+        } else {
+          frappe.msgprint('Please enter a repayment amount first.');
+        }
       });
 
       frm.custom_buttons_added = true;
     }
-  },
-
-  // helper: sum user-entered partials into `amount`
-  repayment_items_add(frm, cdt, cdn) { sum_to_pay(frm); },
-  repayment_items_remove(frm, cdt, cdn) { sum_to_pay(frm); }
+  }
 });
-
-function sum_to_pay(frm){
-  let total = 0;
-  (frm.doc.repayment_items || []).forEach(r => total += (r.to_pay || 0));
-  frm.set_value('total_paid', total);
-  frm.refresh_field('total_paid');
-}
 
 frappe.ui.form.on("SHG Loan Repayment", {
     setup: function(frm) {
@@ -177,6 +174,63 @@ frappe.ui.form.on("SHG Repayment Installment Adjustment", {
         let total_paid = 0;
         frm.doc.installment_adjustment.forEach(installment => {
             total_paid += flt(installment.amount_to_repay);
+        });
+        frm.set_value("total_paid", total_paid);
+    }
+});
+
+// Handle changes in repayment breakdown table
+frappe.ui.form.on("SHG Repayment Breakdown", {
+    amount_to_pay: function(frm, cdt, cdn) {
+        let row = frappe.get_doc(cdt, cdn);
+        
+        // Validate that amount to pay does not exceed unpaid balance
+        if (flt(row.amount_to_pay) > flt(row.unpaid_balance)) {
+            frappe.msgprint(`Amount to pay cannot exceed unpaid balance (${row.unpaid_balance}).`);
+            row.amount_to_pay = row.unpaid_balance;
+            frm.refresh_field("repayment_breakdown");
+        }
+        
+        // Update status based on amount to pay
+        if (flt(row.amount_to_pay) >= flt(row.unpaid_balance)) {
+            row.status = "Fully Paid";
+        } else if (flt(row.amount_to_pay) > 0) {
+            row.status = "Partially Paid";
+        } else {
+            row.status = "Unpaid";
+        }
+        
+        // Recalculate total paid
+        let total_paid = 0;
+        frm.doc.repayment_breakdown.forEach(installment => {
+            total_paid += flt(installment.amount_to_pay);
+        });
+        frm.set_value("total_paid", total_paid);
+        
+        // Auto-calculate breakdown when total paid changes
+        if (frm.doc.loan && total_paid > 0) {
+            frm.call({
+                method: 'calculate_repayment_breakdown',
+                doc: frm.doc,
+                callback: function(r) {
+                    if (r.message) {
+                        frm.set_value("principal_amount", r.message.principal_amount);
+                        frm.set_value("interest_amount", r.message.interest_amount);
+                        frm.set_value("penalty_amount", r.message.penalty_amount);
+                        frm.set_value("outstanding_balance", r.message.outstanding_balance);
+                        frm.set_value("balance_after_payment", r.message.balance_after_payment);
+                        frm.refresh_fields();
+                    }
+                }
+            });
+        }
+    },
+    
+    repayment_breakdown_remove: function(frm) {
+        // Recalculate total paid when an installment is removed
+        let total_paid = 0;
+        frm.doc.repayment_breakdown.forEach(installment => {
+            total_paid += flt(installment.amount_to_pay);
         });
         frm.set_value("total_paid", total_paid);
     }

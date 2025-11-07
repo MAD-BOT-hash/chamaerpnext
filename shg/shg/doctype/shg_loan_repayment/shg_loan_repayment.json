@@ -26,6 +26,8 @@
         "balance_after_payment",
         "installment_adjustment_section",
         "installment_adjustment",
+        "repayment_breakdown_section",
+        "repayment_breakdown",
         "accounting_section",
         "voucher_type",
         "journal_entry",
@@ -157,6 +159,17 @@
             "fieldtype": "Table",
             "label": "Installment Adjustment",
             "options": "SHG Repayment Installment Adjustment"
+        },
+        {
+            "fieldname": "repayment_breakdown_section",
+            "fieldtype": "Section Break",
+            "label": "Repayment Breakdown"
+        },
+        {
+            "fieldname": "repayment_breakdown",
+            "fieldtype": "Table",
+            "label": "Repayment Breakdown",
+            "options": "SHG Repayment Breakdown"
         },
         {
             "fieldname": "accounting_section",

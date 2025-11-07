@@ -193,6 +193,7 @@ def recompute_from_ledger(loan_name):
             frappe.log_error(frappe.get_traceback(), f"Failed to post repayment to ledger for {self.name}")
             frappe.throw(f"Failed to post repayment to ledger: {str(e)}")
 
+    @frappe.whitelist()
     def calculate_repayment_breakdown(self):
         """
         Calculate principal, interest, and penalty breakdown for the repayment.
@@ -254,3 +255,49 @@ def recompute_from_ledger(loan_name):
             "principal_amount": self.principal_amount,
             "balance_after_payment": self.balance_after_payment
         }
+
+    @frappe.whitelist()
+    def get_unpaid_installments(self):
+        """
+        Fetch unpaid or partially paid installments linked to the given Loan.
+        Populate a child table (Repayment Breakdown) with installment details.
+        """
+        if not self.loan:
+            frappe.msgprint("Please select a loan first.")
+            return
+
+        # Get unpaid or partially paid installments
+        schedule = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={
+                "parent": self.loan,
+                "status": ("in", ["Unpaid", "Partially Paid", "Pending", "Overdue"])
+            },
+            fields=[
+                "name", "installment_no", "due_date", "emi_amount", 
+                "principal_component", "interest_component", "total_payment", 
+                "amount_paid", "unpaid_balance", "status"
+            ]
+        )
+        
+        if not schedule:
+            frappe.msgprint("No unpaid installments found.")
+            return
+
+        # Clear existing repayment breakdown
+        self.set("repayment_breakdown", [])
+        
+        # Populate repayment breakdown table
+        for row in schedule:
+            self.append("repayment_breakdown", {
+                "installment_no": row.installment_no,
+                "due_date": row.due_date,
+                "emi_amount": row.emi_amount or row.total_payment,
+                "principal_component": row.principal_component,
+                "interest_component": row.interest_component,
+                "unpaid_balance": row.unpaid_balance or 0,
+                "amount_to_pay": 0  # User will edit this
+            })
+        
+        frappe.msgprint("Unpaid installments loaded successfully.")
+        return self.repayment_breakdown
