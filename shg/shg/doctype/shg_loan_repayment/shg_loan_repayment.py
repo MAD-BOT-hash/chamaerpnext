@@ -65,6 +65,8 @@ class SHGLoanRepayment(Document):
     def on_submit(self):
         if self.loan:
             allocate_payment_to_schedule(self.loan, self.total_paid)
+            # Use the central update_loan_summary function
+            from shg.shg.loan_utils import update_loan_summary
             update_loan_summary(self.loan)
 
     def on_cancel(self):
@@ -90,6 +92,8 @@ def recompute_from_ledger(loan_name):
     for p in pays:
         allocate_payment_to_schedule(loan_name, p["total_paid"])
 
+    # Use the central update_loan_summary function
+    from shg.shg.loan_utils import update_loan_summary
     update_loan_summary(loan_name)
 
     def calculate_outstanding_balance(self, loan_doc):

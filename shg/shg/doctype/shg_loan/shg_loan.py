@@ -732,6 +732,10 @@ class SHGLoan(Document):
             self.append("repayment_schedule", row_data)
 
         frappe.msgprint(_("✅ Repayment schedule created with {0} installments.").format(len(schedule)))
+        
+        # Update loan summary after schedule creation
+        from shg.shg.loan_utils import update_loan_summary
+        update_loan_summary(self.name)
 
     @frappe.whitelist()
     def mark_all_due_as_paid(self):
@@ -947,4 +951,9 @@ def on_submit(doc, method=None):
     doc.create_repayment_schedule_if_needed()
     doc.db_set("status", "Disbursed")
     doc.db_set("disbursed_on", now_datetime())
+    
+    # Update loan summary after schedule creation
+    from shg.shg.loan_utils import update_loan_summary
+    update_loan_summary(doc.name)
+    
     frappe.msgprint(_(f"Loan {doc.name} successfully disbursed and schedule created."))

@@ -4,7 +4,7 @@ frappe.ui.form.on('SHG Loan', {
             // Add Recalculate Loan Summary button
             frm.add_custom_button(__('Recalculate Loan Summary'), function() {
                 frappe.call({
-                    method: 'shg.shg.doctype.shg_loan.shg_loan.update_loan_summary',
+                    method: 'shg.shg.loan_utils.update_loan_summary',
                     args: {
                         loan_name: frm.doc.name
                     },

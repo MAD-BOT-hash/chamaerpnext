@@ -36,15 +36,92 @@ def compute_totals(schedule_rows):
 
 def update_loan_summary(loan_name):
     """
-    Alias to new method for backward compatibility.
-    Update loan summary fields to ensure synchronization with repayment schedule.
+    Central function to update all loan summary fields based on repayment schedule.
+    Reads all rows in SHG Loan Repayment Schedule and recalculates all summary fields.
     """
     try:
-        from shg.shg.doctype.shg_loan.shg_loan import update_loan_summary as real_update_loan_summary
-        return real_update_loan_summary(loan_name)
+        # Get the loan document
+        loan_doc = frappe.get_doc("SHG Loan", loan_name)
+        
+        # Get repayment schedule rows
+        schedule = frappe.get_all(
+            "SHG Loan Repayment Schedule",
+            filters={"parent": loan_name},
+            fields=[
+                "name", "due_date", "principal_component", "interest_component",
+                "total_payment", "amount_paid", "unpaid_balance", "status"
+            ],
+            order_by="due_date asc"
+        )
+        
+        # Calculate totals
+        total_principal_payable = sum(flt(r.principal_component) for r in schedule)
+        total_interest_payable = sum(flt(r.interest_component) for r in schedule)
+        total_payable = sum(flt(r.total_payment) for r in schedule)
+        total_paid = sum(flt(r.amount_paid or 0) for r in schedule)
+        
+        # Calculate outstanding balance (principal + interest)
+        outstanding_balance = sum(flt(r.unpaid_balance or (flt(r.total_payment) - flt(r.amount_paid or 0))) for r in schedule)
+        
+        # Calculate overdue amount (sum of unpaid installments where due_date < today)
+        overdue_amount = 0
+        today_date = getdate(today())
+        for r in schedule:
+            if (r.status not in ("Paid",) and 
+                getdate(r.due_date) < today_date and 
+                flt(r.unpaid_balance or (flt(r.total_payment) - flt(r.amount_paid or 0))) > 0):
+                overdue_amount += flt(r.unpaid_balance or (flt(r.total_payment) - flt(r.amount_paid or 0)))
+        
+        # Calculate next due date (first unpaid installment)
+        next_due_date = None
+        for r in sorted(schedule, key=lambda x: getdate(x.due_date)):
+            if r.status not in ("Paid",) and flt(r.unpaid_balance or 0) > 0:
+                next_due_date = r.due_date
+                break
+        
+        # Calculate percentage repaid
+        percent_repaid = 0
+        if total_payable > 0:
+            percent_repaid = flt((total_paid / total_payable) * 100, 2)
+        
+        # Update loan document fields
+        loan_doc.total_principal_payable = flt(total_principal_payable, 2)
+        loan_doc.total_interest_payable = flt(total_interest_payable, 2)
+        loan_doc.total_payable_amount = flt(total_payable, 2)
+        loan_doc.total_amount_paid = flt(total_paid, 2)
+        loan_doc.total_interest_paid = flt(total_interest_payable - (outstanding_balance - (total_principal_payable - total_paid + total_interest_payable)), 2)  # Simplified calculation
+        loan_doc.outstanding_amount = flt(outstanding_balance, 2)
+        loan_doc.balance_amount = flt(outstanding_balance, 2)
+        loan_doc.loan_balance = flt(outstanding_balance, 2)
+        loan_doc.overdue_amount = flt(overdue_amount, 2)
+        loan_doc.next_due_date = next_due_date
+        loan_doc.percent_repaid = flt(percent_repaid, 2)
+        
+        # Set loan status based on calculations
+        if outstanding_balance <= 0:
+            loan_doc.loan_status = "Completed"
+        elif overdue_amount > 0:
+            loan_doc.loan_status = "Overdue"
+        else:
+            loan_doc.loan_status = "Active"
+        
+        # Allow updates on submitted loans
+        loan_doc.flags.ignore_validate_update_after_submit = True
+        
+        # Save the document
+        loan_doc.save(ignore_permissions=True)
+        
+        return {
+            "status": "success",
+            "message": "Loan summary updated successfully"
+        }
+        
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), f"Failed to update loan summary for {loan_name}")
-        frappe.throw(f"Failed to update loan summary: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 def allocate_payment_to_schedule(loan_name, paying_amount, posting_date=None):
     """
