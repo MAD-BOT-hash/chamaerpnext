@@ -1,3 +1,51 @@
+import frappe
+from frappe.utils import today, getdate, flt
+
+def get_schedule(loan_name):
+    return frappe.get_all(
+        "SHG Loan Repayment Schedule",
+        filters={"parent": loan_name},
+        fields=[
+            "name", "idx", "due_date",
+            "principal_component", "interest_component",
+            "total_payment", "amount_paid", "unpaid_balance", "status"
+        ],
+        order_by="due_date asc, idx asc"
+    )
+
+def compute_totals(schedule_rows):
+    total_principal = sum(flt(r.principal_component) for r in schedule_rows)
+    total_interest  = sum(flt(r.interest_component)  for r in schedule_rows)
+    total_payment   = sum(flt(r.total_payment)       for r in schedule_rows)
+    total_paid      = sum(flt(r.amount_paid or 0)    for r in schedule_rows)
+    outstanding_balance = sum(flt(r.unpaid_balance or (flt(r.total_payment) - flt(r.amount_paid or 0))) for r in schedule_rows)
+    overdue         = sum(
+        flt(r.unpaid_balance or (flt(r.total_payment) - flt(r.amount_paid or 0)))
+        for r in schedule_rows
+        if (r.status not in ("Paid",) and getdate(r.due_date) < getdate(today()))
+    )
+    return dict(
+        total_principal=flt(total_principal, 2),
+        total_interest=flt(total_interest, 2),
+        total_payable=flt(total_payment, 2),
+        total_repaid=flt(total_paid, 2),
+        outstanding_balance=flt(outstanding_balance, 2),
+        overdue_amount=flt(overdue, 2),
+        loan_balance=flt(outstanding_balance, 2)  # same as outstanding_balance, principal+interest
+    )
+
+def update_loan_summary(loan_name):
+    """
+    Alias to new method for backward compatibility.
+    Update loan summary fields to ensure synchronization with repayment schedule.
+    """
+    try:
+        from shg.shg.doctype.shg_loan.shg_loan import update_loan_summary as real_update_loan_summary
+        return real_update_loan_summary(loan_name)
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"Failed to update loan summary for {loan_name}")
+        frappe.throw(f"Failed to update loan summary: {str(e)}")
+
 def allocate_payment_to_schedule(loan_name, paying_amount, posting_date=None):
     """
     EMI allocation across earliest unpaid/partially paid installments.
@@ -65,3 +113,9 @@ def allocate_payment_to_schedule(loan_name, paying_amount, posting_date=None):
 
     # Refresh loan header
     return update_loan_summary(loan_name)
+
+@frappe.whitelist()
+def debug_loan_balance(loan):
+    rows = get_schedule(loan)
+    totals = compute_totals(rows)
+    return {"schedule": rows, "totals": totals}
