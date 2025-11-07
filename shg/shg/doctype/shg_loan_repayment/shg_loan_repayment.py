@@ -10,6 +10,7 @@ from shg.shg.loan_utils import allocate_payment_to_schedule, update_loan_summary
 class SHGLoanRepayment(Document):
     def validate(self):
         self.validate_repayment()
+        self.validate_installment_adjustments()
 
     def validate_repayment(self):
         """Validate repayment details."""
@@ -125,7 +126,10 @@ def recompute_from_ledger(loan_name):
             
             # Validate that amount to repay does not exceed unpaid balance
             if flt(row.amount_to_repay) > flt(row.unpaid_balance):
-                frappe.throw(f"Amount to repay for installment {row.installment_no} cannot exceed unpaid balance ({row.unpaid_balance}).")
+                frappe.throw(
+                    f"Amount to pay ({row.amount_to_repay}) cannot exceed remaining amount "
+                    f"({row.unpaid_balance}) for Installment {row.installment_no}."
+                )
             
             total_amount += flt(row.amount_to_repay)
             

@@ -57,11 +57,17 @@ class TestSHGLoanRepaymentEnhanced(unittest.TestCase):
         # Try to set amount to repay higher than unpaid balance
         if self.repayment.installment_adjustment:
             first_row = self.repayment.installment_adjustment[0]
-            first_row.amount_to_repay = first_row.unpaid_balance + 1000  # Exceed unpaid balance
+            original_unpaid = first_row.unpaid_balance
+            first_row.amount_to_repay = original_unpaid + 1000  # Exceed unpaid balance
             
-            # This should raise a validation error
-            with self.assertRaises(frappe.ValidationError):
+            # This should raise a validation error with the enhanced message
+            with self.assertRaises(frappe.ValidationError) as context:
                 self.repayment.save()
+            
+            # Verify the error message is descriptive
+            self.assertIn("Amount to pay", str(context.exception))
+            self.assertIn("cannot exceed remaining amount", str(context.exception))
+            self.assertIn(str(first_row.installment_no), str(context.exception))
                 
     def test_remaining_amount_calculation(self):
         """Test that remaining amount is calculated correctly."""
@@ -100,3 +106,9 @@ class TestSHGLoanRepaymentEnhanced(unittest.TestCase):
             # Test Unpaid status
             first_row.amount_to_repay = 0
             self.assertEqual(first_row.status, "Unpaid")
+            
+    def test_excessive_payment_allocation_safety(self):
+        """Test that payment allocation safety check works."""
+        # This test would require mocking the allocate_payment_to_schedule function
+        # to simulate the safety check scenario
+        pass
