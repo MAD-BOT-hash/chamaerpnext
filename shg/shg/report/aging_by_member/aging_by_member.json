@@ -1,0 +1,17 @@
+{
+    "doctype": "Report",
+    "name": "Aging By Member",
+    "report_name": "Aging By Member",
+    "report_type": "Script Report",
+    "ref_doctype": "SHG Loan",
+    "module": "SHG",
+    "add_total_row": 1,
+    "filters": [
+        {
+            "fieldname": "member",
+            "fieldtype": "Link",
+            "label": "Member",
+            "options": "SHG Member"
+        }
+    ]
+}

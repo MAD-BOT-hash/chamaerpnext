@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, flt
 
+
 def execute(filters=None):
     if not filters:
         filters = {}
@@ -10,6 +11,7 @@ def execute(filters=None):
     data = get_data(filters)
     
     return columns, data
+
 
 def get_columns():
     return [
@@ -20,6 +22,7 @@ def get_columns():
         {"label": _("Credit (KES)"), "fieldname": "credit", "fieldtype": "Currency", "width": 120},
         {"label": _("Running Balance (KES)"), "fieldname": "balance", "fieldtype": "Currency", "width": 150},
     ]
+
 
 def get_data(filters):
     member_filter = filters.get("member")
@@ -125,6 +128,25 @@ def get_data(filters):
                     pe.total_amount as credit
                 FROM `tabSHG Payment Entry` pe
                 WHERE pe.member = %(member)s AND pe.docstatus = 1 {date_condition}
+                
+                UNION ALL
+                
+                -- Loan Transactions (accruals, write-offs, etc.)
+                SELECT 
+                    t.posting_date as date,
+                    'SHG Loan Transaction' as reference,
+                    t.name as reference_name,
+                    CONCAT(t.transaction_type, ' - Loan #', t.loan) as description,
+                    CASE 
+                        WHEN t.transaction_type IN ('Disbursement', 'Interest Accrual', 'Penalty Accrual') THEN t.amount
+                        ELSE 0
+                    END as debit,
+                    CASE 
+                        WHEN t.transaction_type IN ('Repayment', 'Write-off Reversal') THEN t.amount
+                        ELSE 0
+                    END as credit
+                FROM `tabSHG Loan Transaction` t
+                WHERE t.member = %(member)s AND t.docstatus = 1 {date_condition}
             ) transactions
             ORDER BY date, reference
         """
