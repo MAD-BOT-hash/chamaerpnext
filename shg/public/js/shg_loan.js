@@ -1,5 +1,12 @@
 frappe.ui.form.on("SHG Loan", {
     refresh: function(frm) {
+        // Add "Get Active Members" button for group loans
+        if (frm.doc.docstatus === 0 && frm.fields_dict.loan_members) {
+            frm.add_custom_button(__("Get Active Members"), function() {
+                get_active_members(frm);
+            });
+        }
+        
         // Add "Pull Unpaid Installments" button
         frm.add_custom_button(__("Pull Unpaid Installments"), function() {
             pull_unpaid_installments(frm);
@@ -41,6 +48,13 @@ frappe.ui.form.on("SHG Loan", {
     }
 });
 
+// Handle changes in the loan members table
+frappe.ui.form.on('SHG Loan Member', {
+    allocated_amount: function(frm, cdt, cdn) {
+        sync_loan_amount_with_members(frm);
+    }
+});
+
 // Handle changes in the repayment schedule table
 frappe.ui.form.on('SHG Loan Repayment Schedule', {
     pay_now: function(frm, cdt, cdn) {
@@ -58,6 +72,61 @@ frappe.ui.form.on('SHG Loan Repayment Schedule', {
         compute_and_update_totals(frm);
     }
 });
+
+// Function to get active members for group loans
+function get_active_members(frm) {
+    if (!frm.doc.name) {
+        frappe.msgprint(__("Please save the loan first."));
+        return;
+    }
+    
+    frappe.call({
+        method: "shg.shg.doctype.shg_loan.shg_loan.get_active_group_members",
+        args: {
+            loan_name: frm.doc.name
+        },
+        callback: function(r) {
+            if (r.message) {
+                // Clear existing members
+                frm.clear_table('loan_members');
+                
+                // Add active members to the loan_members table
+                r.message.forEach(function(member) {
+                    var row = frm.add_child('loan_members');
+                    row.member = member.member;
+                    row.member_name = member.member_name;
+                    row.allocated_amount = member.allocated_amount || 0.0;
+                });
+                
+                frm.refresh_field('loan_members');
+                frappe.show_alert(__("Active members added successfully"));
+                
+                // Sync loan amount with members if loan amount is zero
+                sync_loan_amount_with_members(frm);
+            }
+        }
+    });
+}
+
+// Function to sync loan amount with total allocated amounts from members
+function sync_loan_amount_with_members(frm) {
+    // Only sync if this is a group loan (has loan_members) and loan amount is zero or empty
+    if (frm.doc.loan_members && frm.doc.loan_members.length > 0 && 
+        (!frm.doc.loan_amount || frm.doc.loan_amount === 0)) {
+        
+        // Calculate total allocated amount
+        var total_allocated = 0;
+        (frm.doc.loan_members || []).forEach(function(member) {
+            total_allocated += flt(member.allocated_amount);
+        });
+        
+        // Update loan amount if total is greater than zero
+        if (total_allocated > 0) {
+            frm.set_value('loan_amount', total_allocated);
+            frappe.show_alert(__("Loan amount updated to match total member allocations"));
+        }
+    }
+}
 
 // Function to pull unpaid installments
 function pull_unpaid_installments(frm) {
