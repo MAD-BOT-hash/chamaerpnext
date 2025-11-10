@@ -63,7 +63,7 @@ def build_flat_rate_schedule(
             "total_due": flt(emi, 2),
             "amount_paid": 0.0,
             "balance": flt(emi, 2),
-            "status": "Due"
+"status": "Pending"
         })
     
     # Adjust last installment for rounding
@@ -136,7 +136,7 @@ def build_reducing_balance_emi_schedule(
             "total_due": flt(emi, 2),
             "amount_paid": 0.0,
             "balance": flt(emi, 2),
-            "status": "Due"
+"status": "Pending"
         })
     
     # Adjust last installment for rounding
@@ -206,7 +206,7 @@ def build_reducing_balance_declining_schedule(
             "total_due": flt(total_due, 2),
             "amount_paid": 0.0,
             "balance": flt(total_due, 2),
-            "status": "Due"
+"status": "Pending"
         })
     
     # Adjust last installment for rounding

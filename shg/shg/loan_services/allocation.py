@@ -62,7 +62,7 @@ def allocate_payment_to_schedule(
             if getdate(row.get("due_date")) < getdate() and new_balance > 0:
                 status = "Overdue"
             else:
-                status = "Due"
+status = "Pending"
         
         updated_row = row.copy()
         updated_row["amount_paid"] = flt(new_amount_paid, 2)
