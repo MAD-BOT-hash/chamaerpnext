@@ -18,6 +18,25 @@ class SHGLoanRepayment(Document):
         if loan_doc.docstatus != 1:
             frappe.throw(f"Loan {loan_doc.name} must be submitted before repayment.")
 
+        # Ensure repayment schedule is loaded
+        if not loan_doc.get("repayment_schedule"):
+            # Try to load from database
+            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
+                                            filters={"parent": self.loan, "parenttype": "SHG Loan"},
+                                            fields=["*"])  # Load all fields
+            if schedule_from_db:
+                # Populate the loan document with the schedule
+                loan_doc.repayment_schedule = []
+                for row_data in schedule_from_db:
+                    loan_doc.append("repayment_schedule", row_data)
+            else:
+                # Try to generate schedule if none exists
+                try:
+                    loan_doc.create_repayment_schedule_if_needed()
+                    loan_doc.reload()  # Reload to get the newly created schedule
+                except Exception as e:
+                    frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name} during validation")
+
         # Calculate outstanding balance directly from repayment schedule
         outstanding_balance = 0
         schedule_count = 0
@@ -53,6 +72,18 @@ class SHGLoanRepayment(Document):
     def on_submit(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
         
+        # Ensure repayment schedule is loaded
+        if not loan_doc.get("repayment_schedule"):
+            # Try to load from database
+            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
+                                            filters={"parent": self.loan, "parenttype": "SHG Loan"},
+                                            fields=["*"])  # Load all fields
+            if schedule_from_db:
+                # Populate the loan document with the schedule
+                loan_doc.repayment_schedule = []
+                for row_data in schedule_from_db:
+                    loan_doc.append("repayment_schedule", row_data)
+        
         # Update the loan repayment schedule
         self.update_repayment_schedule(loan_doc)
         
@@ -68,6 +99,18 @@ class SHGLoanRepayment(Document):
 
     def on_cancel(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
+        
+        # Ensure repayment schedule is loaded
+        if not loan_doc.get("repayment_schedule"):
+            # Try to load from database
+            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
+                                            filters={"parent": self.loan, "parenttype": "SHG Loan"},
+                                            fields=["*"])  # Load all fields
+            if schedule_from_db:
+                # Populate the loan document with the schedule
+                loan_doc.repayment_schedule = []
+                for row_data in schedule_from_db:
+                    loan_doc.append("repayment_schedule", row_data)
         
         # Reverse the repayment schedule updates
         self.reverse_repayment_schedule(loan_doc)
@@ -90,14 +133,25 @@ class SHGLoanRepayment(Document):
         """Update the repayment schedule based on this repayment."""
         remaining_amount = flt(self.total_paid)
         
+        # Ensure repayment schedule is loaded
         if not loan_doc.get("repayment_schedule"):
-            # Try to generate repayment schedule if missing
-            try:
-                loan_doc.create_repayment_schedule_if_needed()
-                loan_doc.reload()  # Reload to get the newly created schedule
-            except Exception as e:
-                frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name}")
-                frappe.throw(f"Loan {loan_doc.name} has no repayment schedule and failed to generate one: {str(e)}")
+            # Try to load from database
+            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
+                                            filters={"parent": self.loan, "parenttype": "SHG Loan"},
+                                            fields=["*"])  # Load all fields
+            if schedule_from_db:
+                # Populate the loan document with the schedule
+                loan_doc.repayment_schedule = []
+                for row_data in schedule_from_db:
+                    loan_doc.append("repayment_schedule", row_data)
+            else:
+                # Try to generate schedule if none exists
+                try:
+                    loan_doc.create_repayment_schedule_if_needed()
+                    loan_doc.reload()  # Reload to get the newly created schedule
+                except Exception as e:
+                    frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name}")
+                    frappe.throw(f"Loan {loan_doc.name} has no repayment schedule and failed to generate one: {str(e)}")
             
             # Check again after attempting to generate
             if not loan_doc.get("repayment_schedule"):
@@ -203,14 +257,25 @@ class SHGLoanRepayment(Document):
 
     def calculate_loan_summary_manually(self, loan_doc):
         """Fallback method to calculate loan summary manually."""
+        # Ensure repayment schedule is loaded
         if not loan_doc.get("repayment_schedule"):
-            # Try to generate repayment schedule if missing
-            try:
-                loan_doc.create_repayment_schedule_if_needed()
-                loan_doc.reload()  # Reload to get the newly created schedule
-            except Exception as e:
-                frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name} in manual calculation")
-                return
+            # Try to load from database
+            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
+                                            filters={"parent": loan_doc.name, "parenttype": "SHG Loan"},
+                                            fields=["*"])  # Load all fields
+            if schedule_from_db:
+                # Populate the loan document with the schedule
+                loan_doc.repayment_schedule = []
+                for row_data in schedule_from_db:
+                    loan_doc.append("repayment_schedule", row_data)
+            else:
+                # Try to generate schedule if none exists
+                try:
+                    loan_doc.create_repayment_schedule_if_needed()
+                    loan_doc.reload()  # Reload to get the newly created schedule
+                except Exception as e:
+                    frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name} in manual calculation")
+                    return
             
             # Check again after attempting to generate
             if not loan_doc.get("repayment_schedule"):

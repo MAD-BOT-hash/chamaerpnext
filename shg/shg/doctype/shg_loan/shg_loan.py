@@ -384,6 +384,18 @@ class SHGLoan(Document):
             except Exception as e:
                 # Log error but don't fail validation
                 frappe.log_error(frappe.get_traceback(), f"Failed to auto-generate repayment schedule for loan {self.name}")
+                
+        # Ensure repayment schedule is properly loaded
+        if self.docstatus == 1 and not self.get("repayment_schedule"):
+            # Try to load from database for submitted loans
+            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
+                                            filters={"parent": self.name, "parenttype": "SHG Loan"},
+                                            fields=["*"])  # Load all fields
+            if schedule_from_db:
+                # Populate the loan document with the schedule
+                self.repayment_schedule = []
+                for row_data in schedule_from_db:
+                    self.append("repayment_schedule", row_data)
 
     def update_loan_summary(self):
         """
