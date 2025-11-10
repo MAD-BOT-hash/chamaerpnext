@@ -92,6 +92,8 @@ def generate_reducing_balance_schedule(principal, annual_interest_rate, months, 
             "total_payment": round(emi, 2),
             "total_due": round(total_due, 2),  # Add total_due field
             "loan_balance": round(max(0, outstanding), 2),  # Ensure no negative balance
+            "amount_paid": 0.0,
+            "unpaid_balance": round(emi, 2),
             "status": "Pending"
         })
         
@@ -138,6 +140,8 @@ def generate_flat_rate_schedule(principal, annual_interest_rate, months, start_d
             "total_payment": round(monthly_payment, 2),
             "total_due": round(total_due, 2),  # Add total_due field
             "loan_balance": round(max(0, outstanding), 2),  # Ensure no negative balance
+            "amount_paid": 0.0,
+            "unpaid_balance": round(monthly_payment, 2),
             "status": "Pending"
         })
         

@@ -378,6 +378,9 @@ class SHGLoanRepayment(Document):
 
         loan = frappe.get_doc("SHG Loan", self.loan)
 
+        # Track if we generated a temporary schedule
+        generated_temp_schedule = False
+        
         # --- Load schedule if missing ---
         if not loan.repayment_schedule:
             # For submitted loans, load schedule from database
@@ -412,6 +415,7 @@ class SHGLoanRepayment(Document):
                             loan.append("repayment_schedule", row_data)
                         
                         frappe.msgprint(f"Temporary repayment schedule generated for {loan.name}.")
+                        generated_temp_schedule = True
                     except Exception as e:
                         frappe.log_error(frappe.get_traceback(), f"Failed to generate temporary repayment schedule for loan {loan.name}")
                         frappe.throw(f"Failed to generate temporary repayment schedule for loan {loan.name}: {str(e)}")
@@ -434,6 +438,18 @@ class SHGLoanRepayment(Document):
                     frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan.name}")
                     frappe.throw(f"Failed to generate repayment schedule for loan {loan.name}: {str(e)}")
 
+        # --- Ensure all schedule rows have proper default values ---
+        for row in loan.repayment_schedule:
+            # Set default status if missing
+            if not getattr(row, 'status', None):
+                row.status = "Pending"
+            # Set default amount_paid if missing
+            if not hasattr(row, 'amount_paid'):
+                row.amount_paid = 0.0
+            # Set default unpaid_balance if missing
+            if not hasattr(row, 'unpaid_balance'):
+                row.unpaid_balance = flt(getattr(row, 'total_payment', 0) or getattr(row, 'total_due', 0)) - flt(row.amount_paid)
+        
         # --- Filter unpaid installments ---
         unpaid = [
             row for row in loan.repayment_schedule
@@ -474,6 +490,11 @@ class SHGLoanRepayment(Document):
             f"Fetched {len(unpaid)} unpaid installments "
             f"(Total Due KES {frappe.utils.fmt_money(balance, currency='KES')})"
         )
+        
+        # Optional enhancement - show schedule refresh message for newly generated schedules
+        if generated_temp_schedule:  # If we generated a temporary schedule
+            frappe.msgprint(f"Refreshed repayment schedule for Loan {loan.name}. You can now mark installments as Paid.")
+        
         return [r.as_dict() for r in unpaid]
 
     # --------------------------
