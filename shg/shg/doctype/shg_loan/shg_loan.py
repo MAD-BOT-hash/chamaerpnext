@@ -349,6 +349,9 @@ class SHGLoan(Document):
         if name == "base_grand_total":
             # Return a default value for base_grand_total to prevent AttributeError
             return 0.0
+        elif name == "advance_paid":
+            # Return a default value for advance_paid to prevent AttributeError
+            return 0.0
         # For all other attributes, raise the default AttributeError
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
     
