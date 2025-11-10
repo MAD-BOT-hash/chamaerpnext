@@ -1,54 +1,72 @@
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt
+from frappe.utils import flt, nowdate
 
 class SHGLoanRepaymentSchedule(Document):
-    def on_update(self):
-        """Update parent loan summary when schedule row is updated."""
-        if self.parent:
-            try:
-                loan = frappe.get_doc("SHG Loan", self.parent)
-                # Use a safer approach instead of hasattr for Server Script compatibility
-                try:
-                    # Try to get the method - if it doesn't exist, this will raise an AttributeError
-                    loan.update_repayment_summary
-                    method_exists = True
-                except AttributeError:
-                    method_exists = False
-                
-                if method_exists:
-                    loan.update_repayment_summary()
-            except Exception:
-                # If we can't update the parent, log the error but don't fail
-                frappe.log_error(frappe.get_traceback(), f"Failed to update loan summary for {self.parent}")
+    """Child DocType; individual schedule rows."""
 
-    def mark_as_paid(self, amount=None):
-        """Mark an installment as paid and refresh loan totals."""
-        amount_to_pay = flt(amount or self.total_payment)
-        self.amount_paid = amount_to_pay
-        self.unpaid_balance = max(0, flt(self.total_payment) - amount_to_pay)
-        self.status = "Paid" if self.unpaid_balance == 0 else "Partially Paid"
-        self.actual_payment_date = frappe.utils.today()
-        self.save(ignore_permissions=True)
+# ---------------------------------------------------------------------------
+@frappe.whitelist()
+def mark_installment_paid(loan_name, installment_no, amount=None, posting_date=None):
+    """Mark a specific installment as paid."""
+    loan = frappe.get_doc("SHG Loan", loan_name)
+    schedule = None
+    for row in loan.repayment_schedule:
+        if row.installment_no == int(installment_no):
+            schedule = row
+            break
+    if not schedule:
+        frappe.throw(f"Installment {installment_no} not found in Loan {loan_name}")
 
-        # Refresh parent loan summary
-        if self.parent:
-            try:
-                loan = frappe.get_doc("SHG Loan", self.parent)
-                # Use a safer approach instead of hasattr for Server Script compatibility
-                try:
-                    # Try to get the method - if it doesn't exist, this will raise an AttributeError
-                    loan.update_repayment_summary
-                    method_exists = True
-                except AttributeError:
-                    method_exists = False
-                
-                if method_exists:
-                    # Allow updates on submitted loans
-                    loan.flags.ignore_validate_update_after_submit = True
-                    loan.update_repayment_summary()
-            except Exception:
-                # If we can't update the parent, log the error but don't fail
-                frappe.log_error(frappe.get_traceback(), f"Failed to update loan summary for {self.parent}")
+    balance = flt(getattr(schedule, 'total_payment', 0)) - flt(getattr(schedule, 'amount_paid', 0))
+    payment = flt(amount or balance)
+    if payment <= 0:
+        frappe.throw("No balance remaining for this installment.")
 
-        frappe.msgprint(f"✅ Installment {self.name} marked as Paid ({amount_to_pay})")
+    schedule.amount_paid = flt(getattr(schedule, 'amount_paid', 0)) + payment
+    schedule.unpaid_balance = flt(getattr(schedule, 'total_payment', 0)) - flt(getattr(schedule, 'amount_paid', 0))
+    schedule.status = "Paid" if schedule.unpaid_balance <= 0.01 else "Partially Paid"
+    schedule.payment_entry = f"AUTO-{nowdate()}"
+    
+    # Allow updates on submitted loans
+    loan.flags.ignore_validate_update_after_submit = True
+    loan.save(ignore_permissions=True)
+    loan.reload()
+
+    frappe.msgprint(
+        f"Installment {installment_no} of Loan {loan_name} marked as Paid (KES {payment:,.2f})."
+    )
+    return {
+        "installment_no": installment_no,
+        "amount_paid": getattr(schedule, 'amount_paid', 0),
+        "balance": getattr(schedule, 'unpaid_balance', 0),
+        "status": getattr(schedule, 'status', ''),
+    }
+
+
+# ---------------------------------------------------------------------------
+@frappe.whitelist()
+def reverse_installment_payment(loan_name, installment_no):
+    """Undo payment for a specific installment."""
+    loan = frappe.get_doc("SHG Loan", loan_name)
+    schedule = None
+    for row in loan.repayment_schedule:
+        if row.installment_no == int(installment_no):
+            schedule = row
+            break
+    if not schedule:
+        frappe.throw(f"Installment {installment_no} not found in Loan {loan_name}")
+
+    schedule.amount_paid = 0
+    schedule.unpaid_balance = flt(getattr(schedule, 'total_payment', 0))
+    schedule.status = "Pending"
+    schedule.payment_entry = None
+    
+    # Allow updates on submitted loans
+    loan.flags.ignore_validate_update_after_submit = True
+    loan.save(ignore_permissions=True)
+    
+    frappe.msgprint(
+        f"Payment for Installment {installment_no} of Loan {loan_name} has been reversed."
+    )
+    return {"installment_no": installment_no, "status": "Pending", "balance": getattr(schedule, 'unpaid_balance', 0)}
