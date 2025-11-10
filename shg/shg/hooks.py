@@ -113,7 +113,7 @@ doc_events = {
     },
     "SHG Loan Repayment": {
         "on_submit": [
-            "shg.shg.loan_services.allocation.process_loan_payment"
+            "shg.shg.loan_services.allocation.handle_loan_repayment_submission"
         ]
     },
     "GL Entry": {

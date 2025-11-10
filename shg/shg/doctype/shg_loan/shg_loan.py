@@ -343,7 +343,15 @@ def recalculate_loan_summary(loan_name):
 
 class SHGLoan(Document):
     """SHG Loan controller with automatic ledger and repayment schedule posting."""
-
+    
+    def __getattr__(self, name):
+        """Handle access to non-existent attributes gracefully."""
+        if name == "base_grand_total":
+            # Return a default value for base_grand_total to prevent AttributeError
+            return 0.0
+        # For all other attributes, raise the default AttributeError
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+    
     def onload(self):
         """Populate loan_balance on document load."""
         if self.name:

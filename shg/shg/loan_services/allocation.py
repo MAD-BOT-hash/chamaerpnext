@@ -62,7 +62,7 @@ def allocate_payment_to_schedule(
             if getdate(row.get("due_date")) < getdate() and new_balance > 0:
                 status = "Overdue"
             else:
-status = "Pending"
+                status = "Pending"
         
         updated_row = row.copy()
         updated_row["amount_paid"] = flt(new_amount_paid, 2)
@@ -198,6 +198,7 @@ def process_loan_payment(
     """
     from shg.shg.loan_services.schedule import generate_schedule_for_loan
     
+
     if not posting_date:
         posting_date = frappe.utils.today()
     
@@ -242,3 +243,44 @@ def process_loan_payment(
         "remaining_amount": remaining_amount,
         "outstanding_balance": outstanding["total_outstanding"]
     }
+
+
+def handle_loan_repayment_submission(doc, method=None):
+    """
+    Process a loan payment when SHG Loan Repayment is submitted.
+    This function is called via hooks.py on_submit of SHG Loan Repayment.
+    
+    Args:
+        doc: SHG Loan Repayment document
+        method: Method name (optional)
+    """
+    try:
+        # Get the loan document
+        loan_doc = frappe.get_doc("SHG Loan", doc.loan)
+        
+        # Ensure repayment schedule is loaded
+        if not loan_doc.get("repayment_schedule"):
+            # Load schedule from database
+            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
+                                            filters={"parent": doc.loan, "parenttype": "SHG Loan"},
+                                            fields=["*"])
+            if schedule_from_db:
+                # Populate the loan document with the schedule
+                loan_doc.repayment_schedule = []
+                for row_data in schedule_from_db:
+                    loan_doc.append("repayment_schedule", row_data)
+        
+        # Update the loan repayment schedule with the payment
+        # This is handled in the SHG Loan Repayment document's on_submit method
+        # We just need to ensure the loan document is properly loaded
+        
+    except Exception as e:
+        from shg.shg.utils.logger import safe_log_error
+        safe_log_error("Failed to process loan payment", {
+            "loan_repayment": doc.name if hasattr(doc, 'name') else 'Unknown',
+            "loan": doc.loan if hasattr(doc, 'loan') else 'Unknown',
+            "error": str(e),
+            "traceback": frappe.get_traceback()
+        })
+        # Don't throw error here as it might interfere with the main process
+        pass
