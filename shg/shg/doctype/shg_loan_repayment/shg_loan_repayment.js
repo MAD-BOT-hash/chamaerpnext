@@ -29,14 +29,14 @@ frappe.ui.form.on('SHG Loan Repayment', {
           frappe.msgprint(__('Select a Loan first.'));
           return;
         }
-        frappe.call({
-          method: 'shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.fetch_unpaid_balances',
+        frm.call({
+          method: 'fetch_unpaid_balances',
           doc: frm.doc,
           freeze: true,
           freeze_message: __('Fetching unpaid balances…'),
           callback(r) {
             if (!r.exc) {
-              frm.reload_doc();
+              frm.refresh_fields();
               frappe.show_alert({
                 message: __('Unpaid balances fetched successfully'),
                 indicator: 'green'
