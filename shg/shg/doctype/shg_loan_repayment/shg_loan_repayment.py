@@ -78,7 +78,11 @@ class SHGLoanRepayment(Document):
                     
                     frappe.msgprint(f"Repayment schedule generated and saved for {loan_doc.name}.")
                 except Exception as e:
-                    frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name}")
+                    from shg.shg.utils.logger import safe_log_error
+                    safe_log_error(f"Failed to generate repayment schedule for loan {loan_doc.name}", {
+                        "error": str(e),
+                        "traceback": frappe.get_traceback()
+                    })
                     frappe.throw(f"Failed to generate repayment schedule for loan {loan_doc.name}: {str(e)}")
 
         # Calculate outstanding balance directly from repayment schedule
@@ -103,7 +107,13 @@ class SHGLoanRepayment(Document):
             outstanding_balance = flt(loan_doc.balance_amount or loan_doc.loan_amount or 0)
 
         # Debug information
-        frappe.log_error(f"Repayment validation - Loan: {self.loan}, Total Paid: {self.total_paid}, Outstanding: {outstanding_balance}, Schedule Count: {schedule_count}, Schedule Details: {schedule_details}", "SHG Loan Repayment Validation")
+        from shg.shg.utils.logger import safe_log_error
+        safe_log_error(f"Repayment validation - Loan {self.loan}", {
+            "total_paid": self.total_paid,
+            "outstanding_balance": outstanding_balance,
+            "schedule_count": schedule_count,
+            "schedule_details": schedule_details
+        })
 
         if flt(self.total_paid) > flt(outstanding_balance):
             frappe.throw(
@@ -176,7 +186,11 @@ class SHGLoanRepayment(Document):
                     
                     frappe.msgprint(f"Repayment schedule generated and saved for {loan_doc.name}.")
                 except Exception as e:
-                    frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name}")
+                    from shg.shg.utils.logger import safe_log_error
+                    safe_log_error(f"Failed to generate repayment schedule for loan {loan_doc.name}", {
+                        "error": str(e),
+                        "traceback": frappe.get_traceback()
+                    })
                     frappe.throw(f"Failed to generate repayment schedule for loan {loan_doc.name}: {str(e)}")
         
         # Update the loan repayment schedule
@@ -255,7 +269,11 @@ class SHGLoanRepayment(Document):
                     
                     frappe.msgprint(f"Repayment schedule generated and saved for {loan_doc.name}.")
                 except Exception as e:
-                    frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name}")
+                    from shg.shg.utils.logger import safe_log_error
+                    safe_log_error(f"Failed to generate repayment schedule for loan {loan_doc.name}", {
+                        "error": str(e),
+                        "traceback": frappe.get_traceback()
+                    })
                     frappe.throw(f"Failed to generate repayment schedule for loan {loan_doc.name}: {str(e)}")
         
         # Reverse the repayment schedule updates
@@ -271,7 +289,11 @@ class SHGLoanRepayment(Document):
                 if pe.docstatus == 1:
                     pe.cancel()
             except Exception as e:
-                frappe.log_error(frappe.get_traceback(), f"Failed to cancel Payment Entry {self.payment_entry}")
+                from shg.shg.utils.logger import safe_log_error
+                safe_log_error(f"Failed to cancel Payment Entry {self.payment_entry}", {
+                    "error": str(e),
+                    "traceback": frappe.get_traceback()
+                })
         
         frappe.msgprint(f"⚠️ Loan repayment {self.name} cancelled. Balance restored to {loan_doc.balance_amount}")
 
@@ -339,7 +361,11 @@ class SHGLoanRepayment(Document):
                     
                     frappe.msgprint(f"Repayment schedule generated and saved for {loan_doc.name}.")
                 except Exception as e:
-                    frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name}")
+                    from shg.shg.utils.logger import safe_log_error
+                    safe_log_error(f"Failed to generate repayment schedule for loan {loan_doc.name}", {
+                        "error": str(e),
+                        "traceback": frappe.get_traceback()
+                    })
                     frappe.throw(f"Failed to generate repayment schedule for loan {loan_doc.name}: {str(e)}")
             # Check again after attempting to generate
             if not loan_doc.get("repayment_schedule"):
@@ -439,7 +465,12 @@ class SHGLoanRepayment(Document):
             # Reload the loan to get updated values
             loan_doc.reload()
         except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Failed to update repayment summary")
+            from shg.shg.utils.logger import safe_log_error
+            safe_log_error("Failed to update repayment summary", {
+                "loan": loan_doc.name,
+                "error": str(e),
+                "traceback": frappe.get_traceback()
+            })
             # Fallback to manual calculation
             self.calculate_loan_summary_manually(loan_doc)
 
@@ -534,7 +565,12 @@ class SHGLoanRepayment(Document):
             frappe.msgprint(f"✅ Payment Entry {pe.name} created successfully.")
             
         except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Failed to create Payment Entry for loan repayment")
+            from shg.shg.utils.logger import safe_log_error
+            safe_log_error("Failed to create Payment Entry for loan repayment", {
+                "loan": self.loan,
+                "error": str(e),
+                "traceback": frappe.get_traceback()
+            })
             frappe.throw(f"Failed to create Payment Entry: {str(e)}")
 
     @frappe.whitelist()
@@ -609,7 +645,11 @@ class SHGLoanRepayment(Document):
                     frappe.msgprint(f"Repayment schedule generated and saved for {loan.name}.")
                     generated_schedule = True
                 except Exception as e:
-                    frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan.name}")
+                    from shg.shg.utils.logger import safe_log_error
+                    safe_log_error(f"Failed to generate repayment schedule for loan {loan.name}", {
+                        "error": str(e),
+                        "traceback": frappe.get_traceback()
+                    })
                     frappe.throw(f"Failed to generate repayment schedule for loan {loan.name}: {str(e)}")
 
         # --- Ensure all schedule rows have proper default values ---
