@@ -121,7 +121,7 @@ class TestRefactoredPostingLogic(unittest.TestCase):
         self.assertIsNone(loan.disbursement_journal_entry)
         
         # Verify the Payment Entry exists and is submitted
-        self.assertTrue(frappe.db.exists("Payment Entry", loan.disbursement_payment_entry))
+        self.assertTrue(frappe.db.exists("SHG Payment Entry", loan.disbursement_payment_entry))
         pe = frappe.get_doc("Payment Entry", loan.disbursement_payment_entry)
         self.assertEqual(pe.docstatus, 1)
         
@@ -326,7 +326,7 @@ class TestRefactoredPostingLogic(unittest.TestCase):
         self.assertIsNone(fine.journal_entry)
         
         # Verify the Payment Entry exists and is submitted
-        self.assertTrue(frappe.db.exists("Payment Entry", fine.payment_entry))
+        self.assertTrue(frappe.db.exists("SHG Payment Entry", fine.payment_entry))
         pe = frappe.get_doc("Payment Entry", fine.payment_entry)
         self.assertEqual(pe.docstatus, 1)
         

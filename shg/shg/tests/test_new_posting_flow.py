@@ -173,7 +173,7 @@ class TestNewPostingFlow(unittest.TestCase):
         self.assertIsNone(contribution.journal_entry)  # Should use Payment Entry
         
         # Verify that the Payment Entry exists and is submitted
-        self.assertTrue(frappe.db.exists("Payment Entry", contribution.payment_entry))
+        self.assertTrue(frappe.db.exists("SHG Payment Entry", contribution.payment_entry))
         pe = frappe.get_doc("Payment Entry", contribution.payment_entry)
         self.assertEqual(pe.docstatus, 1)
         

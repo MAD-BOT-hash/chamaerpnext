@@ -47,8 +47,8 @@ def create_payment_entry_from_invoice(invoice_name, paid_amount=None):
         paid_from = default_receivable_account  # Member's account (receivable)
         paid_to = default_cash_account  # Group's cash account
         
-        # Create Payment Entry
-        payment_entry = frappe.new_doc("Payment Entry")
+        # Create SHG Payment Entry
+        payment_entry = frappe.new_doc("SHG Payment Entry")
         payment_entry.payment_type = "Receive"
         payment_entry.party_type = "Customer"
         payment_entry.party = invoice.customer
@@ -87,13 +87,13 @@ def create_payment_entry_from_invoice(invoice_name, paid_amount=None):
         # Update the SHG Contribution Invoice status based on the Sales Invoice status
         update_shg_contribution_invoice_status(invoice.name)
         
-        frappe.msgprint(_("Payment Entry {0} created and submitted for Invoice {1}").format(payment_entry.name, invoice.name))
+        frappe.msgprint(_("SHG Payment Entry {0} created and submitted for Invoice {1}").format(payment_entry.name, invoice.name))
         
         return payment_entry.name
         
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Payment Entry Creation Failed")
-        frappe.throw(_("Failed to create payment entry: {0}").format(str(e)))
+        frappe.log_error(frappe.get_traceback(), "SHG Payment Entry Creation Failed")
+        frappe.throw(_("Failed to create SHG payment entry: {0}").format(str(e)))
 
 def update_shg_contribution_invoice_status(sales_invoice_name):
     """

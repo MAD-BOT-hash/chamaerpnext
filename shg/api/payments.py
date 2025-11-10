@@ -39,8 +39,8 @@ def receive_multiple_payments(selected_invoices, payment_date, payment_method, a
         # Get member account (Credit account)
         member_account = get_or_create_member_account(member, company)
         
-        # Create Payment Entry
-        pe = frappe.new_doc("Payment Entry")
+        # Create SHG Payment Entry
+        pe = frappe.new_doc("SHG Payment Entry")
         pe.payment_type = "Receive"
         pe.posting_date = payment_date
         pe.party_type = "Customer"

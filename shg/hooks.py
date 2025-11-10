@@ -52,6 +52,14 @@ doc_events = {
         "on_submit": "shg.shg.hooks.payment_entry.payment_entry_on_submit",
         "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     },
+    "SHG Payment Entry": {
+        "validate": [
+            "shg.shg.hooks.payment_entry.payment_entry_validate",
+            "shg.shg.utils.member_account_mapping.set_member_credit_account"
+        ],
+        "on_submit": "shg.shg.hooks.payment_entry.payment_entry_on_submit",
+        "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
+    },
     "Sales Invoice": {
         "before_validate": "shg.shg.utils.invoice_override.allow_backdated_invoices"
     }

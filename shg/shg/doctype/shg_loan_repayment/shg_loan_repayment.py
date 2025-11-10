@@ -134,7 +134,7 @@ class SHGLoanRepayment(Document):
         self.calculate_repayment_breakdown()
 
     def on_submit(self):
-        # Auto-create Payment Entry if none exists
+        # Auto-create SHG Payment Entry if none exists
         if not self.payment_entry:
             try:
                 # Get member details
@@ -144,8 +144,8 @@ class SHGLoanRepayment(Document):
                 # Get or create member receivable account
                 member_account = get_or_create_member_receivable(self.member, self.company)
                 
-                # Create Payment Entry
-                pe = frappe.new_doc("Payment Entry")
+                # Create SHG Payment Entry
+                pe = frappe.new_doc("SHG Payment Entry")
                 pe.payment_type = "Receive"
                 pe.company = self.company
                 pe.posting_date = self.posting_date
@@ -175,20 +175,20 @@ class SHGLoanRepayment(Document):
                 # Link the payment entry to this repayment
                 self.db_set("payment_entry", pe.name)
                 
-                frappe.msgprint(f"✅ Payment Entry {pe.name} created successfully.")
+                frappe.msgprint(f"✅ SHG Payment Entry {pe.name} created successfully.")
             except Exception as e:
                 from shg.shg.utils.logger import safe_log_error
-                safe_log_error("Failed to auto-create Payment Entry for loan repayment", {
+                safe_log_error("Failed to auto-create SHG Payment Entry for loan repayment", {
                     "loan_repayment": self.name,
                     "loan": self.loan,
                     "error": str(e),
                     "traceback": frappe.get_traceback()
                 })
-                frappe.throw(f"Failed to auto-create Payment Entry: {str(e)}")
+                frappe.throw(f"Failed to auto-create SHG Payment Entry: {str(e)}")
 
-        # Validate that the Payment Entry exists
-        if self.payment_entry and not frappe.db.exists("Payment Entry", self.payment_entry):
-            frappe.throw(f"Linked Payment Entry {self.payment_entry} is missing. Cannot submit.")
+        # Validate that the SHG Payment Entry exists
+        if self.payment_entry and not frappe.db.exists("SHG Payment Entry", self.payment_entry):
+            frappe.throw(f"Linked SHG Payment Entry {self.payment_entry} is missing. Cannot submit.")
 
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
         
@@ -351,12 +351,12 @@ class SHGLoanRepayment(Document):
         # Cancel the payment entry if it exists
         if self.payment_entry:
             try:
-                pe = frappe.get_doc("Payment Entry", self.payment_entry)
+                pe = frappe.get_doc("SHG Payment Entry", self.payment_entry)
                 if pe.docstatus == 1:
                     pe.cancel()
             except Exception as e:
                 from shg.shg.utils.logger import safe_log_error
-                safe_log_error(f"Failed to cancel Payment Entry {self.payment_entry}", {
+                safe_log_error(f"Failed to cancel SHG Payment Entry {self.payment_entry}", {
                     "error": str(e),
                     "traceback": frappe.get_traceback()
                 })
@@ -515,9 +515,9 @@ class SHGLoanRepayment(Document):
                 row.db_update()
             elif row.payment_entry:
                 # Guard against invalid payment entry references
-                if not frappe.db.exists("Payment Entry", row.payment_entry):
+                if not frappe.db.exists("SHG Payment Entry", row.payment_entry):
                     from shg.shg.utils.logger import safe_log_error
-                    safe_log_error(f"Missing Payment Entry {row.payment_entry}", {
+                    safe_log_error(f"Missing SHG Payment Entry {row.payment_entry}", {
                         "loan": self.loan,
                         "installment_no": row.installment_no
                     })
@@ -597,7 +597,7 @@ class SHGLoanRepayment(Document):
         frappe.db.commit()
 
     def post_to_ledger(self, loan_doc):
-        """Post repayment to ledger by creating a Payment Entry."""
+        """Post repayment to ledger by creating a SHG Payment Entry."""
         try:
             # Get member details
             member = frappe.get_doc("SHG Member", loan_doc.member)
@@ -606,8 +606,8 @@ class SHGLoanRepayment(Document):
             # Get or create member receivable account
             member_account = get_or_create_member_receivable(loan_doc.member, self.company)
             
-            # Create Payment Entry
-            pe = frappe.new_doc("Payment Entry")
+            # Create SHG Payment Entry
+            pe = frappe.new_doc("SHG Payment Entry")
             pe.payment_type = "Receive"
             pe.company = self.company
             pe.posting_date = self.posting_date
@@ -637,16 +637,16 @@ class SHGLoanRepayment(Document):
             # Link the payment entry to this repayment
             self.db_set("payment_entry", pe.name)
             
-            frappe.msgprint(f"✅ Payment Entry {pe.name} created successfully.")
+            frappe.msgprint(f"✅ SHG Payment Entry {pe.name} created successfully.")
             
         except Exception as e:
             from shg.shg.utils.logger import safe_log_error
-            safe_log_error("Failed to create Payment Entry for loan repayment", {
+            safe_log_error("Failed to create SHG Payment Entry for loan repayment", {
                 "loan": self.loan,
                 "error": str(e),
                 "traceback": frappe.get_traceback()
             })
-            frappe.throw(f"Failed to create Payment Entry: {str(e)}")
+            frappe.throw(f"Failed to create SHG Payment Entry: {str(e)}")
 
     @frappe.whitelist()
     def fetch_unpaid_balances(self):

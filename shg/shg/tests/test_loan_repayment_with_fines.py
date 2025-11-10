@@ -133,7 +133,7 @@ class TestLoanRepaymentWithFines(unittest.TestCase):
         self.assertIsNone(repayment.journal_entry)
         
         # Verify the Payment Entry exists and is submitted
-        self.assertTrue(frappe.db.exists("Payment Entry", repayment.payment_entry))
+        self.assertTrue(frappe.db.exists("SHG Payment Entry", repayment.payment_entry))
         pe = frappe.get_doc("Payment Entry", repayment.payment_entry)
         self.assertEqual(pe.docstatus, 1)
         
@@ -193,7 +193,7 @@ class TestLoanRepaymentWithFines(unittest.TestCase):
         self.assertIsNone(fine.journal_entry)
         
         # Verify the Payment Entry exists and is submitted
-        self.assertTrue(frappe.db.exists("Payment Entry", fine.payment_entry))
+        self.assertTrue(frappe.db.exists("SHG Payment Entry", fine.payment_entry))
         pe = frappe.get_doc("Payment Entry", fine.payment_entry)
         self.assertEqual(pe.docstatus, 1)
         

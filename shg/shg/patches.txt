@@ -3,3 +3,5 @@ shg.shg.patches.clean_broken_payment_entry_links.execute
 shg.shg.patches.populate_loan_company_field.execute
 shg.shg.patches.populate_schedule_company_field.execute
 shg.shg.patches.fix_base_grand_total_error.execute
+shg.shg.patches.update_payment_entry_reference_options.execute
+shg.shg.patches.update_custom_payment_entry_fields.execute
