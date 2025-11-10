@@ -203,7 +203,7 @@ def debug_loan_balance(loan_name):
         # Get repayments
         repayments = frappe.get_all(
             "SHG Loan Repayment",
-            filters={"loan": loan_name, "docstatus": 1},
+            filters={"parent": loan_name, "docstatus": 1},
             fields=["*"],
             order_by="posting_date"
         )

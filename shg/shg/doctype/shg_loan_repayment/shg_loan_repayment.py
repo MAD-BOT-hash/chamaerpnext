@@ -20,16 +20,31 @@ class SHGLoanRepayment(Document):
 
         # Calculate outstanding balance directly from repayment schedule
         outstanding_balance = 0
+        schedule_count = 0
+        schedule_details = []
         if loan_doc.get("repayment_schedule"):
+            schedule_count = len(loan_doc.get("repayment_schedule"))
             for row in loan_doc.get("repayment_schedule"):
-                outstanding_balance += flt(row.unpaid_balance or 0)
+                unpaid = flt(row.unpaid_balance or 0)
+                outstanding_balance += unpaid
+                schedule_details.append({
+                    "installment": row.installment_no,
+                    "due_date": row.due_date,
+                    "total_payment": row.total_payment,
+                    "amount_paid": row.amount_paid,
+                    "unpaid_balance": unpaid,
+                    "status": row.status
+                })
         else:
             # If no schedule, calculate from loan fields
             outstanding_balance = flt(loan_doc.balance_amount or loan_doc.loan_amount or 0)
 
+        # Debug information
+        frappe.log_error(f"Repayment validation - Loan: {self.loan}, Total Paid: {self.total_paid}, Outstanding: {outstanding_balance}, Schedule Count: {schedule_count}, Schedule Details: {schedule_details}", "SHG Loan Repayment Validation")
+
         if flt(self.total_paid) > flt(outstanding_balance):
             frappe.throw(
-                f"Repayment ({self.total_paid}) exceeds remaining balance ({outstanding_balance})."
+                f"Repayment ({self.total_paid}) exceeds remaining balance ({outstanding_balance}). Loan has {schedule_count} schedule rows."
             )
 
         # Auto-calculate repayment breakdown
