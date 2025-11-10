@@ -10,8 +10,10 @@ frappe.ui.form.on('SHG Loan Repayment', {
           return;
         }
         frm.call({
-          method: 'get_unpaid_installments',
-          doc: frm.doc,
+          method: 'get_unpaid_schedule_rows',
+          args: {
+              loan: frm.doc.loan
+          },
           callback: function(r) {
             if (r.message) {
               frm.refresh_field('repayment_breakdown');
@@ -57,7 +59,7 @@ frappe.ui.form.on("SHG Loan Repayment", {
         frm.set_query("reference_schedule_row", function() {
             if (frm.doc.loan) {
                 return {
-                    query: "shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.get_unpaid_schedule_rows",
+                    method: "shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.get_unpaid_schedule_rows",
                     filters: {
                         loan: frm.doc.loan
                     }

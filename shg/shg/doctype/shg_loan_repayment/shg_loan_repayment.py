@@ -18,9 +18,18 @@ class SHGLoanRepayment(Document):
         if loan_doc.docstatus != 1:
             frappe.throw(f"Loan {loan_doc.name} must be submitted before repayment.")
 
-        if flt(self.total_paid) > flt(loan_doc.balance_amount):
+        # Calculate outstanding balance directly from repayment schedule
+        outstanding_balance = 0
+        if loan_doc.get("repayment_schedule"):
+            for row in loan_doc.get("repayment_schedule"):
+                outstanding_balance += flt(row.unpaid_balance or 0)
+        else:
+            # If no schedule, calculate from loan fields
+            outstanding_balance = flt(loan_doc.balance_amount or loan_doc.loan_amount or 0)
+
+        if flt(self.total_paid) > flt(outstanding_balance):
             frappe.throw(
-                f"Repayment ({self.total_paid}) exceeds remaining balance ({loan_doc.balance_amount})."
+                f"Repayment ({self.total_paid}) exceeds remaining balance ({outstanding_balance})."
             )
 
         # Auto-calculate repayment breakdown
@@ -331,7 +340,7 @@ def post_to_general_ledger(doc, method):
 
 # --- Query methods ---
 @frappe.whitelist()
-def get_unpaid_schedule_rows(loan):
+def get_unpaid_schedule_rows(loan, **kwargs):
     """Get unpaid schedule rows for a loan."""
     if not loan:
         return []
