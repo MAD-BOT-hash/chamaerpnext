@@ -3,7 +3,7 @@
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt, getdate, today
+from frappe.utils import flt, getdate, today, add_months
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 class SHGLoanRepayment(Document):
@@ -391,7 +391,30 @@ class SHGLoanRepayment(Document):
                     for row_data in schedule_from_db:
                         loan.append("repayment_schedule", row_data)
                 else:
-                    frappe.msgprint(f"Loan {loan.name} has no repayment schedule in database.")
+                    # For submitted loans with no schedule in DB, generate schedule data on-the-fly
+                    frappe.msgprint(f"Loan {loan.name} has no repayment schedule in database. Generating temporary schedule…")
+                    try:
+                        from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
+                        
+                        principal = flt(loan.loan_amount)
+                        months = int(loan.loan_period_months)
+                        start_date = loan.repayment_start_date or add_months(loan.disbursement_date or frappe.utils.today(), 1)
+                        interest_type = getattr(loan, "interest_type", "Reducing Balance")
+                        
+                        if interest_type == "Flat Rate":
+                            schedule_data = generate_flat_rate_schedule(principal, loan.interest_rate, months, start_date)
+                        else:
+                            schedule_data = generate_reducing_balance_schedule(principal, loan.interest_rate, months, start_date)
+                        
+                        # Populate the loan document with the generated schedule data
+                        loan.repayment_schedule = []
+                        for row_data in schedule_data:
+                            loan.append("repayment_schedule", row_data)
+                        
+                        frappe.msgprint(f"Temporary repayment schedule generated for {loan.name}.")
+                    except Exception as e:
+                        frappe.log_error(frappe.get_traceback(), f"Failed to generate temporary repayment schedule for loan {loan.name}")
+                        frappe.throw(f"Failed to generate temporary repayment schedule for loan {loan.name}: {str(e)}")
             else:
                 # For draft loans, generate schedule
                 frappe.msgprint(f"Loan {loan.name} has no repayment schedule. Generating now…")
