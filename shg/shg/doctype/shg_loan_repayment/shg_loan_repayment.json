@@ -17,6 +17,7 @@
         "payment_method",
         "reference_number",
         "reference_schedule_row",
+        "company",
         "repayment_details_section",
         "total_paid",
         "principal_amount",
@@ -99,6 +100,13 @@
             "fieldtype": "Link",
             "label": "Reference Schedule Row",
             "options": "SHG Loan Repayment Schedule",
+            "read_only": 1
+        },
+        {
+            "fieldname": "company",
+            "fieldtype": "Link",
+            "label": "Company",
+            "options": "Company",
             "read_only": 1
         },
         {

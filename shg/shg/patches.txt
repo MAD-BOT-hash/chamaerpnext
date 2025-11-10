@@ -1,2 +1,4 @@
 shg.patches.register_loan_services.execute
 shg.shg.patches.clean_broken_payment_entry_links.execute
+shg.shg.patches.populate_loan_company_field.execute
+shg.shg.patches.populate_schedule_company_field.execute

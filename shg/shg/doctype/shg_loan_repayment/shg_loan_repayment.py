@@ -7,6 +7,11 @@ from frappe.utils import flt, getdate, today, add_months
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 class SHGLoanRepayment(Document):
+    def before_insert(self):
+        """Auto-fill company from linked loan before inserting the document."""
+        if self.loan:
+            self.company = frappe.db.get_value("SHG Loan", self.loan, "company")
+
     def validate(self):
         """Validate the loan repayment before saving."""
         if not self.loan:
@@ -137,18 +142,17 @@ class SHGLoanRepayment(Document):
                 customer = member.customer or self.member
                 
                 # Get or create member receivable account
-                company = self.company or frappe.db.get_single_value("SHG Settings", "company")
-                member_account = get_or_create_member_receivable(self.member, company)
+                member_account = get_or_create_member_receivable(self.member, self.company)
                 
                 # Create Payment Entry
                 pe = frappe.new_doc("Payment Entry")
                 pe.payment_type = "Receive"
-                pe.company = company
+                pe.company = self.company
                 pe.posting_date = self.posting_date
                 pe.paid_from = member_account
                 pe.paid_from_account_type = "Receivable"
                 pe.paid_from_account_currency = frappe.db.get_value("Account", member_account, "account_currency")
-                pe.paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account") or "Cash - " + frappe.db.get_value("Company", company, "abbr")
+                pe.paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account") or "Cash - " + frappe.db.get_value("Company", self.company, "abbr")
                 pe.paid_to_account_type = "Cash"
                 pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency")
                 pe.paid_amount = flt(self.total_paid)
@@ -600,18 +604,17 @@ class SHGLoanRepayment(Document):
             customer = member.customer or loan_doc.member
             
             # Get or create member receivable account
-            company = loan_doc.company or frappe.db.get_single_value("SHG Settings", "company")
-            member_account = get_or_create_member_receivable(loan_doc.member, company)
+            member_account = get_or_create_member_receivable(loan_doc.member, self.company)
             
             # Create Payment Entry
             pe = frappe.new_doc("Payment Entry")
             pe.payment_type = "Receive"
-            pe.company = company
+            pe.company = self.company
             pe.posting_date = self.posting_date
             pe.paid_from = member_account
             pe.paid_from_account_type = "Receivable"
             pe.paid_from_account_currency = frappe.db.get_value("Account", member_account, "account_currency")
-            pe.paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account") or "Cash - " + frappe.db.get_value("Company", company, "abbr")
+            pe.paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account") or "Cash - " + frappe.db.get_value("Company", self.company, "abbr")
             pe.paid_to_account_type = "Cash"
             pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency")
             pe.paid_amount = flt(self.total_paid)

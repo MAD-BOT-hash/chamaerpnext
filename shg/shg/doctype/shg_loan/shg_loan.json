@@ -18,6 +18,7 @@
         "interest_type",
         "loan_period_months",
         "repayment_frequency",
+        "company",
         "application_section",
         "application_date",
         "loan_purpose",
@@ -140,6 +141,13 @@
             "label": "Repayment Frequency",
             "options": "Daily\nWeekly\nBi-Weekly\nMonthly\nBi-Monthly\nQuarterly\nYearly",
             "default": "Monthly"
+        },
+        {
+            "fieldname": "company",
+            "fieldtype": "Link",
+            "label": "Company",
+            "options": "Company",
+            "reqd": 1
         },
         {
             "fieldname": "application_section",

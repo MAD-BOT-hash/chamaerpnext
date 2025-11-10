@@ -4,6 +4,12 @@ from frappe.utils import flt, nowdate
 
 class SHGLoanRepaymentSchedule(Document):
     """Child DocType; individual schedule rows."""
+    
+    def before_insert(self):
+        """Set company from parent loan before inserting the document."""
+        if self.parent and self.parenttype == "SHG Loan":
+            parent_loan = frappe.get_doc(self.parenttype, self.parent)
+            self.company = getattr(parent_loan, "company", None)
 
 # ---------------------------------------------------------------------------
 @frappe.whitelist()
@@ -31,6 +37,7 @@ def mark_installment_paid(loan_name, installment_no, amount=None, posting_date=N
     repayment_doc.posting_date = posting_date or nowdate()
     repayment_doc.repayment_date = posting_date or nowdate()
     repayment_doc.reference_schedule_row = schedule.name  # Link to specific schedule row
+    repayment_doc.company = loan.company  # Set company from loan
     
     # Save and submit the repayment
     repayment_doc.insert(ignore_permissions=True)
