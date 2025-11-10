@@ -5,7 +5,7 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, today, add_months
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
-from shg.shg.utils.payment_entry_tools import ensure_payment_entry_exists
+from shg.shg.utils.payment_entry_tools import ensure_payment_entry_exists, auto_create_payment_entry
 
 class SHGLoanRepayment(Document):
     def before_insert(self):
@@ -225,16 +225,19 @@ class SHGLoanRepayment(Document):
         
         # Cancel the payment entry if it exists
         if self.payment_entry:
-            try:
-                pe = frappe.get_doc("SHG Payment Entry", self.payment_entry)
-                if pe.docstatus == 1:
-                    pe.cancel()
-            except Exception as e:
-                from shg.shg.utils.logger import safe_log_error
-                safe_log_error(f"Failed to cancel SHG Payment Entry {self.payment_entry}", {
-                    "error": str(e),
-                    "traceback": frappe.get_traceback()
-                })
+            if not frappe.db.exists("SHG Payment Entry", self.payment_entry):
+                frappe.msgprint(f"⚠️ Payment Entry {self.payment_entry} not found – cannot cancel...")
+            else:
+                try:
+                    pe = frappe.get_doc("SHG Payment Entry", self.payment_entry)
+                    if pe.docstatus == 1:
+                        pe.cancel()
+                except Exception as e:
+                    from shg.shg.utils.logger import safe_log_error
+                    safe_log_error(f"Failed to cancel SHG Payment Entry {self.payment_entry}", {
+                        "error": str(e),
+                        "traceback": frappe.get_traceback()
+                    })
         
         frappe.msgprint(f"⚠️ Loan repayment {self.name} cancelled. Balance restored to {loan_doc.balance_amount}")
 
@@ -473,55 +476,18 @@ class SHGLoanRepayment(Document):
 
     def post_to_ledger(self, loan_doc):
         """Post repayment to ledger by creating a SHG Payment Entry."""
-        try:
-            # Get member details
-            member = frappe.get_doc("SHG Member", loan_doc.member)
-            customer = member.customer or loan_doc.member
-            
-            # Get or create member receivable account
-            member_account = get_or_create_member_receivable(loan_doc.member, self.company)
-            
-            # Create SHG Payment Entry
-            pe = frappe.new_doc("SHG Payment Entry")
-            pe.payment_type = "Receive"
-            pe.company = self.company
-            pe.posting_date = self.posting_date
-            pe.paid_from = member_account
-            pe.paid_from_account_type = "Receivable"
-            pe.paid_from_account_currency = frappe.db.get_value("Account", member_account, "account_currency")
-            pe.paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account") or "Cash - " + frappe.db.get_value("Company", self.company, "abbr")
-            pe.paid_to_account_type = "Cash"
-            pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency")
-            pe.paid_amount = flt(self.total_paid)
-            pe.received_amount = flt(self.total_paid)
-            pe.allocate_payment_amount = 1
-            pe.party_type = "Customer"
-            pe.party = customer
-            pe.remarks = f"Loan repayment for {self.loan}"
-            
-            # Add reference to the loan
-            pe.append("references", {
-                "reference_doctype": "SHG Loan",
-                "reference_name": self.loan,
-                "allocated_amount": flt(self.total_paid)
-            })
-            
-            pe.insert(ignore_permissions=True)
-            pe.submit()
-            
-            # Link the payment entry to this repayment
-            self.db_set("payment_entry", pe.name)
-            
-            frappe.msgprint(f"✅ SHG Payment Entry {pe.name} created successfully.")
-            
-        except Exception as e:
-            from shg.shg.utils.logger import safe_log_error
-            safe_log_error("Failed to create SHG Payment Entry for loan repayment", {
-                "loan": self.loan,
-                "error": str(e),
-                "traceback": frappe.get_traceback()
-            })
-            frappe.throw(f"Failed to create SHG Payment Entry: {str(e)}")
+        # Check if payment entry already exists and is valid
+        if self.payment_entry:
+            if not frappe.db.exists("SHG Payment Entry", self.payment_entry):
+                frappe.msgprint(f"⚠️ Payment Entry {self.payment_entry} not found – recreating...")
+                self.payment_entry = auto_create_payment_entry(self)
+                return
+            else:
+                # Payment entry exists, nothing to do
+                return
+        
+        # No payment entry exists, create one
+        self.payment_entry = auto_create_payment_entry(self)
 
     @frappe.whitelist()
     def fetch_unpaid_balances(self):
