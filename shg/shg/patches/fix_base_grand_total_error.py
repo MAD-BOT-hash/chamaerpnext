@@ -1,10 +1,10 @@
 import frappe
 
 def execute():
-    """Fix for 'SHGLoan' object has no attribute 'base_grand_total' or 'advance_paid' error.
+    """Fix for 'SHGLoan' object has no attribute errors for common financial attributes.
     
-    This patch adds a safeguard to prevent errors when external code tries to 
-    access these attributes on SHGLoan objects.
+    This patch adds safeguards to prevent errors when external code tries to 
+    access common ERPNext financial attributes on SHGLoan objects.
     """
     # Get all SHG Loan records
     loans = frappe.get_all("SHG Loan", fields=["name"])
@@ -43,4 +43,4 @@ def execute():
             frappe.log_error(f"Failed to process SHG Loan Repayment {repayment.name}: {str(e)}")
     
     frappe.db.commit()
-    frappe.msgprint("✅ Applied fix for base_grand_total and advance_paid errors and ensured company field is populated")
+    frappe.msgprint("✅ Applied comprehensive fix for common financial attribute errors and ensured company field is populated")

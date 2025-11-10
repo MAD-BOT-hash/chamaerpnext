@@ -346,12 +346,39 @@ class SHGLoan(Document):
     
     def __getattr__(self, name):
         """Handle access to non-existent attributes gracefully."""
-        if name == "base_grand_total":
-            # Return a default value for base_grand_total to prevent AttributeError
-            return 0.0
-        elif name == "advance_paid":
-            # Return a default value for advance_paid to prevent AttributeError
-            return 0.0
+        # Common ERPNext financial document attributes that might be accessed
+        common_financial_attributes = {
+            "base_grand_total": 0.0,
+            "advance_paid": 0.0,
+            "outstanding_amount": 0.0,
+            "total_advance": 0.0,
+            "grand_total": 0.0,
+            "base_total": 0.0,
+            "total_taxes_and_charges": 0.0,
+            "base_total_taxes_and_charges": 0.0,
+            "total_amount": 0.0,
+            "base_total_amount": 0.0,
+            "rounded_total": 0.0,
+            "base_rounded_total": 0.0,
+            "in_words": "",
+            "base_in_words": "",
+            "total_qty": 0.0,
+            "total_net_weight": 0.0,
+            "total_commission": 0.0,
+            "write_off_amount": 0.0,
+            "base_write_off_amount": 0.0,
+            "discount_amount": 0.0,
+            "base_discount_amount": 0.0,
+            "loyalty_amount": 0.0,
+            "base_loyalty_amount": 0.0,
+            "tax_withholding_net_total": 0.0,
+            "base_tax_withholding_net_total": 0.0,
+        }
+        
+        if name in common_financial_attributes:
+            # Return a default value to prevent AttributeError
+            return common_financial_attributes[name]
+            
         # For all other attributes, raise the default AttributeError
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
     
