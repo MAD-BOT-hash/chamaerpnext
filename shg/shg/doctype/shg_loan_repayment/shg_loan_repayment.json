@@ -25,6 +25,8 @@
         "penalty_amount",
         "outstanding_balance",
         "balance_after_payment",
+        "repayment_breakdown_section",
+        "repayment_breakdown",
         "accounting_section",
         "payment_entry",
         "posted_to_gl",
@@ -149,6 +151,18 @@
             "label": "Balance After Payment",
             "precision": 2,
             "read_only": 1
+        },
+        {
+            "fieldname": "repayment_breakdown_section",
+            "fieldtype": "Section Break",
+            "label": "Repayment Breakdown"
+        },
+        {
+            "fieldname": "repayment_breakdown",
+            "fieldtype": "Table",
+            "label": "Repayment Breakdown",
+            "options": "SHG Repayment Breakdown",
+            "reqd": 0
         },
         {
             "fieldname": "accounting_section",

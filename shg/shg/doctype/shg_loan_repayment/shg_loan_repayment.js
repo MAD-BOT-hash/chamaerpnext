@@ -23,6 +23,29 @@ frappe.ui.form.on('SHG Loan Repayment', {
         });
       });
 
+      // Add "Fetch Unpaid Balances" button
+      frm.add_custom_button(__('💰 Fetch Unpaid Balances'), function() {
+        if (!frm.doc.loan) {
+          frappe.msgprint(__('Select a Loan first.'));
+          return;
+        }
+        frappe.call({
+          method: 'shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.fetch_unpaid_balances',
+          doc: frm.doc,
+          freeze: true,
+          freeze_message: __('Fetching unpaid balances…'),
+          callback(r) {
+            if (!r.exc) {
+              frm.reload_doc();
+              frappe.show_alert({
+                message: __('Unpaid balances fetched successfully'),
+                indicator: 'green'
+              });
+            }
+          }
+        });
+      });
+
       // Add button to apply repayment
       frm.add_custom_button(__('Apply Repayment'), function() {
         if (frm.doc.total_paid > 0) {
@@ -113,6 +136,19 @@ frappe.ui.form.on("SHG Loan Repayment", {
                 
                 frm.refresh_fields();
             });
+            
+            // Automatically fetch unpaid balances
+            if (frm.doc.docstatus === 0) {  // Only for draft documents
+                frm.call({
+                    method: 'fetch_unpaid_balances',
+                    doc: frm.doc,
+                    callback: function(r) {
+                        if (!r.exc) {
+                            frm.refresh_fields();
+                        }
+                    }
+                });
+            }
         } else {
             // Clear values if loan is cleared
             frm.set_value("member", "");
@@ -212,36 +248,46 @@ frappe.ui.form.on("SHG Repayment Breakdown", {
         
         // Recalculate total paid
         let total_paid = 0;
-        frm.doc.repayment_breakdown.forEach(installment => {
-            total_paid += flt(installment.amount_to_pay);
-        });
-        frm.set_value("total_paid", total_paid);
-        
-        // Auto-calculate breakdown when total paid changes
-        if (frm.doc.loan && total_paid > 0) {
-            frm.call({
-                method: 'calculate_repayment_breakdown',
-                doc: frm.doc,
-                callback: function(r) {
-                    if (r.message) {
-                        frm.set_value("principal_amount", r.message.principal_amount);
-                        frm.set_value("interest_amount", r.message.interest_amount);
-                        frm.set_value("penalty_amount", r.message.penalty_amount);
-                        frm.set_value("outstanding_balance", r.message.outstanding_balance);
-                        frm.set_value("balance_after_payment", r.message.balance_after_payment);
-                        frm.refresh_fields();
-                    }
-                }
+        if (frm.doc.repayment_breakdown) {
+            frm.doc.repayment_breakdown.forEach(installment => {
+                total_paid += flt(installment.amount_to_pay || 0);
             });
         }
+        frm.set_value("total_paid", total_paid);
+        
+        // Update outstanding balance
+        let outstanding_balance = 0;
+        if (frm.doc.repayment_breakdown) {
+            frm.doc.repayment_breakdown.forEach(installment => {
+                outstanding_balance += flt(installment.unpaid_balance || 0);
+            });
+        }
+        frm.set_value("outstanding_balance", outstanding_balance);
+        frm.set_value("balance_after_payment", outstanding_balance - total_paid);
+        
+        frm.refresh_fields();
     },
     
     repayment_breakdown_remove: function(frm) {
         // Recalculate total paid when an installment is removed
         let total_paid = 0;
-        frm.doc.repayment_breakdown.forEach(installment => {
-            total_paid += flt(installment.amount_to_pay);
-        });
+        if (frm.doc.repayment_breakdown) {
+            frm.doc.repayment_breakdown.forEach(installment => {
+                total_paid += flt(installment.amount_to_pay || 0);
+            });
+        }
         frm.set_value("total_paid", total_paid);
+        
+        // Update outstanding balance
+        let outstanding_balance = 0;
+        if (frm.doc.repayment_breakdown) {
+            frm.doc.repayment_breakdown.forEach(installment => {
+                outstanding_balance += flt(installment.unpaid_balance || 0);
+            });
+        }
+        frm.set_value("outstanding_balance", outstanding_balance);
+        frm.set_value("balance_after_payment", outstanding_balance - total_paid);
+        
+        frm.refresh_fields();
     }
 });

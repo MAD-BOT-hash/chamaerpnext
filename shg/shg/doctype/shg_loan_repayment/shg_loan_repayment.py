@@ -358,6 +358,75 @@ class SHGLoanRepayment(Document):
             frappe.log_error(frappe.get_traceback(), "Failed to create Payment Entry for loan repayment")
             frappe.throw(f"Failed to create Payment Entry: {str(e)}")
 
+    @frappe.whitelist()
+    def fetch_unpaid_balances(self):
+        """Fetch unpaid balances from the linked loan's repayment schedule."""
+        if not self.loan:
+            frappe.throw("Please select a Loan first.")
+
+        loan = frappe.get_doc("SHG Loan", self.loan)
+
+        # --- Generate schedule if missing ---
+        if not loan.repayment_schedule:
+            frappe.msgprint(f"Loan {loan.name} has no repayment schedule. Generating now…")
+            try:
+                from shg.shg.loan_services.schedule import generate_schedule_for_loan
+                schedule_data = generate_schedule_for_loan(loan.name)
+                if schedule_data:
+                    # Clear existing schedule and add new one
+                    loan.set("repayment_schedule", [])
+                    for row_data in schedule_data:
+                        loan.append("repayment_schedule", row_data)
+                    loan.save(ignore_permissions=True)
+                    frappe.msgprint(f"Repayment schedule generated for {loan.name}.")
+                else:
+                    frappe.throw(f"Failed to generate repayment schedule for loan {loan.name}")
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan.name}")
+                frappe.throw(f"Failed to generate repayment schedule for loan {loan.name}: {str(e)}")
+
+        # --- Filter unpaid installments ---
+        unpaid = [
+            row for row in loan.repayment_schedule
+            if row.status in ("Pending", "Overdue", "Partially Paid") and flt(row.unpaid_balance) > 0
+        ]
+
+        if not unpaid:
+            frappe.msgprint(f"Loan {loan.name} has no unpaid installments.")
+            return []
+
+        # --- Clear current breakdown ---
+        self.set("repayment_breakdown", [])
+
+        total_due = total_paid = balance = 0
+        for row in unpaid:
+            balance_row = flt(row.unpaid_balance or 0)
+            self.append("repayment_breakdown", {
+                "installment_no": row.installment_no,
+                "due_date": row.due_date,
+                "emi_amount": row.emi_amount or row.total_payment,
+                "principal_component": row.principal_component,
+                "interest_component": row.interest_component,
+                "unpaid_balance": balance_row,
+                "amount_to_pay": 0,  # Default to 0, user can edit
+                "status": row.status
+            })
+            total_due += flt(row.total_payment or 0)
+            total_paid += flt(row.amount_paid or 0)
+            balance += balance_row
+
+        # --- Update totals on parent ---
+        self.total_paid = total_paid
+        self.outstanding_balance = balance
+        self.balance_after_payment = balance
+        self.save()
+
+        frappe.msgprint(
+            f"Fetched {len(unpaid)} unpaid installments "
+            f"(Total Due KES {frappe.utils.fmt_money(balance, currency='KES')})"
+        )
+        return [r.as_dict() for r in unpaid]
+
     # --------------------------
     # REPAYMENT BREAKDOWN
     # --------------------------
