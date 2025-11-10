@@ -4,7 +4,7 @@ from frappe.model.document import Document
 from frappe.utils import today, add_months, flt, now_datetime, getdate, nowdate
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
 from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
-from shg.shg.loan.services import get_unpaid_rows, allocate_payment, post_payment_entries, refresh_repayment_summary
+from shg.shg.api.loan import get_unpaid_installments as get_unpaid_rows, post_repayment_allocation as allocate_payment, refresh_repayment_summary
 
 @frappe.whitelist()
 def get_loan_balance(loan_name):
@@ -287,28 +287,22 @@ def apply_inline_repayments(loan_name, allocations, posting_date=None):
         dict: Result of the allocation
     """
     try:
-        # Allocate payments
-        allocation_result = allocate_payment(loan_name, allocations, posting_date)
+        # Allocate payments - we need to sum up the allocations to get total amount
+        total_amount = sum(flt(allocation.get("amount_to_pay", 0)) for allocation in allocations)
+        allocation_result = allocate_payment(loan_name, total_amount)
         
-        if allocation_result.get("status") == "success":
-            # Post payment entries
-            posting_plan = allocation_result.get("posting_plan")
-            post_result = post_payment_entries(loan_name, posting_plan)
-            
-            # Refresh loan summary
-            refresh_repayment_summary(loan_name)
-            
-            # Reload and return updated loan document
-            loan_doc = frappe.get_doc("SHG Loan", loan_name)
-            loan_doc.reload()
-            
-            return {
-                "status": "success",
-                "message": allocation_result.get("message"),
-                "loan": loan_doc.as_dict()
-            }
-        else:
-            return allocation_result
+        # Refresh loan summary
+        refresh_repayment_summary(loan_name)
+        
+        # Reload and return updated loan document
+        loan_doc = frappe.get_doc("SHG Loan", loan_name)
+        loan_doc.reload()
+        
+        return {
+            "status": "success",
+            "message": allocation_result.get("message"),
+            "loan": loan_doc.as_dict()
+        }
             
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), f"Failed to apply inline repayments for {loan_name}")
