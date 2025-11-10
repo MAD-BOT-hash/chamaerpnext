@@ -375,6 +375,15 @@ class SHGLoan(Document):
 
         self.run_eligibility_checks()
         self.calculate_repayment_details()
+        
+        # Auto-generate repayment schedule if needed (for validation purposes)
+        # This ensures schedule exists before submission
+        if not self.get("repayment_schedule") and self.docstatus == 0:
+            try:
+                self.create_repayment_schedule_if_needed()
+            except Exception as e:
+                # Log error but don't fail validation
+                frappe.log_error(frappe.get_traceback(), f"Failed to auto-generate repayment schedule for loan {self.name}")
 
     def update_loan_summary(self):
         """

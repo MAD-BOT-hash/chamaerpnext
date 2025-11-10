@@ -91,7 +91,17 @@ class SHGLoanRepayment(Document):
         remaining_amount = flt(self.total_paid)
         
         if not loan_doc.get("repayment_schedule"):
-            frappe.throw(f"Loan {loan_doc.name} has no repayment schedule.")
+            # Try to generate repayment schedule if missing
+            try:
+                loan_doc.create_repayment_schedule_if_needed()
+                loan_doc.reload()  # Reload to get the newly created schedule
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name}")
+                frappe.throw(f"Loan {loan_doc.name} has no repayment schedule and failed to generate one: {str(e)}")
+            
+            # Check again after attempting to generate
+            if not loan_doc.get("repayment_schedule"):
+                frappe.throw(f"Loan {loan_doc.name} has no repayment schedule.")
             
         # If a specific schedule row is selected, apply to that row only
         if self.reference_schedule_row:
@@ -150,6 +160,10 @@ class SHGLoanRepayment(Document):
 
     def reverse_repayment_schedule(self, loan_doc):
         """Reverse the repayment schedule updates when cancelling."""
+        if not loan_doc.get("repayment_schedule"):
+            # Nothing to reverse if there's no schedule
+            return
+            
         # Find schedule rows that were affected by this repayment
         for row in loan_doc.get("repayment_schedule"):
             if row.payment_entry == self.name:
@@ -190,7 +204,17 @@ class SHGLoanRepayment(Document):
     def calculate_loan_summary_manually(self, loan_doc):
         """Fallback method to calculate loan summary manually."""
         if not loan_doc.get("repayment_schedule"):
-            return
+            # Try to generate repayment schedule if missing
+            try:
+                loan_doc.create_repayment_schedule_if_needed()
+                loan_doc.reload()  # Reload to get the newly created schedule
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), f"Failed to generate repayment schedule for loan {loan_doc.name} in manual calculation")
+                return
+            
+            # Check again after attempting to generate
+            if not loan_doc.get("repayment_schedule"):
+                return
             
         total_repaid = 0.0
         balance_amount = 0.0
