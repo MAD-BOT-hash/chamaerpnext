@@ -31,84 +31,83 @@ class TestSHGLoanRepaymentEnhanced(unittest.TestCase):
             frappe.delete_doc("SHG Loan Repayment", self.repayment.name)
         frappe.delete_doc("SHG Loan", self.loan.name)
         
-    def test_fetch_unpaid_installments(self):
-        """Test that fetch_unpaid_installments populates the child table correctly."""
-        # Call the method
-        self.repayment.fetch_unpaid_installments()
+    def test_repayment_validation(self):
+        """Test that repayment validation works correctly."""
+        # Test that repayment amount must be greater than zero
+        self.repayment.total_paid = 0
+        with self.assertRaises(frappe.ValidationError) as context:
+            self.repayment.save()
+        self.assertIn("Repayment amount must be greater than zero", str(context.exception))
         
-        # Verify that installment adjustments were populated
-        self.assertTrue(len(self.repayment.installment_adjustment) > 0)
+        # Test that repayment cannot exceed outstanding balance
+        self.repayment.total_paid = 15000  # Exceeds loan amount
+        with self.assertRaises(frappe.ValidationError) as context:
+            self.repayment.save()
+        self.assertIn("exceeds remaining balance", str(context.exception))
         
-        # Verify that the first row has correct data
-        first_row = self.repayment.installment_adjustment[0]
-        self.assertIsNotNone(first_row.installment_no)
-        self.assertIsNotNone(first_row.due_date)
-        self.assertIsNotNone(first_row.emi_amount)
-        self.assertIsNotNone(first_row.principal_amount)
-        self.assertIsNotNone(first_row.interest_amount)
-        self.assertIsNotNone(first_row.unpaid_balance)
-        self.assertIsNotNone(first_row.status)
+    def test_repayment_breakdown_calculation(self):
+        """Test that repayment breakdown is calculated correctly."""
+        # Set a valid repayment amount
+        self.repayment.total_paid = 1000
+        self.repayment.save()
         
-    def test_amount_to_repay_validation(self):
-        """Test that amount to repay validation works correctly."""
-        # Fetch unpaid installments first
-        self.repayment.fetch_unpaid_installments()
+        # Call the breakdown calculation method
+        result = self.repayment.calculate_repayment_breakdown()
         
-        # Try to set amount to repay higher than unpaid balance
-        if self.repayment.installment_adjustment:
-            first_row = self.repayment.installment_adjustment[0]
-            original_unpaid = first_row.unpaid_balance
-            first_row.amount_to_repay = original_unpaid + 1000  # Exceed unpaid balance
-            
-            # This should raise a validation error with the enhanced message
-            with self.assertRaises(frappe.ValidationError) as context:
-                self.repayment.save()
-            
-            # Verify the error message is descriptive
-            self.assertIn("Amount to pay", str(context.exception))
-            self.assertIn("cannot exceed remaining amount", str(context.exception))
-            self.assertIn(str(first_row.installment_no), str(context.exception))
-                
-    def test_remaining_amount_calculation(self):
-        """Test that remaining amount is calculated correctly."""
-        # Fetch unpaid installments first
-        self.repayment.fetch_unpaid_installments()
+        # Verify that all breakdown fields are populated
+        self.assertIsNotNone(self.repayment.principal_amount)
+        self.assertIsNotNone(self.repayment.interest_amount)
+        self.assertIsNotNone(self.repayment.penalty_amount)
+        self.assertIsNotNone(self.repayment.outstanding_balance)
+        self.assertIsNotNone(self.repayment.balance_after_payment)
         
-        if self.repayment.installment_adjustment:
-            first_row = self.repayment.installment_adjustment[0]
-            original_unpaid = first_row.unpaid_balance
-            amount_to_repay = original_unpaid / 2
-            first_row.amount_to_repay = amount_to_repay
-            
-            # Calculate expected remaining amount
-            expected_remaining = original_unpaid - amount_to_repay
-            
-            # Verify remaining amount calculation
-            self.assertEqual(first_row.remaining_amount, expected_remaining)
-            
-    def test_status_update(self):
-        """Test that status is updated correctly based on amount to repay."""
-        # Fetch unpaid installments first
-        self.repayment.fetch_unpaid_installments()
+    def test_on_submit_updates_schedule(self):
+        """Test that on_submit updates the repayment schedule correctly."""
+        # Set a valid repayment amount
+        self.repayment.total_paid = 1000
+        self.repayment.insert()
+        self.repayment.submit()
         
-        if self.repayment.installment_adjustment:
-            first_row = self.repayment.installment_adjustment[0]
-            original_unpaid = first_row.unpaid_balance
-            
-            # Test Partially Paid status
-            first_row.amount_to_repay = original_unpaid / 2
-            self.assertEqual(first_row.status, "Partially Paid")
-            
-            # Test Paid status
-            first_row.amount_to_repay = original_unpaid
-            self.assertEqual(first_row.status, "Paid")
-            
-            # Test Unpaid status
-            first_row.amount_to_repay = 0
-            self.assertEqual(first_row.status, "Unpaid")
-            
-    def test_excessive_payment_allocation_safety(self):
-        """Test that payment allocation safety check works."""
-        # This test would require mocking the allocate_payment_to_schedule function
-        # to simulate the safety check scenario
-        pass
+        # Reload the loan to check updated values
+        self.loan.reload()
+        
+        # Verify that loan summary fields are updated
+        self.assertGreater(self.loan.total_repaid, 0)
+        self.assertLess(self.loan.balance_amount, self.loan.loan_amount)
+        
+    def test_on_cancel_reverses_schedule(self):
+        """Test that on_cancel reverses the repayment schedule updates."""
+        # First submit a repayment
+        self.repayment.total_paid = 1000
+        self.repayment.insert()
+        self.repayment.submit()
+        
+        # Get the loan balance after repayment
+        self.loan.reload()
+        balance_after_repayment = self.loan.balance_amount
+        
+        # Cancel the repayment
+        self.repayment.cancel()
+        
+        # Reload the loan to check reversed values
+        self.loan.reload()
+        
+        # Verify that loan summary fields are reversed
+        self.assertEqual(self.loan.total_repaid, 0)
+        self.assertEqual(self.loan.balance_amount, self.loan.loan_amount)
+        
+    def test_get_unpaid_schedule_rows(self):
+        """Test that get_unpaid_schedule_rows returns correct data."""
+        from shg.shg.doctype.shg_loan_repayment.shg_loan_repayment import get_unpaid_schedule_rows
+        
+        # Get unpaid schedule rows for the test loan
+        result = get_unpaid_schedule_rows(self.loan.name)
+        
+        # Verify that result is a list
+        self.assertIsInstance(result, list)
+        
+        # Verify that each item has the required fields
+        if result:
+            for item in result:
+                self.assertIn("value", item)
+                self.assertIn("label", item)

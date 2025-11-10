@@ -52,6 +52,18 @@ frappe.ui.form.on("SHG Loan Repayment", {
                 }
             };
         });
+        
+        // Set query for reference_schedule_row to only show unpaid schedule rows for the selected loan
+        frm.set_query("reference_schedule_row", function() {
+            if (frm.doc.loan) {
+                return {
+                    query: "shg.shg.doctype.shg_loan_repayment.shg_loan_repayment.get_unpaid_schedule_rows",
+                    filters: {
+                        loan: frm.doc.loan
+                    }
+                };
+            }
+        });
     },
     
     refresh: function(frm) {
@@ -76,22 +88,6 @@ frappe.ui.form.on("SHG Loan Repayment", {
                     frappe.msgprint("Please select a loan and enter the total paid amount first.");
                 }
             });
-            
-            // Add button to fetch unpaid installments
-            if (frm.doc.loan) {
-                frm.add_custom_button(__('Fetch Unpaid Installments'), function() {
-                    frm.call({
-                        method: 'get_unpaid_installments',
-                        doc: frm.doc,
-                        callback: function(r) {
-                            if (r.message) {
-                                frm.refresh_field('installment_adjustment');
-                                frappe.msgprint("Unpaid installments fetched successfully.");
-                            }
-                        }
-                    });
-                });
-            }
         }
     },
     
@@ -115,12 +111,24 @@ frappe.ui.form.on("SHG Loan Repayment", {
                 
                 frm.refresh_fields();
             });
+        } else {
+            // Clear values if loan is cleared
+            frm.set_value("member", "");
+            frm.set_value("member_name", "");
+            frm.set_value("outstanding_balance", 0);
+            frm.refresh_fields();
         }
     },
     
     total_paid: function(frm) {
         if (frm.doc.loan && frm.doc.total_paid) {
             // Auto-calculate breakdown when total paid changes
+            frm.trigger("calculate_breakdown");
+        }
+    },
+    
+    calculate_breakdown: function(frm) {
+        if (frm.doc.loan && frm.doc.total_paid) {
             frm.call({
                 method: 'calculate_repayment_breakdown',
                 doc: frm.doc,

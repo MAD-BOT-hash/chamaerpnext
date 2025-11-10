@@ -2,7 +2,7 @@
     "actions": [],
     "allow_rename": 1,
     "autoname": "naming_series:",
-    "creation": "2025-09-25 10:00:00",
+    "creation": "2025-11-03 10:00:00",
     "doctype": "DocType",
     "engine": "InnoDB",
     "field_order": [
@@ -16,6 +16,7 @@
         "repayment_date",
         "payment_method",
         "reference_number",
+        "reference_schedule_row",
         "repayment_details_section",
         "total_paid",
         "principal_amount",
@@ -24,13 +25,7 @@
         "penalty_amount",
         "outstanding_balance",
         "balance_after_payment",
-        "installment_adjustment_section",
-        "installment_adjustment",
-        "repayment_breakdown_section",
-        "repayment_breakdown",
         "accounting_section",
-        "voucher_type",
-        "journal_entry",
         "payment_entry",
         "posted_to_gl",
         "posted_on"
@@ -40,7 +35,7 @@
             "fieldname": "naming_series",
             "fieldtype": "Select",
             "label": "Naming Series",
-            "options": "REP-.####",
+            "options": "LR-.####",
             "reqd": 1
         },
         {
@@ -67,8 +62,7 @@
             "fieldtype": "Date",
             "label": "Posting Date",
             "reqd": 1,
-            "default": "Today",
-            "description": "Date when the transaction was posted"
+            "default": "Today"
         },
         {
             "fieldname": "member_name",
@@ -97,6 +91,13 @@
             "fieldname": "reference_number",
             "fieldtype": "Data",
             "label": "Reference Number"
+        },
+        {
+            "fieldname": "reference_schedule_row",
+            "fieldtype": "Link",
+            "label": "Reference Schedule Row",
+            "options": "SHG Loan Repayment Schedule",
+            "read_only": 1
         },
         {
             "fieldname": "repayment_details_section",
@@ -150,46 +151,9 @@
             "read_only": 1
         },
         {
-            "fieldname": "installment_adjustment_section",
-            "fieldtype": "Section Break",
-            "label": "Installment Adjustment"
-        },
-        {
-            "fieldname": "installment_adjustment",
-            "fieldtype": "Table",
-            "label": "Installment Adjustment",
-            "options": "SHG Repayment Installment Adjustment"
-        },
-        {
-            "fieldname": "repayment_breakdown_section",
-            "fieldtype": "Section Break",
-            "label": "Repayment Breakdown"
-        },
-        {
-            "fieldname": "repayment_breakdown",
-            "fieldtype": "Table",
-            "label": "Repayment Breakdown",
-            "options": "SHG Repayment Breakdown"
-        },
-        {
             "fieldname": "accounting_section",
             "fieldtype": "Section Break",
             "label": "Accounting"
-        },
-        {
-            "fieldname": "voucher_type",
-            "fieldtype": "Select",
-            "label": "Voucher Type",
-            "options": "Repayment Entry\nBank Entry\nCash Entry\nCredit Card Entry\nWrite Off Entry\nOpening Entry\nContra Entry\nExcise Entry\nAdjustment Entry\nPurchase Entry\nSales Entry\nStock Entry\nDebit Note\nCredit Note\nInter Company Journal Entry\nInter Company Payment\nBill of Entry",
-            "default": "Cash Entry",
-            "reqd": 1
-        },
-        {
-            "fieldname": "journal_entry",
-            "fieldtype": "Link",
-            "label": "Journal Entry",
-            "options": "Journal Entry",
-            "read_only": 1
         },
         {
             "fieldname": "payment_entry",
@@ -213,7 +177,7 @@
     ],
     "is_submittable": 1,
     "links": [],
-    "modified": "2025-09-25 10:00:00",
+    "modified": "2025-11-03 10:00:00",
     "modified_by": "Administrator",
     "module": "SHG",
     "name": "SHG Loan Repayment",
@@ -241,13 +205,14 @@
             "print": 1,
             "read": 1,
             "report": 1,
-            "role": "SHG Treasurer",
+            "role": "SHG Manager",
             "share": 1,
             "submit": 1,
             "write": 1
         },
         {
             "create": 1,
+            "delete": 1,
             "email": 1,
             "export": 1,
             "print": 1,
@@ -261,5 +226,5 @@
     ],
     "sort_field": "modified",
     "sort_order": "DESC",
-    "track_changes": 1
+    "states": []
 }
