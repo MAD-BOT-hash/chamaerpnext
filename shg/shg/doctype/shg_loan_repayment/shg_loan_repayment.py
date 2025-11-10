@@ -8,6 +8,7 @@ from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 class SHGLoanRepayment(Document):
     def validate(self):
+        """Validate the loan repayment before saving."""
         if not self.loan:
             frappe.throw("Please select a Loan to apply this repayment to.")
 
@@ -120,10 +121,71 @@ class SHGLoanRepayment(Document):
                 f"Repayment ({self.total_paid}) exceeds remaining balance ({outstanding_balance}). Loan has {schedule_count} schedule rows."
             )
 
+        # Validate that if payment_entry is set, it exists
+        if self.payment_entry and not frappe.db.exists("Payment Entry", self.payment_entry):
+            frappe.throw(f"Linked Payment Entry {self.payment_entry} does not exist.")
+
         # Auto-calculate repayment breakdown
         self.calculate_repayment_breakdown()
 
     def on_submit(self):
+        # Auto-create Payment Entry if none exists
+        if not self.payment_entry:
+            try:
+                # Get member details
+                member = frappe.get_doc("SHG Member", self.member)
+                customer = member.customer or self.member
+                
+                # Get or create member receivable account
+                company = self.company or frappe.db.get_single_value("SHG Settings", "company")
+                member_account = get_or_create_member_receivable(self.member, company)
+                
+                # Create Payment Entry
+                pe = frappe.new_doc("Payment Entry")
+                pe.payment_type = "Receive"
+                pe.company = company
+                pe.posting_date = self.posting_date
+                pe.paid_from = member_account
+                pe.paid_from_account_type = "Receivable"
+                pe.paid_from_account_currency = frappe.db.get_value("Account", member_account, "account_currency")
+                pe.paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account") or "Cash - " + frappe.db.get_value("Company", company, "abbr")
+                pe.paid_to_account_type = "Cash"
+                pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency")
+                pe.paid_amount = flt(self.total_paid)
+                pe.received_amount = flt(self.total_paid)
+                pe.allocate_payment_amount = 1
+                pe.party_type = "Customer"
+                pe.party = customer
+                pe.remarks = f"Loan repayment for {self.loan}"
+                
+                # Add reference to the loan
+                pe.append("references", {
+                    "reference_doctype": "SHG Loan",
+                    "reference_name": self.loan,
+                    "allocated_amount": flt(self.total_paid)
+                })
+                
+                pe.insert(ignore_permissions=True)
+                pe.submit()
+                
+                # Link the payment entry to this repayment
+                self.db_set("payment_entry", pe.name)
+                
+                frappe.msgprint(f"✅ Payment Entry {pe.name} created successfully.")
+            except Exception as e:
+                from shg.shg.utils.logger import safe_log_error
+                safe_log_error("Failed to auto-create Payment Entry for loan repayment", {
+                    "loan_repayment": self.name,
+                    "loan": self.loan,
+                    "error": str(e),
+                    "traceback": frappe.get_traceback()
+                })
+                frappe.throw(f"Failed to auto-create Payment Entry: {str(e)}")
+
+        # Validate that the Payment Entry exists
+        if self.payment_entry and not frappe.db.exists("Payment Entry", self.payment_entry):
+            frappe.throw(f"Linked Payment Entry {self.payment_entry} is missing. Cannot submit.")
+
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
         
         # Ensure repayment schedule is loaded
@@ -447,6 +509,16 @@ class SHGLoanRepayment(Document):
                 row.payment_entry = None
                 row.actual_payment_date = None
                 row.db_update()
+            elif row.payment_entry:
+                # Guard against invalid payment entry references
+                if not frappe.db.exists("Payment Entry", row.payment_entry):
+                    from shg.shg.utils.logger import safe_log_error
+                    safe_log_error(f"Missing Payment Entry {row.payment_entry}", {
+                        "loan": self.loan,
+                        "installment_no": row.installment_no
+                    })
+                    row.payment_entry = None
+                    row.db_update()
         
         # Clear last repayment date if this was the last payment
         loan_doc.last_repayment_date = None
