@@ -86,7 +86,9 @@ def receive_multiple_payments(invoices, payment_date=None, payment_method=None, 
         pe.party = invoice.member
         pe.posting_date = payment_date
         pe.mode_of_payment = payment_method
-        pe.company = invoice.company or frappe.defaults.get_global_default("company")
+        # Get company from SHG Settings or global defaults since SHGContributionInvoice doesn't have a company field
+        company = frappe.db.get_single_value("SHG Settings", "company") or frappe.defaults.get_global_default("company")
+        pe.company = company
 
         # --- Credit side ---
         pe.append("accounts", {
