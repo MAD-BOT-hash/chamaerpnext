@@ -199,8 +199,28 @@ class SHGMultiMemberPayment(Document):
                 if invoice.status == "Paid":
                     frappe.throw(_("Invoice {0} is already fully paid").format(invoice.name))
                 
-                # Get member account
-                member_account = self.get_or_create_member_account(invoice.member, self.company)
+                # Retrieve company using fallback chain
+                company = None
+                if hasattr(invoice, "company") and invoice.company:
+                    company = invoice.company
+                else:
+                    # try to infer from member account
+                    try:
+                        from shg.shg.utils.account_helpers import get_or_create_member_receivable
+                        member_account = get_or_create_member_receivable(invoice.member, None)
+                        company = frappe.db.get_value("Account", member_account, "company")
+                    except:
+                        company = None
+                
+                # final fallback
+                if not company:
+                    company = frappe.db.get_single_value("SHG Settings", "company")
+                
+                if not company:
+                    frappe.throw("Company not found for invoice and not set in SHG Settings.")
+                
+                # Get member account using the resolved company
+                member_account = self.get_or_create_member_account(invoice.member, company)
                 
                 # Validate payment amount
                 payment_amount = flt(invoice_row.payment_amount)
@@ -220,6 +240,19 @@ class SHGMultiMemberPayment(Document):
                         # For unpaid invoices, full amount is outstanding
                         outstanding_amount = flt(invoice.amount)
                 
+                # Get cash or bank account for the company
+                cash_or_bank = frappe.db.get_single_value("SHG Settings", "default_bank_account")
+                if not cash_or_bank:
+                    # Fallback to cash account
+                    cash_or_bank = frappe.db.get_single_value("SHG Settings", "default_cash_account")
+                if not cash_or_bank:
+                    # Last resort - try to find any bank or cash account for the company
+                    cash_or_bank_accounts = frappe.get_all("Account", 
+                        filters={"company": company, "account_type": ["in", ["Bank", "Cash"]], "is_group": 0},
+                        limit=1)
+                    if cash_or_bank_accounts:
+                        cash_or_bank = cash_or_bank_accounts[0].name
+                
                 # Create Payment Entry
                 pe = frappe.new_doc("Payment Entry")
                 pe.payment_type = "Receive"
@@ -229,13 +262,13 @@ class SHGMultiMemberPayment(Document):
                 pe.paid_amount = payment_amount
                 pe.received_amount = payment_amount
                 pe.payment_method = self.payment_method
-                pe.company = self.company
+                pe.company = company
                 pe.reference_no = self.name
                 pe.reference_date = self.payment_date
                 pe.remarks = f"Payment for SHG Contribution Invoice {invoice.name}"
                 
                 # Set accounts correctly for receive payment
-                pe.paid_to = self.account  # Debit to bank/cash account
+                pe.paid_to = cash_or_bank  # Debit to bank/cash account
                 pe.paid_from = member_account  # Credit from member account
                 
                 # Add reference to the invoice

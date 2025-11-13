@@ -52,8 +52,7 @@ def receive_multiple_payments(invoices, payment_date=None, payment_method=None, 
     processed = 0
     payment_date = payment_date or today()
     payment_method = payment_method or "Cash"
-    account = account or frappe.db.get_value("Account", {"account_type": "Cash", "is_group": 0}, "name")
-
+    
     for entry in invoices:
         if not isinstance(entry, dict) or "name" not in entry:
             frappe.log_error(str(entry), "Invalid invoice entry in receive_multiple_payments")
@@ -86,20 +85,53 @@ def receive_multiple_payments(invoices, payment_date=None, payment_method=None, 
         pe.party = invoice.member
         pe.posting_date = payment_date
         pe.mode_of_payment = payment_method
-        # Get company from SHG Settings or global defaults since SHGContributionInvoice doesn't have a company field
-        company = frappe.db.get_single_value("SHG Settings", "company") or frappe.defaults.get_global_default("company")
+        
+        # Retrieve company using fallback chain
+        company = None
+        if hasattr(invoice, "company") and invoice.company:
+            company = invoice.company
+        else:
+            # try to infer from member account
+            try:
+                from shg.shg.utils.account_helpers import get_or_create_member_receivable
+                member_account = get_or_create_member_receivable(invoice.member, None)
+                company = frappe.db.get_value("Account", member_account, "company")
+            except:
+                company = None
+        
+        # final fallback
+        if not company:
+            company = frappe.db.get_single_value("SHG Settings", "company")
+        
+        if not company:
+            frappe.throw("Company not found for invoice and not set in SHG Settings.")
+            
         pe.company = company
 
         # --- Credit side ---
+        # Get cash or bank account for the company
+        cash_or_bank = frappe.db.get_single_value("SHG Settings", "default_bank_account")
+        if not cash_or_bank:
+            # Fallback to cash account
+            cash_or_bank = frappe.db.get_single_value("SHG Settings", "default_cash_account")
+        if not cash_or_bank:
+            # Last resort - try to find any bank or cash account for the company
+            cash_or_bank_accounts = frappe.get_all("Account", 
+                filters={"company": company, "account_type": ["in", ["Bank", "Cash"]], "is_group": 0},
+                limit=1)
+            if cash_or_bank_accounts:
+                cash_or_bank = cash_or_bank_accounts[0].name
+        if not cash_or_bank:
+            frappe.throw("No bank or cash account found for company {0}".format(company))
+            
         pe.append("accounts", {
-            "account": account,
+            "account": cash_or_bank,
             "credit_in_account_currency": paid_amount
         })
 
         # --- Debit side ---
-        from shg.shg.utils.account_utils import get_or_create_member_account
-        member = frappe.get_doc("SHG Member", invoice.member)
-        member_account = get_or_create_member_account(member, pe.company)
+        from shg.shg.utils.account_helpers import get_or_create_member_receivable
+        member_account = get_or_create_member_receivable(invoice.member, company)
         if not member_account:
             frappe.throw(f"Unable to find ledger account for member {invoice.member}")
 
