@@ -2,6 +2,42 @@ import frappe
 from frappe import _
 from frappe.utils import flt, nowdate, today
 
+def resolve_company_for_invoice(invoice):
+    """
+    Resolve company reliably for ANY SHG invoice-like document.
+    Order of resolution:
+    1. If invoice.company exists → use it
+    2. If member receivable account exists → use account's company
+    3. Fallback to SHG Settings default company
+    4. Throw clear error if still missing
+    """
+
+    # 1) Direct company on invoice (if field exists)
+    inv_company = getattr(invoice, "company", None)
+    if inv_company:
+        return inv_company
+
+    # 2) Infer from member receivable ledger
+    try:
+        from shg.shg.utils.account_helpers import get_or_create_member_receivable
+        member_account = get_or_create_member_receivable(invoice.member, None)
+        acc_company = frappe.db.get_value("Account", member_account, "company")
+        if acc_company:
+            return acc_company
+    except Exception:
+        pass
+
+    # 3) Fallback to SHG Settings
+    settings_company = frappe.db.get_single_value("SHG Settings", "company")
+    if settings_company:
+        return settings_company
+
+    # 4) Still missing → throw clean error
+    frappe.throw(
+        f"Company cannot be resolved for invoice {invoice.name}. "
+        "Please set 'Company' in SHG Settings."
+    )
+
 @frappe.whitelist()
 def get_unpaid_invoices(member=None):
     """
@@ -86,26 +122,8 @@ def receive_multiple_payments(invoices, payment_date=None, payment_method=None, 
         pe.posting_date = payment_date
         pe.mode_of_payment = payment_method
         
-        # Retrieve company using fallback chain
-        company = None
-        if hasattr(invoice, "company") and invoice.company:
-            company = invoice.company
-        else:
-            # try to infer from member account
-            try:
-                from shg.shg.utils.account_helpers import get_or_create_member_receivable
-                member_account = get_or_create_member_receivable(invoice.member, None)
-                company = frappe.db.get_value("Account", member_account, "company")
-            except:
-                company = None
-        
-        # final fallback
-        if not company:
-            company = frappe.db.get_single_value("SHG Settings", "company")
-        
-        if not company:
-            frappe.throw("Company not found for invoice and not set in SHG Settings.")
-            
+        # Resolve company using the universal resolver
+        company = resolve_company_for_invoice(invoice)
         pe.company = company
 
         # --- Credit side ---
