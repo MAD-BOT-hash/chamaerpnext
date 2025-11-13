@@ -3,7 +3,7 @@
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt, getdate, today
+from frappe.utils import flt, getdate, today, nowdate
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 class SHGLoanRepayment(Document):
@@ -213,7 +213,6 @@ class SHGLoanRepayment(Document):
         company = loan.company
         member = loan.member
 
-        # Resolve correct ledger accounts
         member_account = get_or_create_member_receivable(member, company)
 
         paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account")
@@ -226,7 +225,7 @@ class SHGLoanRepayment(Document):
         pe.company = company
         pe.party_type = "Customer"
         pe.party = member
-        pe.posting_date = self.posting_date
+        pe.posting_date = self.posting_date or nowdate()
 
         pe.paid_from = member_account
         pe.paid_to = paid_to
@@ -234,8 +233,12 @@ class SHGLoanRepayment(Document):
         pe.received_amount = flt(self.total_paid)
         pe.mode_of_payment = self.payment_method or "Cash"
 
-        # ❌ DO NOT USE REFERENCES for SHG Loan (ERPNext blocks)
-        pe.remarks = f"Auto-generated SHG Loan Repayment for Loan {self.loan}"
+        # REQUIRED FIX → prevent Bank transaction error
+        pe.reference_no = self.name
+        pe.reference_date = self.posting_date or nowdate()
+
+        # IMPORTANT → no references.append for SHG Loan
+        pe.remarks = f"Auto-created repayment for SHG Loan {self.loan}"
 
         pe.insert(ignore_permissions=True)
         pe.submit()

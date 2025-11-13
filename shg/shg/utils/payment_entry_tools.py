@@ -19,7 +19,6 @@ def auto_create_payment_entry(repayment_doc):
     company = loan.company
     member = loan.member
 
-    # Resolve correct ledger accounts
     member_account = get_or_create_member_receivable(member, company)
 
     paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account")
@@ -32,7 +31,7 @@ def auto_create_payment_entry(repayment_doc):
     pe.company = company
     pe.party_type = "Customer"
     pe.party = member
-    pe.posting_date = repayment_doc.posting_date
+    pe.posting_date = repayment_doc.posting_date or nowdate()
 
     pe.paid_from = member_account
     pe.paid_to = paid_to
@@ -40,8 +39,12 @@ def auto_create_payment_entry(repayment_doc):
     pe.received_amount = flt(repayment_doc.total_paid)
     pe.mode_of_payment = repayment_doc.payment_method or "Cash"
 
-    # ❌ DO NOT USE REFERENCES for SHG Loan (ERPNext blocks)
-    pe.remarks = f"Auto-generated SHG Loan Repayment for Loan {repayment_doc.loan}"
+    # REQUIRED FIX → prevent Bank transaction error
+    pe.reference_no = repayment_doc.name
+    pe.reference_date = repayment_doc.posting_date or nowdate()
+
+    # IMPORTANT → no references.append for SHG Loan
+    pe.remarks = f"Auto-created repayment for SHG Loan {repayment_doc.loan}"
 
     pe.insert(ignore_permissions=True)
     pe.submit()
