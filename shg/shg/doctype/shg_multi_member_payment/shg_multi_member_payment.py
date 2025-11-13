@@ -6,30 +6,40 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt, today, getdate
 from frappe.desk.form.assign_to import add as assign_to
+from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 def resolve_company_for_invoice(invoice):
     """
-    Resolve company reliably for ANY SHG invoice-like document.
-    Order of resolution:
-    1. If invoice.company exists → use it
-    2. Fallback to SHG Settings default company
-    3. Throw clear error if still missing
+    Resolve company for ANY invoice-like SHG document.
+    Never returns None.
     """
 
-    # 1) Direct company on invoice (if field exists)
-    inv_company = getattr(invoice, "company", None)
-    if inv_company:
-        return inv_company
+    # 1) Direct invoice.company if field exists
+    try:
+        inv_company = getattr(invoice, "company", None)
+        if inv_company:
+            return inv_company
+    except Exception:
+        pass
 
-    # 2) Fallback to SHG Settings
+    # 2) Infer from member receivable account
+    try:
+        member_account = get_or_create_member_receivable(invoice.member, None)
+        acc_company = frappe.db.get_value("Account", member_account, "company")
+        if acc_company:
+            return acc_company
+    except Exception:
+        pass
+
+    # 3) Fallback to SHG Settings
     settings_company = frappe.db.get_single_value("SHG Settings", "company")
     if settings_company:
         return settings_company
 
-    # 3) Still missing → throw clean error
+    # 4) Complete failure → STOP with clear message
     frappe.throw(
-        f"Company cannot be resolved for invoice {invoice.name}. "
-        "Please set 'Company' in SHG Settings."
+        f"Cannot resolve company for invoice {invoice.name}. "
+        "Please set default 'Company' in SHG Settings."
     )
 
 @frappe.whitelist()
