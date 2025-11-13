@@ -19,27 +19,29 @@ def auto_create_payment_entry(repayment_doc):
     company = loan.company
     member = loan.member
 
-    # locate default accounts
-    cash_account = frappe.db.get_value("Account",
-        {"account_name": "Cash", "company": company}, "name")
-    receivable_account = get_or_create_member_receivable(member, company)
+    # Resolve correct ledger accounts
+    member_account = get_or_create_member_receivable(member, company)
 
-    if not cash_account or not receivable_account:
-        frappe.throw(f"Missing default Cash/Receivable accounts for {company}")
+    paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account")
+    if not paid_to:
+        abbr = frappe.db.get_value("Company", company, "abbr")
+        paid_to = f"Cash - {abbr}"
 
-    pe = frappe.new_doc("Payment Entry")     # Use standard Payment Entry
+    pe = frappe.new_doc("Payment Entry")
     pe.payment_type = "Receive"
     pe.company = company
     pe.party_type = "Customer"
     pe.party = member
-    pe.paid_from = receivable_account
-    pe.paid_to = cash_account
-    pe.paid_amount = repayment_doc.total_paid
-    pe.received_amount = repayment_doc.total_paid
+    pe.posting_date = repayment_doc.posting_date
+
+    pe.paid_from = member_account
+    pe.paid_to = paid_to
+    pe.paid_amount = flt(repayment_doc.total_paid)
+    pe.received_amount = flt(repayment_doc.total_paid)
     pe.mode_of_payment = repayment_doc.payment_method or "Cash"
-    pe.reference_no = repayment_doc.name
-    pe.reference_date = repayment_doc.posting_date
-    pe.remarks = f"Auto-created for SHG Loan {repayment_doc.loan}"
+
+    # ❌ DO NOT USE REFERENCES for SHG Loan (ERPNext blocks)
+    pe.remarks = f"Auto-generated SHG Loan Repayment for Loan {repayment_doc.loan}"
 
     pe.insert(ignore_permissions=True)
     pe.submit()

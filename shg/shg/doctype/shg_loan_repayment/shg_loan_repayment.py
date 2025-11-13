@@ -420,42 +420,33 @@ class SHGLoanRepayment(Document):
 
     # --------------------------------------------------------------------
     def create_payment_entry(self):
-        """Creates a clean and always-valid Payment Entry for this repayment."""
-
         loan = frappe.get_doc("SHG Loan", self.loan)
+        company = loan.company
+        member = loan.member
 
-        # Ensure company
-        company = loan.company or frappe.db.get_single_value("SHG Settings", "company")
-        if not company:
-            frappe.throw("Company not configured in SHG Settings.")
+        # Resolve correct ledger accounts
+        member_account = get_or_create_member_receivable(member, company)
 
-        # Member receivable account (NOT group account)
-        member_account = get_or_create_member_receivable(loan.member, company)
-
-        # Paid To must be a NON-GROUP account
         paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account")
         if not paid_to:
             abbr = frappe.db.get_value("Company", company, "abbr")
             paid_to = f"Cash - {abbr}"
 
-        # Create Payment Entry
         pe = frappe.new_doc("Payment Entry")
         pe.payment_type = "Receive"
         pe.company = company
-        pe.posting_date = self.posting_date
         pe.party_type = "Customer"
-        pe.party = frappe.db.get_value("SHG Member", loan.member, "customer") or loan.member
+        pe.party = member
+        pe.posting_date = self.posting_date
 
         pe.paid_from = member_account
         pe.paid_to = paid_to
         pe.paid_amount = flt(self.total_paid)
         pe.received_amount = flt(self.total_paid)
+        pe.mode_of_payment = self.payment_method or "Cash"
 
-        pe.append("references", {
-            "reference_doctype": "SHG Loan",
-            "reference_name": self.loan,
-            "allocated_amount": flt(self.total_paid)
-        })
+        # ❌ DO NOT USE REFERENCES for SHG Loan (ERPNext blocks)
+        pe.remarks = f"Auto-generated SHG Loan Repayment for Loan {self.loan}"
 
         pe.insert(ignore_permissions=True)
         pe.submit()
