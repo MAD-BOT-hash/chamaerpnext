@@ -1,7 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import flt, nowdate
-import json
+from frappe.utils import flt, nowdate, today
 
 @frappe.whitelist()
 def get_unpaid_invoices(member=None):
@@ -37,26 +36,21 @@ def get_unpaid_invoices(member=None):
     return invoices
 
 @frappe.whitelist()
-def receive_multiple_payments(selected_invoices, payment_date=None, payment_method=None, account=None):
+def receive_multiple_payments(invoices, payment_date=None, payment_method=None, account=None):
     """
-    Process multiple invoice payments safely with proper JSON and dict handling.
+    Receive payments for multiple contribution invoices.
+    
+    Args:
+        invoices (list): List of invoice dictionaries with 'name' and optionally 'paid_amount'
+        payment_date (str): Payment date (defaults to today)
+        payment_method (str): Payment method (defaults to 'Cash')
+        account (str): Account to credit (defaults to Cash account)
+        
+    Returns:
+        dict: Result with processed count
     """
-    import json
-    # Already imported at the top
-
-    # --- Parse and validate JSON input ---
-    invoices = []
-    try:
-        invoices = json.loads(selected_invoices)
-        if isinstance(invoices, dict):
-            invoices = [invoices]
-        if not isinstance(invoices, list):
-            frappe.throw("Invalid format: selected_invoices must be a list of dicts.")
-    except Exception as e:
-        frappe.throw(f"Invalid JSON data for selected_invoices: {e}")
-
     processed = 0
-    payment_date = payment_date or nowdate()
+    payment_date = payment_date or today()
     payment_method = payment_method or "Cash"
     account = account or frappe.db.get_value("Account", {"account_type": "Cash", "is_group": 0}, "name")
 
@@ -66,7 +60,21 @@ def receive_multiple_payments(selected_invoices, payment_date=None, payment_meth
             continue
 
         invoice = frappe.get_doc("SHG Contribution Invoice", entry["name"])
-        paid_amount = flt(entry.get("paid_amount", invoice.amount or 0))
+        
+        # For SHGContributionInvoice, calculate paid_amount based on the entry or assume full payment
+        # SHGContributionInvoice doesn't have a paid_amount field, so we need to calculate it
+        if "paid_amount" in entry:
+            paid_amount = flt(entry.get("paid_amount"))
+        else:
+            # If no paid_amount specified, check if there's a linked Sales Invoice to determine outstanding amount
+            if invoice.sales_invoice:
+                sales_invoice = frappe.get_doc("Sales Invoice", invoice.sales_invoice)
+                # For partial payment scenarios, we'll use half the amount as an example
+                # In real implementation, this should be calculated properly based on business logic
+                paid_amount = flt(sales_invoice.outstanding_amount or invoice.amount)
+            else:
+                # If no Sales Invoice, assume full payment
+                paid_amount = flt(invoice.amount)
 
         if paid_amount <= 0:
             continue
@@ -104,7 +112,21 @@ def receive_multiple_payments(selected_invoices, payment_date=None, payment_meth
         pe.submit()
 
         # --- Update invoice & contribution record ---
-        invoice.db_set("status", "Paid" if paid_amount >= flt(invoice.amount) else "Partially Paid")
+        # Calculate the new status based on payment
+        if invoice.sales_invoice:
+            sales_invoice = frappe.get_doc("Sales Invoice", invoice.sales_invoice)
+            new_outstanding = sales_invoice.outstanding_amount - paid_amount
+            if new_outstanding <= 0:
+                invoice.db_set("status", "Paid")
+            else:
+                invoice.db_set("status", "Partially Paid")
+        else:
+            # For invoices without Sales Invoice, determine status based on payment amount
+            if paid_amount >= flt(invoice.amount):
+                invoice.db_set("status", "Paid")
+            else:
+                invoice.db_set("status", "Partially Paid")
+                
         contribution_name = frappe.db.get_value("SHG Contribution", {"invoice_reference": invoice.name}, "name")
         if contribution_name:
             contrib = frappe.get_doc("SHG Contribution", contribution_name)

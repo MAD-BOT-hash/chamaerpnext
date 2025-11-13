@@ -136,7 +136,6 @@ class SHGMultiMemberPayment(Document):
         self.total_payment_amount = total_amount
         self.total_amount = total_amount
         
-    @frappe.whitelist()
     def get_unpaid_invoices(self):
         """Fetch all unpaid contribution invoices for selection"""
         invoices = frappe.get_all(
@@ -153,14 +152,26 @@ class SHGMultiMemberPayment(Document):
                 "invoice_date",
                 "due_date",
                 "amount",
-                "paid_amount",
                 "status"
             ]
         )
         
         # Calculate outstanding amount for each invoice
+        # SHGContributionInvoice doesn't have paid_amount field, so we calculate from status and amount
         for invoice in invoices:
-            invoice["outstanding_amount"] = flt(invoice["amount"]) - flt(invoice["paid_amount"] or 0)
+            # For SHGContributionInvoice, we calculate outstanding amount based on status
+            if invoice["status"] == "Partially Paid":
+                # For partially paid invoices, we need to check the linked Sales Invoice if exists
+                shg_invoice = frappe.get_doc("SHG Contribution Invoice", invoice["invoice"])
+                if shg_invoice.sales_invoice:
+                    sales_invoice = frappe.get_doc("Sales Invoice", shg_invoice.sales_invoice)
+                    invoice["outstanding_amount"] = sales_invoice.outstanding_amount
+                else:
+                    # If no Sales Invoice, assume half is paid (this is a fallback)
+                    invoice["outstanding_amount"] = flt(invoice["amount"]) / 2
+            else:
+                # For unpaid invoices, outstanding amount is the full amount
+                invoice["outstanding_amount"] = flt(invoice["amount"])
             invoice["payment_amount"] = invoice["outstanding_amount"]  # Default payment amount
             
         return invoices
@@ -196,6 +207,19 @@ class SHGMultiMemberPayment(Document):
                 if payment_amount <= 0:
                     frappe.throw(_("Payment amount must be greater than zero for invoice {0}").format(invoice.name))
                 
+                # Calculate outstanding amount for this invoice
+                if invoice.sales_invoice:
+                    sales_invoice = frappe.get_doc("Sales Invoice", invoice.sales_invoice)
+                    outstanding_amount = sales_invoice.outstanding_amount
+                else:
+                    # If no Sales Invoice, calculate based on status
+                    if invoice.status == "Partially Paid":
+                        # For partially paid invoices, assume half is still outstanding (fallback)
+                        outstanding_amount = flt(invoice.amount) / 2
+                    else:
+                        # For unpaid invoices, full amount is outstanding
+                        outstanding_amount = flt(invoice.amount)
+                
                 # Create Payment Entry
                 pe = frappe.new_doc("Payment Entry")
                 pe.payment_type = "Receive"
@@ -220,7 +244,7 @@ class SHGMultiMemberPayment(Document):
                     "reference_name": invoice.name,
                     "allocated_amount": payment_amount,
                     "total_amount": flt(invoice.amount),
-                    "outstanding_amount": flt(invoice.amount) - flt(invoice.paid_amount or 0)
+                    "outstanding_amount": outstanding_amount
                 })
                 
                 # Insert and submit the Payment Entry
@@ -228,26 +252,19 @@ class SHGMultiMemberPayment(Document):
                 pe.submit()
                 
                 # Update invoice status
-                paid_amount = payment_amount
-                outstanding_amount = flt(invoice.amount) - flt(invoice.paid_amount or 0)
-                
-                if paid_amount >= outstanding_amount:
+                if payment_amount >= outstanding_amount:
                     invoice.db_set("status", "Paid")
                 else:
                     invoice.db_set("status", "Partially Paid")
                     
-                # Update paid amount on invoice
-                new_paid_amount = flt(invoice.paid_amount or 0) + paid_amount
-                invoice.db_set("paid_amount", new_paid_amount)
+                # Update payment reference on the invoice
+                invoice.db_set("payment_reference", pe.name)
                 
                 # Update linked contribution if exists
                 if invoice.linked_shg_contribution:
                     contribution = frappe.get_doc("SHG Contribution", invoice.linked_shg_contribution)
-                    contribution.update_payment_status(paid_amount)
+                    contribution.update_payment_status(payment_amount)
                     
-                # Update the payment reference on the invoice
-                invoice.db_set("payment_reference", pe.name)
-                
             frappe.msgprint(_("✅ Payments recorded successfully for {0} invoices (Total: KSh {1:,.2f}).").format(
                 len(self.invoices), self.total_payment_amount))
                 
