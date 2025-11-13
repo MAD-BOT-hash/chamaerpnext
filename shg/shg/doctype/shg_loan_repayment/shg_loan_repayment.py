@@ -2,7 +2,6 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import flt, getdate, today, add_months, nowdate
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
-from shg.shg.utils.payment_entry_tools import ensure_payment_entry_exists, auto_create_payment_entry
 
 class SHGLoanRepayment(Document):
     def before_insert(self):
@@ -24,70 +23,7 @@ class SHGLoanRepayment(Document):
 
         # Ensure repayment schedule is loaded
         if not loan_doc.get("repayment_schedule"):
-            # Load schedule from database
-            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
-                                            filters={"parent": self.loan, "parenttype": "SHG Loan"},
-                                            fields=["*"])  # Load all fields
-            if schedule_from_db:
-                # Populate the loan document with the schedule
-                loan_doc.repayment_schedule = []
-                for row_data in schedule_from_db:
-                    loan_doc.append("repayment_schedule", row_data)
-            else:
-                # Generate schedule if none exists in database
-                frappe.msgprint(f"Loan {loan_doc.name} has no repayment schedule. Generating schedule…")
-                try:
-                    from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
-                    
-                    principal = flt(loan_doc.loan_amount)
-                    months = int(loan_doc.loan_period_months)
-                    start_date = loan_doc.repayment_start_date or add_months(loan_doc.disbursement_date or frappe.utils.today(), 1)
-                    interest_type = getattr(loan_doc, "interest_type", "Reducing Balance")
-                    
-                    if interest_type == "Flat Rate":
-                        schedule_data = generate_flat_rate_schedule(principal, loan_doc.interest_rate, months, start_date)
-                    else:
-                        schedule_data = generate_reducing_balance_schedule(principal, loan_doc.interest_rate, months, start_date)
-                    
-                    if not schedule_data:
-                        frappe.throw("Schedule generator returned empty list. Fix schedule generation functions.")
-                    
-                    # Clear any existing schedule and add new one
-                    loan_doc.set("repayment_schedule", [])
-                    
-                    # Append properly as child rows
-                    for row in schedule_data:
-                        loan_doc.append("repayment_schedule", {
-                            "installment_no": row.get("installment_no"),
-                            "due_date": row.get("due_date"),
-                            "principal_component": row.get("principal_component"),
-                            "interest_component": row.get("interest_component"),
-                            "penalty_due": row.get("penalty_due", 0),
-                            "total_payment": row.get("total_payment"),
-                            "total_due": row.get("total_due"),
-                            "amount_paid": row.get("amount_paid", 0),
-                            "unpaid_balance": row.get("unpaid_balance"),
-                            "loan_balance": row.get("loan_balance", 0),
-                            "status": row.get("status", "Pending")
-                        })
-                    
-                    # Save the schedule - for submitted loans, we need to use special flags
-                    if loan_doc.docstatus == 1:
-                        # Allow updates on submitted loans
-                        loan_doc.flags.ignore_validate_update_after_submit = True
-                        loan_doc.save(ignore_permissions=True)
-                        loan_doc.reload()
-                    else:
-                        loan_doc.save(ignore_permissions=True)
-                    
-                    frappe.msgprint(f"Repayment schedule generated and saved for {loan_doc.name}.")
-                except Exception as e:
-                    from shg.shg.utils.logger import safe_log_error
-                    safe_log_error(f"Failed to generate repayment schedule for loan {loan_doc.name}", {
-                        "error": str(e),
-                        "traceback": frappe.get_traceback()
-                    })
-                    frappe.throw(f"Failed to generate repayment schedule for loan {loan_doc.name}: {str(e)}")
+            self.generate_and_attach_schedule(loan_doc)
 
         # Calculate outstanding balance directly from repayment schedule
         outstanding_balance = 0
@@ -125,15 +61,17 @@ class SHGLoanRepayment(Document):
             )
 
         # Validate that if payment_entry is set, it exists
-        if self.payment_entry and not frappe.db.exists("SHG Payment Entry", self.payment_entry):
-            frappe.throw(f"Linked SHG Payment Entry {self.payment_entry} does not exist.")
+        if self.payment_entry and not frappe.db.exists("Payment Entry", self.payment_entry):
+            frappe.throw(f"Linked Payment Entry {self.payment_entry} does not exist.")
 
         # Auto-calculate repayment breakdown
         self.calculate_repayment_breakdown()
 
     def on_submit(self):
-        # 1️⃣ ensure valid Payment Entry
-        pe_name = self.ensure_payment_entry_exists()
+        # 1️⃣ Ensure payment entry exists
+        if not self.payment_entry or not frappe.db.exists("Payment Entry", self.payment_entry):
+            self.payment_entry = self.create_payment_entry()
+            self.db_update()
         
         # Get the loan document
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
@@ -142,77 +80,14 @@ class SHGLoanRepayment(Document):
         self.update_repayment_schedule(loan_doc)
         self.update_loan_summary(loan_doc)
 
-        frappe.msgprint(f"Linked Payment Entry: {pe_name}")
+        frappe.msgprint(f"Linked Payment Entry: {self.payment_entry}")
 
     def on_cancel(self):
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
         
         # Ensure repayment schedule is loaded
         if not loan_doc.get("repayment_schedule"):
-            # Load schedule from database
-            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
-                                            filters={"parent": self.loan, "parenttype": "SHG Loan"},
-                                            fields=["*"])  # Load all fields
-            if schedule_from_db:
-                # Populate the loan document with the schedule
-                loan_doc.repayment_schedule = []
-                for row_data in schedule_from_db:
-                    loan_doc.append("repayment_schedule", row_data)
-            else:
-                # Generate schedule if none exists in database
-                frappe.msgprint(f"Loan {loan_doc.name} has no repayment schedule. Generating schedule…")
-                try:
-                    from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
-                    
-                    principal = flt(loan_doc.loan_amount)
-                    months = int(loan_doc.loan_period_months)
-                    start_date = loan_doc.repayment_start_date or add_months(loan_doc.disbursement_date or frappe.utils.today(), 1)
-                    interest_type = getattr(loan_doc, "interest_type", "Reducing Balance")
-                    
-                    if interest_type == "Flat Rate":
-                        schedule_data = generate_flat_rate_schedule(principal, loan_doc.interest_rate, months, start_date)
-                    else:
-                        schedule_data = generate_reducing_balance_schedule(principal, loan_doc.interest_rate, months, start_date)
-                    
-                    if not schedule_data:
-                        frappe.throw("Schedule generator returned empty list. Fix schedule generation functions.")
-                    
-                    # Clear any existing schedule and add new one
-                    loan_doc.set("repayment_schedule", [])
-                    
-                    # Append properly as child rows
-                    for row in schedule_data:
-                        loan_doc.append("repayment_schedule", {
-                            "installment_no": row.get("installment_no"),
-                            "due_date": row.get("due_date"),
-                            "principal_component": row.get("principal_component"),
-                            "interest_component": row.get("interest_component"),
-                            "penalty_due": row.get("penalty_due", 0),
-                            "total_payment": row.get("total_payment"),
-                            "total_due": row.get("total_due"),
-                            "amount_paid": row.get("amount_paid", 0),
-                            "unpaid_balance": row.get("unpaid_balance"),
-                            "loan_balance": row.get("loan_balance", 0),
-                            "status": row.get("status", "Pending")
-                        })
-                    
-                    # Save the schedule - for submitted loans, we need to use special flags
-                    if loan_doc.docstatus == 1:
-                        # Allow updates on submitted loans
-                        loan_doc.flags.ignore_validate_update_after_submit = True
-                        loan_doc.save(ignore_permissions=True)
-                        loan_doc.reload()
-                    else:
-                        loan_doc.save(ignore_permissions=True)
-                    
-                    frappe.msgprint(f"Repayment schedule generated and saved for {loan_doc.name}.")
-                except Exception as e:
-                    from shg.shg.utils.logger import safe_log_error
-                    safe_log_error(f"Failed to generate repayment schedule for loan {loan_doc.name}", {
-                        "error": str(e),
-                        "traceback": frappe.get_traceback()
-                    })
-                    frappe.throw(f"Failed to generate repayment schedule for loan {loan_doc.name}: {str(e)}")
+            self.generate_and_attach_schedule(loan_doc)
         
         # Reverse the repayment schedule updates
         self.reverse_repayment_schedule(loan_doc)
@@ -221,20 +96,10 @@ class SHGLoanRepayment(Document):
         self.update_loan_summary(loan_doc)
         
         # Cancel the payment entry if it exists
-        if self.payment_entry:
-            if not frappe.db.exists("SHG Payment Entry", self.payment_entry):
-                frappe.msgprint(f"⚠️ Payment Entry {self.payment_entry} not found – cannot cancel...")
-            else:
-                try:
-                    pe = frappe.get_doc("SHG Payment Entry", self.payment_entry)
-                    if pe.docstatus == 1:
-                        pe.cancel()
-                except Exception as e:
-                    from shg.shg.utils.logger import safe_log_error
-                    safe_log_error(f"Failed to cancel SHG Payment Entry {self.payment_entry}", {
-                        "error": str(e),
-                        "traceback": frappe.get_traceback()
-                    })
+        if self.payment_entry and frappe.db.exists("Payment Entry", self.payment_entry):
+            pe = frappe.get_doc("Payment Entry", self.payment_entry)
+            if pe.docstatus == 1:
+                pe.cancel()
         
         frappe.msgprint(f"⚠️ Loan repayment {self.name} cancelled. Balance restored to {loan_doc.balance_amount}")
 
@@ -244,73 +109,7 @@ class SHGLoanRepayment(Document):
         
         # Ensure repayment schedule is loaded
         if not loan_doc.get("repayment_schedule"):
-            # Load schedule from database
-            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
-                                            filters={"parent": self.loan, "parenttype": "SHG Loan"},
-                                            fields=["*"])  # Load all fields
-            if schedule_from_db:
-                # Populate the loan document with the schedule
-                loan_doc.repayment_schedule = []
-                for row_data in schedule_from_db:
-                    loan_doc.append("repayment_schedule", row_data)
-            else:
-                # Generate schedule if none exists in database
-                frappe.msgprint(f"Loan {loan_doc.name} has no repayment schedule. Generating schedule…")
-                try:
-                    from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
-                    
-                    principal = flt(loan_doc.loan_amount)
-                    months = int(loan_doc.loan_period_months)
-                    start_date = loan_doc.repayment_start_date or add_months(loan_doc.disbursement_date or frappe.utils.today(), 1)
-                    interest_type = getattr(loan_doc, "interest_type", "Reducing Balance")
-                    
-                    if interest_type == "Flat Rate":
-                        schedule_data = generate_flat_rate_schedule(principal, loan_doc.interest_rate, months, start_date)
-                    else:
-                        schedule_data = generate_reducing_balance_schedule(principal, loan_doc.interest_rate, months, start_date)
-                    
-                    if not schedule_data:
-                        frappe.throw("Schedule generator returned empty list. Fix schedule generation functions.")
-                    
-                    # Clear any existing schedule and add new one
-                    loan_doc.set("repayment_schedule", [])
-                    
-                    # Append properly as child rows
-                    for row in schedule_data:
-                        loan_doc.append("repayment_schedule", {
-                            "installment_no": row.get("installment_no"),
-                            "due_date": row.get("due_date"),
-                            "principal_component": row.get("principal_component"),
-                            "interest_component": row.get("interest_component"),
-                            "penalty_due": row.get("penalty_due", 0),
-                            "total_payment": row.get("total_payment"),
-                            "total_due": row.get("total_due"),
-                            "amount_paid": row.get("amount_paid", 0),
-                            "unpaid_balance": row.get("unpaid_balance"),
-                            "loan_balance": row.get("loan_balance", 0),
-                            "status": row.get("status", "Pending")
-                        })
-                    
-                    # Save the schedule - for submitted loans, we need to use special flags
-                    if loan_doc.docstatus == 1:
-                        # Allow updates on submitted loans
-                        loan_doc.flags.ignore_validate_update_after_submit = True
-                        loan_doc.save(ignore_permissions=True)
-                        loan_doc.reload()
-                    else:
-                        loan_doc.save(ignore_permissions=True)
-                    
-                    frappe.msgprint(f"Repayment schedule generated and saved for {loan_doc.name}.")
-                except Exception as e:
-                    from shg.shg.utils.logger import safe_log_error
-                    safe_log_error(f"Failed to generate repayment schedule for loan {loan_doc.name}", {
-                        "error": str(e),
-                        "traceback": frappe.get_traceback()
-                    })
-                    frappe.throw(f"Failed to generate repayment schedule for loan {loan_doc.name}: {str(e)}")
-            # Check again after attempting to generate
-            if not loan_doc.get("repayment_schedule"):
-                frappe.throw(f"Loan {loan_doc.name} has no repayment schedule.")
+            self.generate_and_attach_schedule(loan_doc)
             
         # If a specific schedule row is selected, apply to that row only
         if self.reference_schedule_row:
@@ -390,9 +189,9 @@ class SHGLoanRepayment(Document):
                 row.db_update()
             elif row.payment_entry:
                 # Guard against invalid payment entry references
-                if not frappe.db.exists("SHG Payment Entry", row.payment_entry):
+                if not frappe.db.exists("Payment Entry", row.payment_entry):
                     from shg.shg.utils.logger import safe_log_error
-                    safe_log_error(f"Missing SHG Payment Entry {row.payment_entry}", {
+                    safe_log_error(f"Missing Payment Entry {row.payment_entry}", {
                         "loan": self.loan,
                         "installment_no": row.installment_no
                     })
@@ -429,18 +228,7 @@ class SHGLoanRepayment(Document):
         """Fallback method to calculate loan summary manually."""
         # Ensure repayment schedule is loaded
         if not loan_doc.get("repayment_schedule"):
-            # Try to load from database
-            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
-                                            filters={"parent": loan_doc.name, "parenttype": "SHG Loan"},
-                                            fields=["*"])  # Load all fields
-            if schedule_from_db:
-                # Populate the loan document with the schedule
-                loan_doc.repayment_schedule = []
-                for row_data in schedule_from_db:
-                    loan_doc.append("repayment_schedule", row_data)
-            # Check again after attempting to generate
-            if not loan_doc.get("repayment_schedule"):
-                return
+            self.generate_and_attach_schedule(loan_doc)
             
         total_repaid = 0.0
         balance_amount = 0.0
@@ -472,19 +260,19 @@ class SHGLoanRepayment(Document):
         frappe.db.commit()
 
     def post_to_ledger(self, loan_doc):
-        """Post repayment to ledger by creating a SHG Payment Entry."""
+        """Post repayment to ledger by creating a Payment Entry."""
         # Check if payment entry already exists and is valid
         if self.payment_entry:
-            if not frappe.db.exists("SHG Payment Entry", self.payment_entry):
+            if not frappe.db.exists("Payment Entry", self.payment_entry):
                 frappe.msgprint(f"⚠️ Payment Entry {self.payment_entry} not found – recreating...")
-                self.payment_entry = auto_create_payment_entry(self)
+                self.payment_entry = self.create_payment_entry()
                 return
             else:
                 # Payment entry exists, nothing to do
                 return
         
         # No payment entry exists, create one
-        self.payment_entry = auto_create_payment_entry(self)
+        self.payment_entry = self.create_payment_entry()
 
     @frappe.whitelist()
     def fetch_unpaid_balances(self):
@@ -499,71 +287,8 @@ class SHGLoanRepayment(Document):
         
         # --- Load schedule if missing ---
         if not loan.repayment_schedule:
-            # Load schedule from database
-            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
-                                            filters={"parent": loan.name, "parenttype": "SHG Loan"},
-                                            fields=["*"])  # Load all fields
-            if schedule_from_db:
-                # Populate the loan document with the schedule
-                loan.repayment_schedule = []
-                for row_data in schedule_from_db:
-                    loan.append("repayment_schedule", row_data)
-            else:
-                # Generate schedule if none exists in database
-                frappe.msgprint(f"Loan {loan.name} has no repayment schedule. Generating schedule…")
-                try:
-                    from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
-                    
-                    principal = flt(loan.loan_amount)
-                    months = int(loan.loan_period_months)
-                    start_date = loan.repayment_start_date or add_months(loan.disbursement_date or frappe.utils.today(), 1)
-                    interest_type = getattr(loan, "interest_type", "Reducing Balance")
-                    
-                    if interest_type == "Flat Rate":
-                        schedule_data = generate_flat_rate_schedule(principal, loan.interest_rate, months, start_date)
-                    else:
-                        schedule_data = generate_reducing_balance_schedule(principal, loan.interest_rate, months, start_date)
-                    
-                    if not schedule_data:
-                        frappe.throw("Schedule generator returned empty list. Fix schedule generation functions.")
-                    
-                    # Clear any existing schedule and add new one
-                    loan.set("repayment_schedule", [])
-                    
-                    # Append properly as child rows
-                    for row in schedule_data:
-                        loan.append("repayment_schedule", {
-                            "installment_no": row.get("installment_no"),
-                            "due_date": row.get("due_date"),
-                            "principal_component": row.get("principal_component"),
-                            "interest_component": row.get("interest_component"),
-                            "penalty_due": row.get("penalty_due", 0),
-                            "total_payment": row.get("total_payment"),
-                            "total_due": row.get("total_due"),
-                            "amount_paid": row.get("amount_paid", 0),
-                            "unpaid_balance": row.get("unpaid_balance"),
-                            "loan_balance": row.get("loan_balance", 0),
-                            "status": row.get("status", "Pending")
-                        })
-                    
-                    # Save the schedule - for submitted loans, we need to use special flags
-                    if loan.docstatus == 1:
-                        # Allow updates on submitted loans
-                        loan.flags.ignore_validate_update_after_submit = True
-                        loan.save(ignore_permissions=True)
-                        loan.reload()
-                    else:
-                        loan.save(ignore_permissions=True)
-                    
-                    frappe.msgprint(f"Repayment schedule generated and saved for {loan.name}.")
-                    generated_schedule = True
-                except Exception as e:
-                    from shg.shg.utils.logger import safe_log_error
-                    safe_log_error(f"Failed to generate repayment schedule for loan {loan.name}", {
-                        "error": str(e),
-                        "traceback": frappe.get_traceback()
-                    })
-                    frappe.throw(f"Failed to generate repayment schedule for loan {loan.name}: {str(e)}")
+            self.generate_and_attach_schedule(loan)
+            generated_schedule = True
 
         # --- Ensure all schedule rows have proper default values ---
         for row in loan.repayment_schedule:
@@ -694,67 +419,65 @@ class SHGLoanRepayment(Document):
         }
 
     # --------------------------------------------------------------------
-    def ensure_payment_entry_exists(self):
-        """Recreate Payment Entry if missing and return its name."""
+    def create_payment_entry(self):
+        """Creates a clean and always-valid Payment Entry for this repayment."""
 
         loan = frappe.get_doc("SHG Loan", self.loan)
-        company = loan.company or frappe.defaults.get_user_default("Company")
-        member = loan.member
 
-        # check if still valid
-        if self.payment_entry and frappe.db.exists("Payment Entry", self.payment_entry):
-            return self.payment_entry
+        # Ensure company
+        company = loan.company or frappe.db.get_single_value("SHG Settings", "company")
+        if not company:
+            frappe.throw("Company not configured in SHG Settings.")
 
-        frappe.msgprint(f"🔄 Auto-creating Payment Entry for Repayment {self.name}")
+        # Member receivable account (NOT group account)
+        member_account = get_or_create_member_receivable(loan.member, company)
 
-        # ---- locate default accounts ----
-        cash_account = frappe.db.get_value("Account",
-            {"account_name": "Cash", "company": company}, "name")
-        receivable_account = frappe.db.get_value("Account",
-            {"account_name": "SHG Loans Receivable", "company": company}, "name")
+        # Paid To must be a NON-GROUP account
+        paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account")
+        if not paid_to:
+            abbr = frappe.db.get_value("Company", company, "abbr")
+            paid_to = f"Cash - {abbr}"
 
-        if not cash_account or not receivable_account:
-            frappe.throw(f"Missing default Cash or Loans Receivable accounts for company {company}")
-
-        # ---- create new Payment Entry ----
-        pe = frappe.new_doc("Payment Entry")  # Use standard Payment Entry
+        # Create Payment Entry
+        pe = frappe.new_doc("Payment Entry")
         pe.payment_type = "Receive"
         pe.company = company
+        pe.posting_date = self.posting_date
         pe.party_type = "Customer"
-        pe.party = member
-        pe.paid_from = receivable_account
-        pe.paid_to = cash_account
+        pe.party = frappe.db.get_value("SHG Member", loan.member, "customer") or loan.member
+
+        pe.paid_from = member_account
+        pe.paid_to = paid_to
         pe.paid_amount = flt(self.total_paid)
         pe.received_amount = flt(self.total_paid)
-        pe.mode_of_payment = self.payment_method or "Cash"
-        pe.reference_no = self.name
-        pe.reference_date = self.posting_date or nowdate()
-        pe.remarks = f"Auto-generated for SHG Loan {loan.name} via Repayment {self.name}"
 
-        try:
-            pe.insert(ignore_permissions=True)
-            pe.submit()
-        except Exception as e:
-            frappe.log_error(f"Auto Payment Entry creation failed for {self.name}", str(e))
-            frappe.throw(f"Failed to auto-create Payment Entry: {e}")
+        pe.append("references", {
+            "reference_doctype": "SHG Loan",
+            "reference_name": self.loan,
+            "allocated_amount": flt(self.total_paid)
+        })
 
-        # ---- link back ----
-        self.payment_entry = pe.name
-        self.save(ignore_permissions=True)
+        pe.insert(ignore_permissions=True)
+        pe.submit()
 
-        # also repair any child rows missing valid links
-        frappe.db.sql("""
-            UPDATE `tabSHG Loan Repayment Schedule`
-               SET payment_entry = %(pe)s
-             WHERE parent = %(loan)s
-               AND (payment_entry IS NULL
-                    OR payment_entry = ''
-                    OR payment_entry NOT IN (SELECT name FROM `tabPayment Entry`))
-        """, {"pe": pe.name, "loan": loan.name})
-        frappe.db.commit()
-
-        frappe.msgprint(f"✅ Payment Entry {pe.name} created and linked to {self.name}")
         return pe.name
+
+    def generate_and_attach_schedule(self, loan_doc):
+        from shg.shg.utils.schedule_math import generate_flat_rate_schedule, generate_reducing_balance_schedule
+
+        principal = flt(loan_doc.loan_amount)
+        months = int(loan_doc.loan_period_months)
+        start_date = loan_doc.repayment_start_date or add_months(loan_doc.disbursement_date or today(), 1)
+
+        if loan_doc.interest_type == "Flat Rate":
+            schedule = generate_flat_rate_schedule(principal, loan_doc.interest_rate, months, start_date)
+        else:
+            schedule = generate_reducing_balance_schedule(principal, loan_doc.interest_rate, months, start_date)
+
+        loan_doc.set("repayment_schedule", schedule)
+        loan_doc.flags.ignore_validate_update_after_submit = True
+        loan_doc.save(ignore_permissions=True)
+        loan_doc.reload()
 
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()

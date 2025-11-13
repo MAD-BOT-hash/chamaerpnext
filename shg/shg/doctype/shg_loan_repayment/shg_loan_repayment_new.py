@@ -27,6 +27,11 @@ class SHGLoanRepayment(Document):
         self.calculate_repayment_breakdown()
 
     def on_submit(self):
+        # 1️⃣ Ensure payment entry exists
+        if not self.payment_entry or not frappe.db.exists("Payment Entry", self.payment_entry):
+            self.payment_entry = self.create_payment_entry()
+            self.db_update()
+            
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
         
         # Update the loan repayment schedule
@@ -34,9 +39,6 @@ class SHGLoanRepayment(Document):
         
         # Update loan summary
         self.update_loan_summary(loan_doc)
-        
-        # Post to GL if needed
-        self.post_to_ledger(loan_doc)
         
         frappe.msgprint(
             f"✅ Loan repayment {self.name} processed successfully. Remaining balance: {loan_doc.balance_amount}"
@@ -52,7 +54,7 @@ class SHGLoanRepayment(Document):
         self.update_loan_summary(loan_doc)
         
         # Cancel the payment entry if it exists
-        if self.payment_entry:
+        if self.payment_entry and frappe.db.exists("Payment Entry", self.payment_entry):
             try:
                 pe = frappe.get_doc("Payment Entry", self.payment_entry)
                 if pe.docstatus == 1:
@@ -141,6 +143,15 @@ class SHGLoanRepayment(Document):
                 row.payment_entry = None
                 row.actual_payment_date = None
                 row.db_update()
+            elif row.payment_entry:
+                # Guard against invalid payment entry references
+                if not frappe.db.exists("Payment Entry", row.payment_entry):
+                    frappe.log_error(f"Missing Payment Entry {row.payment_entry}", {
+                        "loan": self.loan,
+                        "installment_no": row.installment_no
+                    })
+                    row.payment_entry = None
+                    row.db_update()
         
         # Clear last repayment date if this was the last payment
         loan_doc.last_repayment_date = None
@@ -197,53 +208,48 @@ class SHGLoanRepayment(Document):
         loan_doc.save(ignore_permissions=True)
         frappe.db.commit()
 
-    def post_to_ledger(self, loan_doc):
-        """Post repayment to ledger by creating a Payment Entry."""
-        try:
-            # Get member details
-            member = frappe.get_doc("SHG Member", loan_doc.member)
-            customer = member.customer or loan_doc.member
-            
-            # Get or create member receivable account
-            company = loan_doc.company or frappe.db.get_single_value("SHG Settings", "company")
-            member_account = get_or_create_member_receivable(loan_doc.member, company)
-            
-            # Create Payment Entry
-            pe = frappe.new_doc("Payment Entry")
-            pe.payment_type = "Receive"
-            pe.company = company
-            pe.posting_date = self.posting_date
-            pe.paid_from = member_account
-            pe.paid_from_account_type = "Receivable"
-            pe.paid_from_account_currency = frappe.db.get_value("Account", member_account, "account_currency")
-            pe.paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account") or "Cash - " + frappe.db.get_value("Company", company, "abbr")
-            pe.paid_to_account_type = "Cash"
-            pe.paid_to_account_currency = frappe.db.get_value("Account", pe.paid_to, "account_currency")
-            pe.paid_amount = flt(self.total_paid)
-            pe.received_amount = flt(self.total_paid)
-            pe.allocate_payment_amount = 1
-            pe.party_type = "Customer"
-            pe.party = customer
-            pe.remarks = f"Loan repayment for {self.loan}"
-            
-            # Add reference to the loan
-            pe.append("references", {
-                "reference_doctype": "SHG Loan",
-                "reference_name": self.loan,
-                "allocated_amount": flt(self.total_paid)
-            })
-            
-            pe.insert(ignore_permissions=True)
-            pe.submit()
-            
-            # Link the payment entry to this repayment
-            self.db_set("payment_entry", pe.name)
-            
-            frappe.msgprint(f"✅ Payment Entry {pe.name} created successfully.")
-            
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Failed to create Payment Entry for loan repayment")
-            frappe.throw(f"Failed to create Payment Entry: {str(e)}")
+    def create_payment_entry(self):
+        """Creates a clean and always-valid Payment Entry for this repayment."""
+
+        loan = frappe.get_doc("SHG Loan", self.loan)
+
+        # Ensure company
+        company = loan.company or frappe.db.get_single_value("SHG Settings", "company")
+        if not company:
+            frappe.throw("Company not configured in SHG Settings.")
+
+        # Member receivable account (NOT group account)
+        member_account = get_or_create_member_receivable(loan.member, company)
+
+        # Paid To must be a NON-GROUP account
+        paid_to = frappe.db.get_single_value("SHG Settings", "default_bank_account")
+        if not paid_to:
+            abbr = frappe.db.get_value("Company", company, "abbr")
+            paid_to = f"Cash - {abbr}"
+
+        # Create Payment Entry
+        pe = frappe.new_doc("Payment Entry")
+        pe.payment_type = "Receive"
+        pe.company = company
+        pe.posting_date = self.posting_date
+        pe.party_type = "Customer"
+        pe.party = frappe.db.get_value("SHG Member", loan.member, "customer") or loan.member
+
+        pe.paid_from = member_account
+        pe.paid_to = paid_to
+        pe.paid_amount = flt(self.total_paid)
+        pe.received_amount = flt(self.total_paid)
+
+        pe.append("references", {
+            "reference_doctype": "SHG Loan",
+            "reference_name": self.loan,
+            "allocated_amount": flt(self.total_paid)
+        })
+
+        pe.insert(ignore_permissions=True)
+        pe.submit()
+
+        return pe.name
 
     # --------------------------
     # REPAYMENT BREAKDOWN
