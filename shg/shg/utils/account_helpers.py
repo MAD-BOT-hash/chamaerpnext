@@ -5,6 +5,13 @@ def get_or_create_member_receivable(member_id, company):
     if not member_id:
         frappe.throw("Member ID is required to get or create receivable account.")
 
+    # --- Handle case when company is None ---
+    if not company:
+        # Try to get company from SHG Settings as fallback
+        company = frappe.db.get_single_value("SHG Settings", "company")
+        if not company:
+            frappe.throw("Company is required but could not be resolved from SHG Settings.")
+
     # --- Get company abbreviation ---
     abbr = frappe.db.get_value("Company", company, "abbr")
     if not abbr:

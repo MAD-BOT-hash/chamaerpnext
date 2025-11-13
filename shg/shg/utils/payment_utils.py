@@ -19,7 +19,9 @@ def resolve_company_for_invoice(invoice):
 
     # 2) Infer from member receivable account
     try:
-        member_account = get_or_create_member_receivable(invoice.member, None)
+        # First try to get company from SHG Settings as a better fallback
+        settings_company = frappe.db.get_single_value("SHG Settings", "company")
+        member_account = get_or_create_member_receivable(invoice.member, settings_company)
         acc_company = frappe.db.get_value("Account", member_account, "company")
         if acc_company:
             return acc_company
