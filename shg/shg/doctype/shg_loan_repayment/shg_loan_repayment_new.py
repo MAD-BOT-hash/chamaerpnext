@@ -26,7 +26,19 @@ class SHGLoanRepayment(Document):
         # Auto-calculate repayment breakdown
         self.calculate_repayment_breakdown()
 
+    def clean_invalid_payment_entry_links(self):
+        """Removes invalid or ghost payment_entry values such as REP-xxxx."""
+        # Fix the loan's repayment schedule table
+        loan = frappe.get_doc("SHG Loan", self.loan)
+        for s in loan.repayment_schedule:
+            if s.payment_entry and not frappe.db.exists("Payment Entry", s.payment_entry):
+                s.payment_entry = None
+        loan.save(ignore_permissions=True)
+
     def on_submit(self):
+        # Clean bad references like REP-0003
+        self.clean_invalid_payment_entry_links()
+
         # 1️⃣ Ensure payment entry exists
         if not self.payment_entry or not frappe.db.exists("Payment Entry", self.payment_entry):
             self.payment_entry = self.create_payment_entry()

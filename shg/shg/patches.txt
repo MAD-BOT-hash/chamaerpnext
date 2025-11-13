@@ -9,3 +9,4 @@ shg.shg.patches.update_custom_payment_entry_fields.execute
 shg.shg.patches.add_loan_edit_permissions_and_audit.execute
 shg.shg.patches.improve_loan_list_view.execute
 shg.shg.patches.enhance_loan_form_ui.execute
+shg.shg.patches.clean_ghost_payment_entry_references.execute
