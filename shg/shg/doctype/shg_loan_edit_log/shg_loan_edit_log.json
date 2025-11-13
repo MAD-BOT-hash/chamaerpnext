@@ -1,0 +1,55 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-11-13 10:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "edited_by",
+  "edited_on",
+  "changed_fields",
+  "details"
+ ],
+ "fields": [
+  {
+   "fieldname": "edited_by",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Edited By",
+   "read_only": 1
+  },
+  {
+   "fieldname": "edited_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Edited On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "changed_fields",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Changed Fields",
+   "read_only": 1
+  },
+  {
+   "fieldname": "details",
+   "fieldtype": "Text Editor",
+   "label": "Details",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-11-13 10:00:00",
+ "modified_by": "Administrator",
+ "module": "SHG",
+ "name": "SHG Loan Edit Log",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
