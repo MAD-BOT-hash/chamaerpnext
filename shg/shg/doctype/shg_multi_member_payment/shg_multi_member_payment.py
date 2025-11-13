@@ -66,14 +66,25 @@ def get_unpaid_invoices(filters=None):
             "invoice_date",
             "due_date",
             "amount",
-            "paid_amount",
             "status"
         ]
     )
     
     # Calculate outstanding amount for each invoice
     for invoice in invoices:
-        invoice["outstanding_amount"] = flt(invoice["amount"]) - flt(invoice["paid_amount"] or 0)
+        # For SHGContributionInvoice, we calculate outstanding amount based on status
+        if invoice["status"] == "Partially Paid":
+            # For partially paid invoices, we need to check the linked Sales Invoice if exists
+            shg_invoice = frappe.get_doc("SHG Contribution Invoice", invoice["invoice"])
+            if shg_invoice.sales_invoice:
+                sales_invoice = frappe.get_doc("Sales Invoice", shg_invoice.sales_invoice)
+                invoice["outstanding_amount"] = sales_invoice.outstanding_amount
+            else:
+                # If no Sales Invoice, assume half is paid (this is a fallback)
+                invoice["outstanding_amount"] = flt(invoice["amount"]) / 2
+        else:
+            # For unpaid invoices, outstanding amount is the full amount
+            invoice["outstanding_amount"] = flt(invoice["amount"])
         invoice["payment_amount"] = invoice["outstanding_amount"]  # Default payment amount
         
     return invoices
@@ -258,19 +269,34 @@ class SHGMultiMemberPayment(Document):
                         # For unpaid invoices, full amount is outstanding
                         outstanding_amount = flt(invoice.amount)
                 
+                # Validate payment amount doesn't exceed outstanding amount
+                if payment_amount > outstanding_amount:
+                    frappe.throw(_("Payment amount {0} exceeds outstanding amount {1} for invoice {2}").format(
+                        payment_amount, outstanding_amount, invoice.name))
+                
                 # Get cash or bank account for the company
-                cash_or_bank = frappe.db.get_single_value("SHG Settings", "default_bank_account")
+                cash_or_bank = None
+                if self.account:
+                    # Use the account specified in the payment entry
+                    cash_or_bank = self.account
+                else:
+                    # Get default account based on payment method from SHG Settings
+                    if self.payment_method == "Cash":
+                        cash_or_bank = frappe.db.get_single_value("SHG Settings", "default_cash_account")
+                    elif self.payment_method in ["Bank Transfer", "Mpesa"]:
+                        cash_or_bank = frappe.db.get_single_value("SHG Settings", "default_bank_account")
+                
+                # If still no account, try to find any bank or cash account for the company
                 if not cash_or_bank:
-                    # Fallback to cash account
-                    cash_or_bank = frappe.db.get_single_value("SHG Settings", "default_cash_account")
-                if not cash_or_bank:
-                    # Last resort - try to find any bank or cash account for the company
                     cash_or_bank_accounts = frappe.get_all("Account", 
                         filters={"company": company, "account_type": ["in", ["Bank", "Cash"]], "is_group": 0},
                         limit=1)
                     if cash_or_bank_accounts:
                         cash_or_bank = cash_or_bank_accounts[0].name
                 
+                if not cash_or_bank:
+                    frappe.throw(_("No bank or cash account found for company {0}").format(company))
+                    
                 # Create Payment Entry
                 pe = frappe.new_doc("Payment Entry")
                 pe.payment_type = "Receive"
@@ -279,15 +305,15 @@ class SHGMultiMemberPayment(Document):
                 pe.party = invoice.member  # Use member ID, not name
                 pe.paid_amount = payment_amount
                 pe.received_amount = payment_amount
-                pe.payment_method = self.payment_method
+                pe.mode_of_payment = self.payment_method
                 pe.company = company
                 pe.reference_no = self.name
                 pe.reference_date = self.payment_date
                 pe.remarks = f"Payment for SHG Contribution Invoice {invoice.name}"
                 
                 # Set accounts correctly for receive payment
-                pe.paid_to = cash_or_bank  # Debit to bank/cash account
-                pe.paid_from = member_account  # Credit from member account
+                pe.paid_to = cash_or_bank  # Credit to bank/cash account
+                pe.paid_from = member_account  # Debit from member account
                 
                 # Add reference to the invoice
                 pe.append("references", {
@@ -328,11 +354,13 @@ class SHGMultiMemberPayment(Document):
         Ensure each SHG Member has a personal ledger account under 'SHG Members - [Company Abbr]'.
         Auto-creates the parent and child accounts if missing.
         """
+        if not company:
+            frappe.throw(_("Company is required to create member account"))
 
         # --- Get company abbreviation ---
         company_abbr = frappe.db.get_value("Company", company, "abbr")
         if not company_abbr:
-            frappe.throw(f"Company abbreviation not found for {company}")
+            frappe.throw(_("Company abbreviation not found for {0}").format(company))
 
         # --- Get the Accounts Receivable parent ---
         accounts_receivable = frappe.db.get_value(
@@ -341,7 +369,7 @@ class SHGMultiMemberPayment(Document):
             "name"
         )
         if not accounts_receivable:
-            frappe.throw(f"No 'Accounts Receivable' group account found for {company}.")
+            frappe.throw(_("No 'Accounts Receivable' group account found for {0}.").format(company))
 
         # --- Ensure SHG Members parent account exists ---
         parent_account_name = f"SHG Members - {company_abbr}"
@@ -366,7 +394,7 @@ class SHGMultiMemberPayment(Document):
             parent_doc.insert(ignore_permissions=True)
             frappe.db.commit()
             parent_account = parent_doc.name
-            frappe.msgprint(f"✅ Created parent account '{parent_account_name}' under Accounts Receivable.")
+            frappe.msgprint(_("✅ Created parent account '{0}' under Accounts Receivable.").format(parent_account_name))
 
         # --- Check if the member already has an account ---
         member_account_name = f"{member_id} - {company_abbr}"
@@ -387,6 +415,6 @@ class SHGMultiMemberPayment(Document):
             member_doc.insert(ignore_permissions=True)
             frappe.db.commit()
             member_account = member_doc.name
-            frappe.msgprint(f"✅ Created member account '{member_account_name}' under '{parent_account_name}'.")
+            frappe.msgprint(_("✅ Created member account '{0}' under '{1}'.").format(member_account_name, parent_account_name))
 
         return member_account
