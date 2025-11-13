@@ -1,9 +1,6 @@
-# Copyright (c) 2025
-# License: MIT
-
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt, getdate, today, add_months
+from frappe.utils import flt, getdate, today, add_months, nowdate
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
 from shg.shg.utils.payment_entry_tools import ensure_payment_entry_exists, auto_create_payment_entry
 
@@ -135,8 +132,8 @@ class SHGLoanRepayment(Document):
         self.calculate_repayment_breakdown()
 
     def on_submit(self):
-        # 1️⃣ guarantee a valid Payment Entry
-        pe_name = ensure_payment_entry_exists(self)
+        # 1️⃣ ensure valid Payment Entry
+        pe_name = self.ensure_payment_entry_exists()
         
         # Get the loan document
         loan_doc = frappe.get_doc("SHG Loan", self.loan)
@@ -696,6 +693,68 @@ class SHGLoanRepayment(Document):
             "balance_after_payment": self.balance_after_payment
         }
 
+    # --------------------------------------------------------------------
+    def ensure_payment_entry_exists(self):
+        """Recreate Payment Entry if missing and return its name."""
+
+        loan = frappe.get_doc("SHG Loan", self.loan)
+        company = loan.company or frappe.defaults.get_user_default("Company")
+        member = loan.member
+
+        # check if still valid
+        if self.payment_entry and frappe.db.exists("Payment Entry", self.payment_entry):
+            return self.payment_entry
+
+        frappe.msgprint(f"🔄 Auto-creating Payment Entry for Repayment {self.name}")
+
+        # ---- locate default accounts ----
+        cash_account = frappe.db.get_value("Account",
+            {"account_name": "Cash", "company": company}, "name")
+        receivable_account = frappe.db.get_value("Account",
+            {"account_name": "SHG Loans Receivable", "company": company}, "name")
+
+        if not cash_account or not receivable_account:
+            frappe.throw(f"Missing default Cash or Loans Receivable accounts for company {company}")
+
+        # ---- create new Payment Entry ----
+        pe = frappe.new_doc("Payment Entry")  # Use standard Payment Entry
+        pe.payment_type = "Receive"
+        pe.company = company
+        pe.party_type = "Customer"
+        pe.party = member
+        pe.paid_from = receivable_account
+        pe.paid_to = cash_account
+        pe.paid_amount = flt(self.total_paid)
+        pe.received_amount = flt(self.total_paid)
+        pe.mode_of_payment = self.payment_method or "Cash"
+        pe.reference_no = self.name
+        pe.reference_date = self.posting_date or nowdate()
+        pe.remarks = f"Auto-generated for SHG Loan {loan.name} via Repayment {self.name}"
+
+        try:
+            pe.insert(ignore_permissions=True)
+            pe.submit()
+        except Exception as e:
+            frappe.log_error(f"Auto Payment Entry creation failed for {self.name}", str(e))
+            frappe.throw(f"Failed to auto-create Payment Entry: {e}")
+
+        # ---- link back ----
+        self.payment_entry = pe.name
+        self.save(ignore_permissions=True)
+
+        # also repair any child rows missing valid links
+        frappe.db.sql("""
+            UPDATE `tabSHG Loan Repayment Schedule`
+               SET payment_entry = %(pe)s
+             WHERE parent = %(loan)s
+               AND (payment_entry IS NULL
+                    OR payment_entry = ''
+                    OR payment_entry NOT IN (SELECT name FROM `tabPayment Entry`))
+        """, {"pe": pe.name, "loan": loan.name})
+        frappe.db.commit()
+
+        frappe.msgprint(f"✅ Payment Entry {pe.name} created and linked to {self.name}")
+        return pe.name
 
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
@@ -703,13 +762,11 @@ def validate_repayment(doc, method):
     """Hook function called from hooks.py"""
     doc.validate()
 
-
 def post_to_general_ledger(doc, method):
     """Hook function called from hooks.py"""
     if doc.docstatus == 1:
         # The actual posting to ledger is handled in the on_submit method
         pass
-
 
 # --- Query methods ---
 @frappe.whitelist()
