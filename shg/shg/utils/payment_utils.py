@@ -7,9 +7,8 @@ def resolve_company_for_invoice(invoice):
     Resolve company reliably for ANY SHG invoice-like document.
     Order of resolution:
     1. If invoice.company exists → use it
-    2. If member receivable account exists → use account's company
-    3. Fallback to SHG Settings default company
-    4. Throw clear error if still missing
+    2. Fallback to SHG Settings default company
+    3. Throw clear error if still missing
     """
 
     # 1) Direct company on invoice (if field exists)
@@ -17,22 +16,12 @@ def resolve_company_for_invoice(invoice):
     if inv_company:
         return inv_company
 
-    # 2) Infer from member receivable ledger
-    try:
-        from shg.shg.utils.account_helpers import get_or_create_member_receivable
-        member_account = get_or_create_member_receivable(invoice.member, None)
-        acc_company = frappe.db.get_value("Account", member_account, "company")
-        if acc_company:
-            return acc_company
-    except Exception:
-        pass
-
-    # 3) Fallback to SHG Settings
+    # 2) Fallback to SHG Settings
     settings_company = frappe.db.get_single_value("SHG Settings", "company")
     if settings_company:
         return settings_company
 
-    # 4) Still missing → throw clean error
+    # 3) Still missing → throw clean error
     frappe.throw(
         f"Company cannot be resolved for invoice {invoice.name}. "
         "Please set 'Company' in SHG Settings."
