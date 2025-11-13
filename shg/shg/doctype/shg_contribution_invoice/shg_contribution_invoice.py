@@ -796,7 +796,12 @@ def post_to_contribution(docname):
 
     # Ensure member account exists
     member = frappe.get_doc("SHG Member", doc.member)
-    company = member.company
+    company = getattr(member, "company", None)
+    if not company:
+        # Try to get company from SHG Settings
+        company = frappe.db.get_single_value("SHG Settings", "company")
+    if not company:
+        frappe.throw(_("Company not found for member {0}. Please set company in SHG Settings.").format(member.name))
 
     # Get or create the member ledger account
     from shg.shg.utils.account_utils import get_or_create_member_account

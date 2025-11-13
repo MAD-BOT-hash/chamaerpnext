@@ -151,7 +151,7 @@ def process_multi_member_payment(invoices, mode_of_payment, posting_date=None):
             "payment_type": "Receive",
             "party_type": "Customer",
             "party": invoice.customer,
-            "company": invoice.company,
+            "company": getattr(invoice, "company", frappe.db.get_single_value("SHG Settings", "company")),
             "posting_date": posting_date,
             "mode_of_payment": mode_of_payment,
             "paid_amount": invoice.outstanding_amount,

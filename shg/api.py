@@ -31,7 +31,13 @@ def create_payment_entry_from_invoice(invoice_name, paid_amount=None):
             frappe.throw(_("This invoice has already been fully paid"))
         
         # Get company defaults
-        company = invoice.company
+        company = getattr(invoice, "company", None)
+        if not company:
+            # Try to get company from SHG Settings
+            company = frappe.db.get_single_value("SHG Settings", "company")
+        if not company:
+            frappe.throw(_("Company not found for invoice {0}. Please set company in SHG Settings.").format(invoice.name))
+            
         default_receivable_account = frappe.db.get_value("Company", company, "default_receivable_account")
         default_cash_account = frappe.db.get_value("Company", company, "default_cash_account")
         
