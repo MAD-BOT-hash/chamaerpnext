@@ -120,6 +120,11 @@ doc_events = {
         "on_submit": [
             "shg.shg.loan_services.gl.create_repayment_gl_entries"
         ]
+    },
+    "Payment Entry": {
+        "on_submit": [
+            "shg.shg.doctype.shg_payment.shg_payment.on_payment_submit"
+        ]
     }
 }
 
