@@ -6,6 +6,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
+from shg.shg.utils.company_utils import get_default_company
 
 
 # -------------------------------------------------------------------
@@ -27,6 +28,7 @@ def resolve_company_for_invoice(invoice):
 
     # 1) Direct invoice.company if field exists
     try:
+        # Use getattr to safely access company field, with fallback to None
         inv_company = getattr(invoice, "company", None)
         if inv_company:
             return inv_company
@@ -34,31 +36,43 @@ def resolve_company_for_invoice(invoice):
         # Safety: ignore any unexpected attribute access issues
         pass
 
-    # 2) Infer from member receivable account
+    # 2) Try to get company from member object if available
+    try:
+        if hasattr(invoice, "member") and invoice.member:
+            member = frappe.get_doc("SHG Member", invoice.member)
+            member_company = getattr(member, "company", None)
+            if member_company:
+                return member_company
+    except Exception:
+        # If member lookup fails, just continue to next step
+        pass
+
+    # 3) Infer from member receivable account
     try:
         # First try to get company from SHG Settings as a better fallback
-        settings_company = frappe.db.get_single_value("SHG Settings", "company")
-        member_account = get_or_create_member_receivable(invoice.member, settings_company)
-        if member_account:
-            acc_company = frappe.db.get_value("Account", member_account, "company")
-            if acc_company:
-                return acc_company
+        settings_company = get_default_company()
+        if hasattr(invoice, "member") and invoice.member and settings_company:
+            member_account = get_or_create_member_receivable(invoice.member, settings_company)
+            if member_account:
+                acc_company = frappe.db.get_value("Account", member_account, "company")
+                if acc_company:
+                    return acc_company
     except Exception:
         # If helper or account lookup fails, just continue to next step
         pass
 
-    # 3) Fallback to SHG Settings default company
-    settings_company = frappe.db.get_single_value("SHG Settings", "company")
+    # 4) Fallback to SHG Settings default company
+    settings_company = get_default_company()
     if settings_company:
         return settings_company
 
-    # 4) Complete failure → stop immediately
+    # 5) Complete failure → stop immediately
     frappe.throw(
         _(
             "Cannot resolve Company for invoice {0}. "
             "Please set default 'Company' in SHG Settings or ensure member "
             "receivable accounts are configured."
-        ).format(invoice.name)
+        ).format(getattr(invoice, "name", "Unknown"))
     )
 
 
@@ -219,7 +233,7 @@ class SHGMultiMemberPayment(Document):
         """Set sensible defaults when loading the form."""
         if not self.company:
             self.company = (
-                frappe.db.get_single_value("SHG Settings", "company")
+                get_default_company()
                 or frappe.defaults.get_user_default("Company")
             )
 
@@ -360,7 +374,7 @@ class SHGMultiMemberPayment(Document):
                     _("Payment amount for invoice {0} must be greater than zero.").format(invoice.name)
                 )
 
-            # Resolve company
+            # Resolve company using the improved function
             company = resolve_company_for_invoice(invoice)
 
             # Get member receivable account
