@@ -66,7 +66,15 @@ def resolve_company_for_invoice(invoice):
     if settings_company:
         return settings_company
 
-    # 5) Complete failure → stop immediately
+    # 5) Last resort: Try user default company
+    try:
+        user_company = frappe.defaults.get_user_default("Company")
+        if user_company and frappe.db.exists("Company", user_company):
+            return user_company
+    except Exception:
+        pass
+
+    # 6) Complete failure → stop immediately
     frappe.throw(
         _(
             "Cannot resolve Company for invoice {0}. "
@@ -232,15 +240,11 @@ class SHGMultiMemberPayment(Document):
     def onload(self):
         """Set sensible defaults when loading the form."""
         if not self.company:
+            # Try multiple fallbacks in order of preference
             self.company = (
                 get_default_company()
                 or frappe.defaults.get_user_default("Company")
-            )
-
-        if not self.payment_method:
-            self.payment_method = (
-                frappe.db.get_single_value("SHG Settings", "default_payment_method")
-                or "Cash"
+                or frappe.db.get_single_value("Global Defaults", "default_company")
             )
 
     def validate(self):
@@ -510,10 +514,15 @@ class SHGMultiMemberPayment(Document):
         if not company:
             frappe.throw(_("Company is required to create member account"))
 
-        # Get company abbreviation
-        company_abbr = frappe.db.get_value("Company", company, "abbr")
+        # Get company abbreviation with proper error handling
+        company_abbr = None
+        try:
+            company_abbr = frappe.db.get_value("Company", company, "abbr")
+        except Exception:
+            pass
+            
         if not company_abbr:
-            frappe.throw(_("Company abbreviation not found for {0}").format(company))
+            frappe.throw(_("Company abbreviation not found for {0}. Please check company setup.").format(company))
 
         # Get Accounts Receivable parent
         accounts_receivable = frappe.db.get_value(
