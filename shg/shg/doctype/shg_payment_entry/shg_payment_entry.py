@@ -8,6 +8,10 @@ from shg.shg.utils.company_utils import get_default_company
 class SHGPaymentEntry(Document):
     def before_validate(self):
         """Pull company from SHG Settings and auto-fill member_name"""
+        # Handle naming_series for backward compatibility
+        if not self.naming_series:
+            self.naming_series = "SHG-PE-.YYYY.-"
+        
         self.company = self.company or get_default_company()
         
         # Auto-fill member_name

@@ -6,6 +6,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "naming_series",
   "member",
   "company",
   "payment_date",
@@ -23,6 +24,14 @@
   "invoices"
  ],
  "fields": [
+  {
+   "fieldname": "naming_series",
+   "label": "Naming Series",
+   "fieldtype": "Data",
+   "reqd": 0,
+   "default": "SHG-MMP-.YYYY.-",
+   "read_only": 0
+  },
   {
    "fieldname": "member",
    "fieldtype": "Link",

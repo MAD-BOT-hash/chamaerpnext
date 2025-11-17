@@ -7,7 +7,11 @@ from shg.shg.utils.company_utils import get_default_company
 
 class SHGMultiMemberPayment(Document):
     def before_validate(self):
-        """Auto-set company from SHG Settings"""
+        """Auto-set company from SHG Settings and handle naming_series"""
+        # Handle naming_series for backward compatibility
+        if not getattr(self, "naming_series", None):
+            self.naming_series = "SHG-MMP-.YYYY.-"
+        
         self.company = self.company or get_default_company()
         
         # Auto-calculate total payment amount
