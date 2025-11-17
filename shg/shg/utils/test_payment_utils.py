@@ -1,7 +1,7 @@
 import unittest
 import frappe
 from frappe.utils import nowdate
-from shg.shg.utils.payment_utils import _get_outstanding_amount
+from shg.shg.utils.payment_utils import _get_outstanding_amount, get_unpaid_items
 
 
 class TestPaymentUtils(unittest.TestCase):
@@ -35,6 +35,12 @@ class TestPaymentUtils(unittest.TestCase):
         # Test with doctype that has outstanding_amount field
         # Test with doctype that has amount field
         # Test with doctype that has neither field
+        pass
+        
+    def test_get_unpaid_items(self):
+        """Test get_unpaid_items function"""
+        # This would test the new get_unpaid_items function
+        # It should return a list of unpaid items from all three doctypes
         pass
 
 

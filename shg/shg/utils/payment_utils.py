@@ -50,6 +50,93 @@ def process_bulk_payment(parent_doc_name):
     return _process_bulk_payment(parent_doc)
 
 
+@frappe.whitelist(allow_guest=False)
+def get_unpaid_items():
+    """
+    Get all unpaid items (invoices, contributions, fines) for bulk payment.
+    
+    Returns:
+        list: List of unpaid items
+    """
+    unpaid_items = []
+    
+    # Get unpaid SHG Contribution Invoices
+    contribution_invoices = frappe.get_all(
+        "SHG Contribution Invoice",
+        filters={
+            "docstatus": 1,
+            "status": ["!=", "Paid"]
+        },
+        fields=["name", "member", "member_name", "invoice_date", "amount", "amount_paid"]
+    )
+    
+    for invoice in contribution_invoices:
+        outstanding = flt(invoice.amount or 0) - flt(invoice.amount_paid or 0)
+        if outstanding > 0:
+            unpaid_items.append({
+                "doctype": "SHG Contribution Invoice",
+                "name": invoice.name,
+                "member": invoice.member,
+                "member_name": invoice.member_name,
+                "date": invoice.invoice_date,
+                "amount": flt(invoice.amount),
+                "outstanding": outstanding
+            })
+    
+    # Get unpaid SHG Contributions
+    contributions = frappe.get_all(
+        "SHG Contribution",
+        filters={
+            "docstatus": 1,
+            "status": ["!=", "Paid"]
+        },
+        fields=["name", "member", "member_name", "contribution_date", "expected_amount", "amount", "amount_paid"]
+    )
+    
+    for contribution in contributions:
+        expected = flt(contribution.expected_amount or contribution.amount or 0)
+        paid = flt(contribution.amount_paid or 0)
+        outstanding = expected - paid
+        if outstanding > 0:
+            unpaid_items.append({
+                "doctype": "SHG Contribution",
+                "name": contribution.name,
+                "member": contribution.member,
+                "member_name": contribution.member_name,
+                "date": contribution.contribution_date,
+                "amount": expected,
+                "outstanding": outstanding
+            })
+    
+    # Get unpaid SHG Meeting Fines
+    meeting_fines = frappe.get_all(
+        "SHG Meeting Fine",
+        filters={
+            "docstatus": 1,
+            "status": ["!=", "Paid"]
+        },
+        fields=["name", "member", "member_name", "meeting_date", "fine_amount"]
+    )
+    
+    for fine in meeting_fines:
+        outstanding = flt(fine.fine_amount or 0)
+        if outstanding > 0:
+            unpaid_items.append({
+                "doctype": "SHG Meeting Fine",
+                "name": fine.name,
+                "member": fine.member,
+                "member_name": fine.member_name,
+                "date": fine.meeting_date,
+                "amount": flt(fine.fine_amount),
+                "outstanding": outstanding
+            })
+    
+    # Sort by date descending
+    unpaid_items.sort(key=lambda x: x["date"], reverse=True)
+    
+    return unpaid_items
+
+
 def _get_outstanding_amount(doctype, name):
     """
     Internal helper to get outstanding amount for a document.

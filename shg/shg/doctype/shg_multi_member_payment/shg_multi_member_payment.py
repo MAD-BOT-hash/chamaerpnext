@@ -51,3 +51,9 @@ class SHGMultiMemberPayment(Document):
         # Note: In a real implementation, you would need to implement cancel functionality
         # For now, we'll just update the status
         self.db_set("status", "Cancelled")
+    
+    @frappe.whitelist()
+    def fetch_unpaid_items(self):
+        """Fetch unpaid items for bulk payment"""
+        from shg.shg.utils.payment_utils import get_unpaid_items
+        return get_unpaid_items()

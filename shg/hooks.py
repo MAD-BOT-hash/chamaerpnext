@@ -94,7 +94,7 @@ doctype_js = {
     "SHG Settings": "public/js/shg_settings.js",
     "SHG Contribution Invoice": "public/js/shg_contribution_invoice.js",
     "SHG Payment Entry": "shg/shg/doctype/shg_payment_entry/shg_payment_entry.js",
-    "SHG Multi Member Payment": "shg/shg/doctype/shg_multi_member_payment/shg_multi_member_payment.js"
+    "SHG Multi Member Payment": "public/js/shg_multi_member_payment.js"
 }
 
 # List JS
