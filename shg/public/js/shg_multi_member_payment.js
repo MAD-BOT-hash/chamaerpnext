@@ -58,19 +58,11 @@ frappe.ui.form.on('SHG Multi Member Payment', {
             
             frm.add_custom_button(__('Recalculate Totals'), function() {
                 frappe.call({
-                    method: 'shg.shg.doctype.shg_multi_member_payment.shg_multi_member_payment.recalculate_totals',
-                    args: {
-                        doc: frm.doc
-                    },
+                    doc: frm.doc,
+                    method: "recalculate_totals",
                     callback: function(r) {
-                        if (r.message) {
-                            frm.set_value('total_outstanding_before', r.message.total_outstanding_before);
-                            frm.set_value('total_payment_amount', r.message.total_payment_amount);
-                            frm.set_value('total_remaining_after', r.message.total_remaining_after);
-                            frm.set_value('total_documents_selected', r.message.total_documents_selected);
-                            frm.set_value('payment_summary', r.message.payment_summary);
-                            frm.refresh_fields();
-                        }
+                        frm.refresh_fields();
+                        frappe.msgprint("Totals updated successfully");
                     }
                 });
             });
@@ -179,19 +171,11 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
             
             // Recalculate totals
             frappe.call({
-                method: 'shg.shg.doctype.shg_multi_member_payment.shg_multi_member_payment.recalculate_totals',
-                args: {
-                    doc: frm.doc
-                },
+                doc: frm.doc,
+                method: "recalculate_totals",
                 callback: function(r) {
-                    if (r.message) {
-                        frm.set_value('total_outstanding_before', r.message.total_outstanding_before);
-                        frm.set_value('total_payment_amount', r.message.total_payment_amount);
-                        frm.set_value('total_remaining_after', r.message.total_remaining_after);
-                        frm.set_value('total_documents_selected', r.message.total_documents_selected);
-                        frm.set_value('payment_summary', r.message.payment_summary);
-                        frm.refresh_fields();
-                    }
+                    frm.refresh_fields();
+                    frappe.msgprint("Totals updated successfully");
                 }
             });
             
@@ -249,17 +233,11 @@ frappe.ui.form.on('SHG Multi Member Payment Invoice', {
         
         // Recalculate totals
         frappe.call({
-            method: 'shg.shg.doctype.shg_multi_member_payment.shg_multi_member_payment.recalculate_totals',
-            args: {
-                doc: frm.doc
-            },
+            doc: frm.doc,
+            method: "recalculate_totals",
             callback: function(r) {
-                if (r.message) {
-                    frm.set_value('total_outstanding_before', r.message.total_outstanding_before);
-                    frm.set_value('total_remaining_after', r.message.total_remaining_after);
-                    frm.set_value('payment_summary', r.message.payment_summary);
-                    frm.refresh_fields();
-                }
+                frm.refresh_fields();
+                frappe.msgprint("Totals updated successfully");
             }
         });
     }

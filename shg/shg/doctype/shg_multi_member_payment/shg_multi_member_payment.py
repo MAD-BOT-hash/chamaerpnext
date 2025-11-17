@@ -149,13 +149,34 @@ Remaining after payment: {3}""").format(
     @frappe.whitelist()
     def recalculate_totals(self):
         """Recalculate totals"""
-        self.validate_totals()
+        total_outstanding = 0.0
+        total_payment = 0.0
+        total_documents = 0
+        
+        from shg.shg.utils.payment_utils import get_outstanding
+        # Loop through invoices child table
+        for row in self.invoices:
+            if row.reference_doctype and row.reference_name:
+                outstanding = get_outstanding(row.reference_doctype, row.reference_name)
+                total_outstanding += outstanding
+                total_payment += flt(row.payment_amount or 0)
+                total_documents += 1
+        
+        # Update parent fields
+        self.total_outstanding_before = total_outstanding
+        self.total_payment_amount = total_payment
+        self.total_remaining_after = total_outstanding - total_payment
+        self.total_documents_selected = total_documents
+        
+        # Save the doc
+        self.save(ignore_permissions=True)
+        
+        # Return updated numbers as dict
         return {
             "total_outstanding_before": self.total_outstanding_before,
             "total_payment_amount": self.total_payment_amount,
             "total_remaining_after": self.total_remaining_after,
-            "total_documents_selected": self.total_documents_selected,
-            "payment_summary": self.payment_summary
+            "total_documents_selected": self.total_documents_selected
         }
     
     def update_display_fields(self):

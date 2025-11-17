@@ -209,12 +209,17 @@ def _get_unpaid_records(doctype):
                     if frappe.db.has_column("SHG Meeting Fine", "posted_to_gl"):
                         posted_to_gl = frappe.db.get_value("SHG Meeting Fine", fine.name, "posted_to_gl") or 0
                     
+                    # Get meeting date if meeting exists
+                    meeting_date = fine.fine_date
+                    if fine.meeting:
+                        meeting_date = frappe.db.get_value("SHG Meeting", fine.meeting, "meeting_date") or fine.fine_date
+                    
                     unpaid_items.append({
                         "doctype": "SHG Meeting Fine",
                         "name": fine.name,
                         "member": fine.member,
                         "member_name": fine.member_name,
-                        "date": fine.fine_date,
+                        "date": meeting_date,
                         "amount": flt(fine.fine_amount),
                         "outstanding": outstanding,
                         "status": fine.status,
@@ -598,3 +603,163 @@ def _get_member_account(member, company):
         str: Member account name
     """
     return get_or_create_member_receivable(member, company)
+
+
+def compute_document_outstanding(doctype, name):
+    """
+    Compute outstanding amount for a document.
+    
+    Args:
+        doctype (str): Document type
+        name (str): Document name
+        
+    Returns:
+        float: Outstanding amount
+    """
+    return _get_outstanding_amount(doctype, name)
+
+
+def is_closed_document(doctype, name):
+    """
+    Check if a document is closed.
+    
+    Args:
+        doctype (str): Document type
+        name (str): Document name
+        
+    Returns:
+        bool: True if document is closed
+    """
+    if frappe.db.has_column(doctype, "is_closed"):
+        return frappe.db.get_value(doctype, name, "is_closed") or False
+    return False
+
+
+def is_paid_document(doctype, name):
+    """
+    Check if a document is paid.
+    
+    Args:
+        doctype (str): Document type
+        name (str): Document name
+        
+    Returns:
+        bool: True if document is paid
+    """
+    status = frappe.db.get_value(doctype, name, "status")
+    return status == "Paid"
+
+
+def is_document_already_processed(doctype, name, current_parent):
+    """
+    Check if a document is already processed in another submitted payment batch.
+    
+    Args:
+        doctype (str): Document type
+        name (str): Document name
+        current_parent (str): Current parent document name
+        
+    Returns:
+        bool: True if document is already processed
+    """
+    existing_payments = frappe.db.sql("""
+        SELECT parent
+        FROM `tabSHG Multi Member Payment Invoice`
+        WHERE reference_doctype = %s AND reference_name = %s AND parent != %s
+    """, (doctype, name, current_parent))
+    
+    for payment in existing_payments:
+        payment_docstatus = frappe.db.get_value("SHG Multi Member Payment", payment[0], "docstatus")
+        if payment_docstatus == 1:  # Submitted
+            return True
+    return False
+
+
+def prepare_child_row(doctype, name):
+    """
+    Prepare child row data for insertion into bulk payment.
+    
+    Args:
+        doctype (str): Document type
+        name (str): Document name
+        
+    Returns:
+        dict: Child row data
+    """
+    # Get document data
+    if doctype == "SHG Contribution Invoice":
+        doc = frappe.get_doc(doctype, name)
+        outstanding = flt(doc.amount or 0)
+        is_closed = 0
+        posted_to_gl = 0
+        if frappe.db.has_column(doctype, "is_closed"):
+            is_closed = frappe.db.get_value(doctype, name, "is_closed") or 0
+        if frappe.db.has_column(doctype, "posted_to_gl"):
+            posted_to_gl = frappe.db.get_value(doctype, name, "posted_to_gl") or 0
+        
+        return {
+            "reference_doctype": doctype,
+            "reference_name": name,
+            "member": doc.member,
+            "member_name": doc.member_name,
+            "date": doc.invoice_date,
+            "amount": flt(doc.amount),
+            "outstanding_amount": outstanding,
+            "payment_amount": outstanding,
+            "status": doc.status,
+            "is_closed": is_closed,
+            "posted_to_gl": posted_to_gl
+        }
+    
+    elif doctype == "SHG Contribution":
+        doc = frappe.get_doc(doctype, name)
+        outstanding = flt(doc.unpaid_amount or 0)
+        is_closed = 0
+        posted_to_gl = 0
+        if frappe.db.has_column(doctype, "is_closed"):
+            is_closed = frappe.db.get_value(doctype, name, "is_closed") or 0
+        if frappe.db.has_column(doctype, "posted_to_gl"):
+            posted_to_gl = frappe.db.get_value(doctype, name, "posted_to_gl") or 0
+        
+        return {
+            "reference_doctype": doctype,
+            "reference_name": name,
+            "member": doc.member,
+            "member_name": doc.member_name,
+            "date": doc.contribution_date,
+            "amount": flt(doc.expected_amount or doc.amount),
+            "outstanding_amount": outstanding,
+            "payment_amount": outstanding,
+            "status": doc.status,
+            "is_closed": is_closed,
+            "posted_to_gl": posted_to_gl
+        }
+    
+    elif doctype == "SHG Meeting Fine":
+        doc = frappe.get_doc(doctype, name)
+        outstanding = flt(doc.fine_amount or 0)
+        is_closed = 0
+        posted_to_gl = 0
+        if frappe.db.has_column(doctype, "is_closed"):
+            is_closed = frappe.db.get_value(doctype, name, "is_closed") or 0
+        if frappe.db.has_column(doctype, "posted_to_gl"):
+            posted_to_gl = frappe.db.get_value(doctype, name, "posted_to_gl") or 0
+        
+        # Get meeting date if meeting exists
+        meeting_date = doc.fine_date
+        if doc.meeting:
+            meeting_date = frappe.db.get_value("SHG Meeting", doc.meeting, "meeting_date") or doc.fine_date
+        
+        return {
+            "reference_doctype": doctype,
+            "reference_name": name,
+            "member": doc.member,
+            "member_name": doc.member_name,
+            "date": meeting_date,
+            "amount": flt(doc.fine_amount),
+            "outstanding_amount": outstanding,
+            "payment_amount": outstanding,
+            "status": doc.status,
+            "is_closed": is_closed,
+            "posted_to_gl": posted_to_gl
+        }
