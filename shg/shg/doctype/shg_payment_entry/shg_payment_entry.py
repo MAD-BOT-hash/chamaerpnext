@@ -10,25 +10,27 @@ class SHGPaymentEntry(Document):
         """Pull company from SHG Settings and auto-fill member_name"""
         self.company = self.company or get_default_company()
         
-        # Auto-fill member_name if party_type is SHG Member
-        if self.party_type == "SHG Member" and self.party:
-            if not self.party_name:
-                self.party_name = frappe.db.get_value("SHG Member", self.party, "member_name")
+        # Auto-fill member_name
+        if self.member:
+            if not self.member_name:
+                self.member_name = frappe.db.get_value("SHG Member", self.member, "member_name")
         
         # Ensure amount is flt
-        if self.paid_amount:
-            self.paid_amount = flt(self.paid_amount)
-        if self.received_amount:
-            self.received_amount = flt(self.received_amount)
+        if self.amount:
+            self.amount = flt(self.amount)
         
         # Calculate outstanding amount
         self.calculate_outstanding()
     
     def validate(self):
         """Validate payment entry"""
-        # Ensure amount > 0
-        if flt(self.paid_amount) <= 0:
-            frappe.throw(_("Paid amount must be greater than zero"))
+        # Add validation rules
+        if not self.member:
+            frappe.throw(_("Member is required"))
+        if not self.company:
+            frappe.throw(_("Company is required"))
+        if not self.amount or self.amount <= 0:
+            frappe.throw(_("Payment amount must be greater than zero"))
             
         # Ensure mode_of_payment not empty
         if not self.mode_of_payment:

@@ -291,16 +291,14 @@ def _process_single_payment(payment_doc):
             if outstanding <= 0:
                 frappe.throw(_("Referenced document has no outstanding amount"))
         
-        # Create Payment Entry
-        pe_name = _create_payment_entry(
-            payment_type=payment_doc.payment_type,
+        # Create Payment Entry using correct ERPNext Payment Entry fields
+        pe_name = _create_payment_entry_for_shg(
             company=payment_doc.company,
             mode_of_payment=payment_doc.mode_of_payment,
-            party_type=payment_doc.party_type,
-            party=payment_doc.party,
-            posting_date=payment_doc.posting_date,
-            paid_amount=flt(payment_doc.paid_amount),
-            received_amount=flt(payment_doc.received_amount),
+            member=payment_doc.member,
+            posting_date=payment_doc.payment_date,
+            paid_amount=flt(payment_doc.amount),
+            received_amount=flt(payment_doc.amount),
             reference_doctype=payment_doc.reference_doctype,
             reference_name=payment_doc.reference_name
         )
@@ -310,7 +308,7 @@ def _process_single_payment(payment_doc):
             _apply_payment_to_document(
                 payment_doc.reference_doctype,
                 payment_doc.reference_name,
-                flt(payment_doc.paid_amount),
+                flt(payment_doc.amount),
                 pe_name
             )
         
@@ -363,11 +361,11 @@ def _process_bulk_payment(parent_doc):
             frappe.throw(_("Total allocated amount {0} does not match total payment amount {1}").format(
                 total_allocated, parent_doc.total_payment_amount))
         
-        # Create Payment Entry
-        pe_name = _create_payment_entry(
-            payment_type="Receive",
+        # Create Payment Entry using correct ERPNext Payment Entry fields
+        pe_name = _create_payment_entry_for_shg(
             company=parent_doc.company,
             mode_of_payment=parent_doc.mode_of_payment,
+            member=None,  # For bulk payments, we don't set a specific member
             posting_date=parent_doc.payment_date,
             paid_amount=total_allocated,
             received_amount=total_allocated,
@@ -394,20 +392,18 @@ def _process_bulk_payment(parent_doc):
         frappe.throw(_("Failed to process bulk payment: {0}").format(str(e)))
 
 
-def _create_payment_entry(payment_type, company, mode_of_payment, posting_date, paid_amount, received_amount,
-                         party_type=None, party=None, reference_doctype=None, reference_name=None, references=None):
+def _create_payment_entry_for_shg(company, mode_of_payment, member, posting_date, paid_amount, received_amount,
+                                 reference_doctype=None, reference_name=None, references=None):
     """
-    Internal helper to create a Payment Entry.
+    Internal helper to create a Payment Entry for SHG payments.
     
     Args:
-        payment_type (str): Payment type (Receive/Pay)
         company (str): Company name
         mode_of_payment (str): Mode of payment
+        member (str): Member ID (can be None for bulk payments)
         posting_date (str): Posting date
         paid_amount (float): Paid amount
         received_amount (float): Received amount
-        party_type (str): Party type
-        party (str): Party name
         reference_doctype (str): Reference doctype
         reference_name (str): Reference name
         references (list): List of references
@@ -426,23 +422,19 @@ def _create_payment_entry(payment_type, company, mode_of_payment, posting_date, 
         abbr = frappe.db.get_value("Company", company, "abbr")
         default_bank_account = f"Cash - {abbr}"
     
-    # Determine accounts based on payment type
-    if payment_type == "Receive":
-        if party_type and party:
-            paid_from = get_or_create_member_receivable(party, company)
-        else:
-            paid_from = default_bank_account
+    # Determine accounts based on payment type (Receive)
+    if member:
+        # For individual member payments
+        paid_from = get_or_create_member_receivable(member, company)
         paid_to = default_bank_account
     else:
+        # For bulk payments
         paid_from = default_bank_account
-        if party_type and party:
-            paid_to = get_or_create_member_receivable(party, company)
-        else:
-            paid_to = default_bank_account
+        paid_to = default_bank_account
     
-    # Create Payment Entry
+    # Create Payment Entry with correct ERPNext fields
     pe = frappe.new_doc("Payment Entry")
-    pe.payment_type = payment_type
+    pe.payment_type = "Receive"
     pe.company = company
     pe.mode_of_payment = mode_of_payment
     pe.posting_date = posting_date
@@ -451,10 +443,10 @@ def _create_payment_entry(payment_type, company, mode_of_payment, posting_date, 
     pe.paid_amount = flt(paid_amount)
     pe.received_amount = flt(received_amount)
     
-    # Add party info if provided
-    if party_type and party:
-        pe.party_type = party_type
-        pe.party = party
+    # Add party info if member is provided
+    if member:
+        pe.party_type = "SHG Member"  # Fixed party type
+        pe.party = member
     
     # Add references
     if references:
