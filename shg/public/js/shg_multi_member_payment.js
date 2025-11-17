@@ -102,15 +102,15 @@ frappe.ui.form.on('SHG Multi Member Payment', {
 
 function show_unpaid_items_dialog(frm, unpaid_items) {
     // Prepare data for the dialog
-    const data = unpaid_items.map(item => [
+    const data = unpaid_items.map((item, index) => [
         0, // Select checkbox (default unchecked)
-        item.doctype,
-        item.name,
-        item.member_name || item.member,
-        item.date,
-        item.amount,
-        item.outstanding,
-        item.status,
+        item.reference_doctype || '',
+        item.reference_name || '',
+        item.member_name || item.member || '',
+        item.date ? frappe.datetime.str_to_user(item.date) : '',
+        item.amount || 0,
+        item.outstanding || 0,
+        item.status || '',
         item.is_closed ? 'Yes' : 'No',
         item.posted_to_gl ? 'Yes' : 'No'
     ]);
@@ -151,8 +151,8 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
                                             <td>${row[2]}</td>
                                             <td>${row[3]}</td>
                                             <td>${row[4]}</td>
-                                            <td>${row[5]}</td>
-                                            <td>${row[6]}</td>
+                                            <td>${format_currency(row[5])}</td>
+                                            <td>${format_currency(row[6])}</td>
                                             <td>${row[7]}</td>
                                             <td>${row[8]}</td>
                                             <td>${row[9]}</td>
@@ -216,6 +216,12 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
     
     // Show dialog
     dialog.show();
+}
+
+// Helper function to format currency
+function format_currency(value) {
+    if (value === null || value === undefined) return '';
+    return frappe.format(value, { fieldtype: 'Currency' });
 }
 
 frappe.ui.form.on('SHG Multi Member Payment Invoice', {
