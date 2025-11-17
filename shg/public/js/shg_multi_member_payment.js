@@ -5,8 +5,14 @@ frappe.ui.form.on('SHG Multi Member Payment', {
     refresh: function(frm) {
         if (frm.doc.docstatus === 0) {
             frm.add_custom_button(__('Fetch Unpaid Invoices'), function() {
+                if (!frm.doc.member) {
+                    frappe.msgprint(__("Please select a Member first."));
+                    return;
+                }
+                
                 frappe.call({
                     method: 'shg.shg.utils.payment_utils.get_unpaid_invoices',
+                    args: { member: frm.doc.member },
                     callback: function(r) {
                         if (r.message && r.message.length > 0) {
                             show_unpaid_items_dialog(frm, r.message);
@@ -18,8 +24,14 @@ frappe.ui.form.on('SHG Multi Member Payment', {
             });
             
             frm.add_custom_button(__('Fetch Unpaid Contributions'), function() {
+                if (!frm.doc.member) {
+                    frappe.msgprint(__("Please select a Member first."));
+                    return;
+                }
+                
                 frappe.call({
                     method: 'shg.shg.utils.payment_utils.get_unpaid_contributions',
+                    args: { member: frm.doc.member },
                     callback: function(r) {
                         if (r.message && r.message.length > 0) {
                             show_unpaid_items_dialog(frm, r.message);
@@ -31,8 +43,14 @@ frappe.ui.form.on('SHG Multi Member Payment', {
             });
             
             frm.add_custom_button(__('Fetch Unpaid Fines'), function() {
+                if (!frm.doc.member) {
+                    frappe.msgprint(__("Please select a Member first."));
+                    return;
+                }
+                
                 frappe.call({
                     method: 'shg.shg.utils.payment_utils.get_unpaid_fines',
+                    args: { member: frm.doc.member },
                     callback: function(r) {
                         if (r.message && r.message.length > 0) {
                             show_unpaid_items_dialog(frm, r.message);
@@ -44,8 +62,14 @@ frappe.ui.form.on('SHG Multi Member Payment', {
             });
             
             frm.add_custom_button(__('Fetch All Unpaid'), function() {
+                if (!frm.doc.member) {
+                    frappe.msgprint(__("Please select a Member first."));
+                    return;
+                }
+                
                 frappe.call({
                     method: 'shg.shg.utils.payment_utils.get_all_unpaid',
+                    args: { member: frm.doc.member },
                     callback: function(r) {
                         if (r.message && r.message.length > 0) {
                             show_unpaid_items_dialog(frm, r.message);

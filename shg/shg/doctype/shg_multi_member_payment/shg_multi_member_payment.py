@@ -4,7 +4,6 @@ from frappe.model.document import Document
 from frappe.utils import flt
 from shg.shg.utils.company_utils import get_default_company
 
-
 class SHGMultiMemberPayment(Document):
     def before_validate(self):
         """Auto-set company from SHG Settings and handle naming_series"""
@@ -26,6 +25,15 @@ class SHGMultiMemberPayment(Document):
         # Validate total_payment_amount > 0
         if flt(self.total_payment_amount) <= 0:
             frappe.throw(_("Total payment amount must be greater than zero"))
+            
+        # Validate required fields in child table
+        for row in self.invoices:
+            if not row.reference_doctype:
+                frappe.throw(_("Row {0}: Reference Doctype is required").format(row.idx))
+            if not row.reference_name:
+                frappe.throw(_("Row {0}: Reference Name is required").format(row.idx))
+            if not row.payment_amount or flt(row.payment_amount) <= 0:
+                frappe.throw(_("Row {0}: Payment Amount must be greater than zero").format(row.idx))
             
         # Run all validation checks
         self.validate_no_closed_documents()
@@ -129,26 +137,47 @@ Remaining after payment: {3}""").format(
     @frappe.whitelist()
     def fetch_unpaid_items(self):
         """Fetch unpaid items for bulk payment"""
+        if not self.member:
+            frappe.throw(_("Please select a Member before fetching unpaid documents."))
+        
         from shg.shg.utils.payment_utils import get_all_unpaid
-        return get_all_unpaid()
+        return get_all_unpaid(self.member)
     
     @frappe.whitelist()
     def fetch_unpaid_invoices(self):
         """Fetch unpaid contribution invoices"""
+        if not self.member:
+            frappe.throw(_("Please select a Member before fetching unpaid documents."))
+            
         from shg.shg.utils.payment_utils import get_unpaid_invoices
-        return get_unpaid_invoices()
+        return get_unpaid_invoices(self.member)
     
     @frappe.whitelist()
     def fetch_unpaid_contributions(self):
         """Fetch unpaid contributions"""
+        if not self.member:
+            frappe.throw(_("Please select a Member before fetching unpaid documents."))
+            
         from shg.shg.utils.payment_utils import get_unpaid_contributions
-        return get_unpaid_contributions()
+        return get_unpaid_contributions(self.member)
     
     @frappe.whitelist()
     def fetch_unpaid_fines(self):
         """Fetch unpaid meeting fines"""
+        if not self.member:
+            frappe.throw(_("Please select a Member before fetching unpaid documents."))
+            
         from shg.shg.utils.payment_utils import get_unpaid_fines
-        return get_unpaid_fines()
+        return get_unpaid_fines(self.member)
+    
+    @frappe.whitelist()
+    def fetch_all_unpaid(self):
+        """Fetch all unpaid items"""
+        if not self.member:
+            frappe.throw(_("Please select a Member before fetching unpaid documents."))
+            
+        from shg.shg.utils.payment_utils import get_all_unpaid
+        return get_all_unpaid(self.member)
     
     @frappe.whitelist()
     def recalculate_totals(self):

@@ -51,50 +51,71 @@ def process_bulk_payment(parent_doc_name):
 
 
 @frappe.whitelist(allow_guest=False)
-def get_unpaid_invoices():
+def get_unpaid_invoices(member):
     """
-    Get all unpaid contribution invoices for bulk payment.
+    Get all unpaid contribution invoices for a specific member.
     
+    Args:
+        member (str): Member ID
+        
     Returns:
         list: List of unpaid contribution invoices
     """
-    return _get_unpaid_records("SHG Contribution Invoice")
+    if not member:
+        return []
+    return _get_unpaid_records_for_member("SHG Contribution Invoice", member)
 
 
 @frappe.whitelist(allow_guest=False)
-def get_unpaid_contributions():
+def get_unpaid_contributions(member):
     """
-    Get all unpaid contributions for bulk payment.
+    Get all unpaid contributions for a specific member.
     
+    Args:
+        member (str): Member ID
+        
     Returns:
         list: List of unpaid contributions
     """
-    return _get_unpaid_records("SHG Contribution")
+    if not member:
+        return []
+    return _get_unpaid_records_for_member("SHG Contribution", member)
 
 
 @frappe.whitelist(allow_guest=False)
-def get_unpaid_fines():
+def get_unpaid_fines(member):
     """
-    Get all unpaid meeting fines for bulk payment.
+    Get all unpaid meeting fines for a specific member.
     
+    Args:
+        member (str): Member ID
+        
     Returns:
         list: List of unpaid meeting fines
     """
-    return _get_unpaid_records("SHG Meeting Fine")
+    if not member:
+        return []
+    return _get_unpaid_records_for_member("SHG Meeting Fine", member)
 
 
 @frappe.whitelist(allow_guest=False)
-def get_all_unpaid():
+def get_all_unpaid(member):
     """
-    Get all unpaid items (invoices, contributions, fines) for bulk payment.
+    Get all unpaid items (invoices, contributions, fines) for a specific member.
     
+    Args:
+        member (str): Member ID
+        
     Returns:
         list: List of all unpaid items
     """
+    if not member:
+        return []
+    
     unpaid_items = []
-    unpaid_items.extend(_get_unpaid_records("SHG Contribution Invoice"))
-    unpaid_items.extend(_get_unpaid_records("SHG Contribution"))
-    unpaid_items.extend(_get_unpaid_records("SHG Meeting Fine"))
+    unpaid_items.extend(_get_unpaid_records_for_member("SHG Contribution Invoice", member))
+    unpaid_items.extend(_get_unpaid_records_for_member("SHG Contribution", member))
+    unpaid_items.extend(_get_unpaid_records_for_member("SHG Meeting Fine", member))
     
     # Sort by date descending
     unpaid_items.sort(key=lambda x: x["date"] or "", reverse=True)
@@ -232,6 +253,142 @@ def _get_unpaid_records(doctype):
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), f"Get Unpaid Records Failed for {doctype}")
         frappe.throw(_("Failed to fetch unpaid records for {0}: {1}").format(doctype, str(e)))
+
+
+def _get_unpaid_records_for_member(doctype, member):
+    """
+    Internal helper to get unpaid records of a specific doctype for a specific member.
+    
+    Args:
+        doctype (str): Document type
+        member (str): Member ID
+        
+    Returns:
+        list: List of unpaid records for the member
+    """
+    try:
+        unpaid_items = []
+        
+        if doctype == "SHG Contribution Invoice":
+            # Build query for contribution invoices
+            query = """
+                SELECT name, member, member_name, invoice_date AS date, amount, status
+                FROM `tabSHG Contribution Invoice`
+                WHERE member = %(member)s
+                  AND status IN ('Unpaid', 'Partially Paid') 
+                  AND docstatus = 1
+            """
+            # Add is_closed check if column exists
+            if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+                query += " AND (is_closed IS NULL OR is_closed = 0)"
+            
+            invoice_data = frappe.db.sql(query, {"member": member}, as_dict=True)
+            
+            for invoice in invoice_data:
+                # For contribution invoices: if status = Partially Paid, treat outstanding = full amount
+                # (until part-payment logic exists)
+                outstanding = flt(invoice.amount or 0)
+                if outstanding > 0:  # Only include if outstanding > 0
+                    # Get additional info
+                    is_closed = 0
+                    posted_to_gl = 0
+                    if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+                        is_closed = frappe.db.get_value("SHG Contribution Invoice", invoice.name, "is_closed") or 0
+                    if frappe.db.has_column("SHG Contribution Invoice", "posted_to_gl"):
+                        posted_to_gl = frappe.db.get_value("SHG Contribution Invoice", invoice.name, "posted_to_gl") or 0
+                    
+                    unpaid_items.append({
+                        "doctype": "SHG Contribution Invoice",
+                        "name": invoice.name,
+                        "member": invoice.member,
+                        "member_name": invoice.member_name,
+                        "date": invoice.date,
+                        "amount": flt(invoice.amount),
+                        "outstanding": outstanding,
+                        "status": invoice.status,
+                        "is_closed": is_closed,
+                        "posted_to_gl": posted_to_gl
+                    })
+        
+        elif doctype == "SHG Contribution":
+            # Get unpaid SHG Contributions
+            contribution_data = frappe.db.sql("""
+                SELECT name, member, member_name, contribution_date AS date,
+                       expected_amount, amount, amount_paid, unpaid_amount, status
+                FROM `tabSHG Contribution`
+                WHERE member = %(member)s
+                  AND status IN ('Unpaid', 'Partially Paid') AND docstatus = 1
+            """, {"member": member}, as_dict=True)
+            
+            for contribution in contribution_data:
+                # For contributions: outstanding = unpaid_amount
+                outstanding = flt(contribution.unpaid_amount or 0)
+                if outstanding > 0:  # Only include if outstanding > 0
+                    # Get additional info
+                    is_closed = 0
+                    posted_to_gl = 0
+                    if frappe.db.has_column("SHG Contribution", "is_closed"):
+                        is_closed = frappe.db.get_value("SHG Contribution", contribution.name, "is_closed") or 0
+                    if frappe.db.has_column("SHG Contribution", "posted_to_gl"):
+                        posted_to_gl = frappe.db.get_value("SHG Contribution", contribution.name, "posted_to_gl") or 0
+                    
+                    unpaid_items.append({
+                        "doctype": "SHG Contribution",
+                        "name": contribution.name,
+                        "member": contribution.member,
+                        "member_name": contribution.member_name,
+                        "date": contribution.date,
+                        "amount": flt(contribution.expected_amount or contribution.amount),
+                        "outstanding": outstanding,
+                        "status": contribution.status,
+                        "is_closed": is_closed,
+                        "posted_to_gl": posted_to_gl
+                    })
+        
+        elif doctype == "SHG Meeting Fine":
+            # Get unpaid SHG Meeting Fines
+            fine_data = frappe.db.sql("""
+                SELECT name, member, member_name, fine_amount, meeting, status, fine_date
+                FROM `tabSHG Meeting Fine`
+                WHERE member = %(member)s
+                  AND status != 'Paid' AND docstatus = 1
+            """, {"member": member}, as_dict=True)
+            
+            for fine in fine_data:
+                # For meeting fines: outstanding = fine_amount
+                outstanding = flt(fine.fine_amount or 0)
+                if outstanding > 0:  # Only include if outstanding > 0
+                    # Get additional info
+                    is_closed = 0
+                    posted_to_gl = 0
+                    if frappe.db.has_column("SHG Meeting Fine", "is_closed"):
+                        is_closed = frappe.db.get_value("SHG Meeting Fine", fine.name, "is_closed") or 0
+                    if frappe.db.has_column("SHG Meeting Fine", "posted_to_gl"):
+                        posted_to_gl = frappe.db.get_value("SHG Meeting Fine", fine.name, "posted_to_gl") or 0
+                    
+                    # Get meeting date if meeting exists
+                    meeting_date = fine.fine_date
+                    if fine.meeting:
+                        meeting_date = frappe.db.get_value("SHG Meeting", fine.meeting, "meeting_date") or fine.fine_date
+                    
+                    unpaid_items.append({
+                        "doctype": "SHG Meeting Fine",
+                        "name": fine.name,
+                        "member": fine.member,
+                        "member_name": fine.member_name,
+                        "date": meeting_date,
+                        "amount": flt(fine.fine_amount),
+                        "outstanding": outstanding,
+                        "status": fine.status,
+                        "is_closed": is_closed,
+                        "posted_to_gl": posted_to_gl
+                    })
+        
+        return unpaid_items
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"Get Unpaid Records for Member Failed for {doctype}")
+        frappe.throw(_("Failed to fetch unpaid records for {0} for member {1}: {2}").format(doctype, member, str(e)))
 
 
 def _get_outstanding_amount(doctype, name):
