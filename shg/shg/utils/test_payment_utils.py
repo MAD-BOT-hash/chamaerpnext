@@ -1,7 +1,7 @@
 import unittest
 import frappe
 from frappe.utils import nowdate
-from shg.shg.utils.payment_utils import get_outstanding, process_single_payment, process_bulk_payment, cancel_linked_payment_entry
+from shg.shg.utils.payment_utils import _get_outstanding_amount
 
 
 class TestPaymentUtils(unittest.TestCase):
@@ -13,40 +13,28 @@ class TestPaymentUtils(unittest.TestCase):
         # Clean up test data
         pass
         
-    def test_get_outstanding_for_contribution_invoice(self):
-        """Test get_outstanding for SHG Contribution Invoice"""
-        # Test with a contribution invoice that has no Sales Invoice linked
-        # This would return the full amount if status is not Paid
+    def test_get_outstanding_amount_contribution_invoice(self):
+        """Test _get_outstanding_amount for SHG Contribution Invoice"""
+        # Test with amount=100, amount_paid=30, should return 70
+        # This would require creating actual test documents
         pass
         
-    def test_get_outstanding_for_contribution(self):
-        """Test get_outstanding for SHG Contribution"""
-        # Test with a contribution that has unpaid amount
-        # This would return the unpaid_amount field
+    def test_get_outstanding_amount_contribution(self):
+        """Test _get_outstanding_amount for SHG Contribution"""
+        # Test with expected_amount=100, amount_paid=30, should return 70
         pass
         
-    def test_get_outstanding_for_meeting_fine(self):
-        """Test get_outstanding for SHG Meeting Fine"""
-        # Test with a meeting fine that is not paid
-        # This would return the fine_amount field
+    def test_get_outstanding_amount_meeting_fine(self):
+        """Test _get_outstanding_amount for SHG Meeting Fine"""
+        # Test with fine_amount=100, status!=Paid, should return 100
+        # Test with status=Paid, should return 0
         pass
         
-    def test_process_single_payment(self):
-        """Test process_single_payment function"""
-        # This would test the creation of a Payment Entry
-        # and updating of linked document status
-        pass
-        
-    def test_process_bulk_payment(self):
-        """Test process_bulk_payment function"""
-        # This would test the creation of a single Payment Entry
-        # for multiple invoices and updating of all linked documents
-        pass
-        
-    def test_cancel_linked_payment_entry(self):
-        """Test cancel_linked_payment_entry function"""
-        # This would test the cancellation of a Payment Entry
-        # and reversal of linked document statuses
+    def test_get_outstanding_amount_other_doctype(self):
+        """Test _get_outstanding_amount for other doctypes"""
+        # Test with doctype that has outstanding_amount field
+        # Test with doctype that has amount field
+        # Test with doctype that has neither field
         pass
 
 

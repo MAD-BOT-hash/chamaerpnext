@@ -40,7 +40,8 @@ frappe.ui.form.on('SHG Payment Entry', {
                         },
                         callback: function(r) {
                             if (r.message) {
-                                frm.set_value('amount', r.message);
+                                frm.set_value('paid_amount', r.message);
+                                frm.set_value('received_amount', r.message);
                             }
                         }
                     });
