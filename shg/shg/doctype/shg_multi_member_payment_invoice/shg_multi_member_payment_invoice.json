@@ -21,9 +21,9 @@
  "fields": [
   {
    "fieldname": "reference_doctype",
-   "fieldtype": "Link",
+   "fieldtype": "Select",
    "label": "Reference Doctype",
-   "options": "DocType",
+   "options": "SHG Contribution Invoice\nSHG Contribution\nSHG Meeting Fine",
    "reqd": 1
   },
   {

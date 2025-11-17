@@ -164,8 +164,8 @@ def _get_unpaid_records(doctype):
                         posted_to_gl = frappe.db.get_value("SHG Contribution Invoice", invoice.name, "posted_to_gl") or 0
                     
                     unpaid_items.append({
-                        "doctype": "SHG Contribution Invoice",
-                        "name": invoice.name,
+                        "reference_doctype": "SHG Contribution Invoice",
+                        "reference_name": invoice.name,
                         "member": invoice.member,
                         "member_name": invoice.member_name,
                         "date": invoice.date,
@@ -198,8 +198,8 @@ def _get_unpaid_records(doctype):
                         posted_to_gl = frappe.db.get_value("SHG Contribution", contribution.name, "posted_to_gl") or 0
                     
                     unpaid_items.append({
-                        "doctype": "SHG Contribution",
-                        "name": contribution.name,
+                        "reference_doctype": "SHG Contribution",
+                        "reference_name": contribution.name,
                         "member": contribution.member,
                         "member_name": contribution.member_name,
                         "date": contribution.date,
@@ -236,8 +236,8 @@ def _get_unpaid_records(doctype):
                         meeting_date = frappe.db.get_value("SHG Meeting", fine.meeting, "meeting_date") or fine.fine_date
                     
                     unpaid_items.append({
-                        "doctype": "SHG Meeting Fine",
-                        "name": fine.name,
+                        "reference_doctype": "SHG Meeting Fine",
+                        "reference_name": fine.name,
                         "member": fine.member,
                         "member_name": fine.member_name,
                         "date": meeting_date,
@@ -298,8 +298,8 @@ def _get_unpaid_records_for_member(doctype, member):
                         posted_to_gl = frappe.db.get_value("SHG Contribution Invoice", invoice.name, "posted_to_gl") or 0
                     
                     unpaid_items.append({
-                        "doctype": "SHG Contribution Invoice",
-                        "name": invoice.name,
+                        "reference_doctype": "SHG Contribution Invoice",
+                        "reference_name": invoice.name,
                         "member": invoice.member,
                         "member_name": invoice.member_name,
                         "date": invoice.date,
@@ -333,8 +333,8 @@ def _get_unpaid_records_for_member(doctype, member):
                         posted_to_gl = frappe.db.get_value("SHG Contribution", contribution.name, "posted_to_gl") or 0
                     
                     unpaid_items.append({
-                        "doctype": "SHG Contribution",
-                        "name": contribution.name,
+                        "reference_doctype": "SHG Contribution",
+                        "reference_name": contribution.name,
                         "member": contribution.member,
                         "member_name": contribution.member_name,
                         "date": contribution.date,
@@ -372,8 +372,8 @@ def _get_unpaid_records_for_member(doctype, member):
                         meeting_date = frappe.db.get_value("SHG Meeting", fine.meeting, "meeting_date") or fine.fine_date
                     
                     unpaid_items.append({
-                        "doctype": "SHG Meeting Fine",
-                        "name": fine.name,
+                        "reference_doctype": "SHG Meeting Fine",
+                        "reference_name": fine.name,
                         "member": fine.member,
                         "member_name": fine.member_name,
                         "date": meeting_date,

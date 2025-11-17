@@ -177,8 +177,8 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
             selected_indices.forEach(index => {
                 const item = unpaid_items[index];
                 const row = frm.add_child('invoices', {
-                    reference_doctype: item.doctype,
-                    reference_name: item.name,
+                    reference_doctype: item.reference_doctype,
+                    reference_name: item.reference_name,
                     member: item.member,
                     member_name: item.member_name,
                     date: item.date,
@@ -187,7 +187,8 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
                     payment_amount: item.outstanding,
                     status: item.status,
                     is_closed: item.is_closed,
-                    posted_to_gl: item.posted_to_gl
+                    posted_to_gl: item.posted_to_gl,
+                    remarks: ""
                 });
             });
             
