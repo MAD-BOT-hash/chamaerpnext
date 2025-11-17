@@ -58,83 +58,85 @@ def get_unpaid_items():
     Returns:
         list: List of unpaid items
     """
-    unpaid_items = []
-    
-    # Get unpaid SHG Contribution Invoices
-    contribution_invoices = frappe.get_all(
-        "SHG Contribution Invoice",
-        filters={
-            "docstatus": 1,
-            "status": ["!=", "Paid"]
-        },
-        fields=["name", "member", "member_name", "invoice_date", "amount", "amount_paid"]
-    )
-    
-    for invoice in contribution_invoices:
-        outstanding = flt(invoice.amount or 0) - flt(invoice.amount_paid or 0)
-        if outstanding > 0:
-            unpaid_items.append({
-                "doctype": "SHG Contribution Invoice",
-                "name": invoice.name,
-                "member": invoice.member,
-                "member_name": invoice.member_name,
-                "date": invoice.invoice_date,
-                "amount": flt(invoice.amount),
-                "outstanding": outstanding
-            })
-    
-    # Get unpaid SHG Contributions
-    contributions = frappe.get_all(
-        "SHG Contribution",
-        filters={
-            "docstatus": 1,
-            "status": ["!=", "Paid"]
-        },
-        fields=["name", "member", "member_name", "contribution_date", "expected_amount", "amount", "amount_paid"]
-    )
-    
-    for contribution in contributions:
-        expected = flt(contribution.expected_amount or contribution.amount or 0)
-        paid = flt(contribution.amount_paid or 0)
-        outstanding = expected - paid
-        if outstanding > 0:
-            unpaid_items.append({
-                "doctype": "SHG Contribution",
-                "name": contribution.name,
-                "member": contribution.member,
-                "member_name": contribution.member_name,
-                "date": contribution.contribution_date,
-                "amount": expected,
-                "outstanding": outstanding
-            })
-    
-    # Get unpaid SHG Meeting Fines
-    meeting_fines = frappe.get_all(
-        "SHG Meeting Fine",
-        filters={
-            "docstatus": 1,
-            "status": ["!=", "Paid"]
-        },
-        fields=["name", "member", "member_name", "meeting_date", "fine_amount"]
-    )
-    
-    for fine in meeting_fines:
-        outstanding = flt(fine.fine_amount or 0)
-        if outstanding > 0:
-            unpaid_items.append({
-                "doctype": "SHG Meeting Fine",
-                "name": fine.name,
-                "member": fine.member,
-                "member_name": fine.member_name,
-                "date": fine.meeting_date,
-                "amount": flt(fine.fine_amount),
-                "outstanding": outstanding
-            })
-    
-    # Sort by date descending
-    unpaid_items.sort(key=lambda x: x["date"], reverse=True)
-    
-    return unpaid_items
+    try:
+        unpaid_items = []
+        
+        # Get unpaid SHG Contribution Invoices
+        # SHG Contribution Invoice has: amount, status (NO amount_paid)
+        invoice_data = frappe.db.sql("""
+            SELECT name, member, member_name, invoice_date AS date, amount, status
+            FROM `tabSHG Contribution Invoice`
+            WHERE status IN ('Unpaid', 'Partially Paid') AND docstatus = 1
+        """, as_dict=True)
+        
+        for invoice in invoice_data:
+            # For contribution invoices: if status = Partially Paid, treat outstanding = full amount
+            # (until part-payment logic exists)
+            outstanding = flt(invoice.amount or 0)
+            if outstanding > 0:  # Only include if outstanding > 0
+                unpaid_items.append({
+                    "doctype": "SHG Contribution Invoice",
+                    "name": invoice.name,
+                    "member": invoice.member,
+                    "member_name": invoice.member_name,
+                    "date": invoice.date,
+                    "amount": flt(invoice.amount),
+                    "outstanding": outstanding
+                })
+        
+        # Get unpaid SHG Contributions
+        # SHG Contribution has: expected_amount, amount, amount_paid, unpaid_amount, status
+        contribution_data = frappe.db.sql("""
+            SELECT name, member, member_name, contribution_date AS date,
+                   expected_amount, amount, amount_paid, unpaid_amount, status
+            FROM `tabSHG Contribution`
+            WHERE status IN ('Unpaid', 'Partially Paid') AND docstatus = 1
+        """, as_dict=True)
+        
+        for contribution in contribution_data:
+            # For contributions: outstanding = unpaid_amount
+            outstanding = flt(contribution.unpaid_amount or 0)
+            if outstanding > 0:  # Only include if outstanding > 0
+                unpaid_items.append({
+                    "doctype": "SHG Contribution",
+                    "name": contribution.name,
+                    "member": contribution.member,
+                    "member_name": contribution.member_name,
+                    "date": contribution.date,
+                    "amount": flt(contribution.expected_amount or contribution.amount),
+                    "outstanding": outstanding
+                })
+        
+        # Get unpaid SHG Meeting Fines
+        # SHG Meeting Fine has: fine_amount, status, fine_date
+        fine_data = frappe.db.sql("""
+            SELECT name, member, member_name, fine_amount, meeting, status, fine_date
+            FROM `tabSHG Meeting Fine`
+            WHERE status != 'Paid' AND docstatus = 1
+        """, as_dict=True)
+        
+        for fine in fine_data:
+            # For meeting fines: outstanding = fine_amount
+            outstanding = flt(fine.fine_amount or 0)
+            if outstanding > 0:  # Only include if outstanding > 0
+                unpaid_items.append({
+                    "doctype": "SHG Meeting Fine",
+                    "name": fine.name,
+                    "member": fine.member,
+                    "member_name": fine.member_name,
+                    "date": fine.fine_date,
+                    "amount": flt(fine.fine_amount),
+                    "outstanding": outstanding
+                })
+        
+        # Sort by date descending
+        unpaid_items.sort(key=lambda x: x["date"] or "", reverse=True)
+        
+        return unpaid_items
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Get Unpaid Items Failed")
+        frappe.throw(_("Failed to fetch unpaid items: {0}").format(str(e)))
 
 
 def _get_outstanding_amount(doctype, name):
@@ -150,17 +152,13 @@ def _get_outstanding_amount(doctype, name):
     """
     if doctype == "SHG Contribution Invoice":
         doc = frappe.get_doc(doctype, name)
-        # For contribution invoices: amount - amount_paid
-        amount_paid = flt(doc.amount_paid or 0)
-        amount = flt(doc.amount or 0)
-        return flt(amount - amount_paid)
+        # For contribution invoices: amount (no amount_paid field exists)
+        return flt(doc.amount or 0)
     
     elif doctype == "SHG Contribution":
         doc = frappe.get_doc(doctype, name)
-        # For contributions: expected_amount - amount_paid
-        expected_amount = flt(doc.expected_amount or doc.amount or 0)
-        amount_paid = flt(doc.amount_paid or 0)
-        return flt(expected_amount - amount_paid)
+        # For contributions: unpaid_amount
+        return flt(doc.unpaid_amount or 0)
     
     elif doctype == "SHG Meeting Fine":
         doc = frappe.get_doc(doctype, name)
@@ -403,19 +401,8 @@ def _apply_payment_to_document(doctype, name, amount, payment_entry_name):
         if payment_entry_name:
             doc.db_set("payment_reference", payment_entry_name)
         
-        # Update paid amount
-        current_paid = flt(doc.amount_paid or 0)
-        new_paid = current_paid + flt(amount)
-        doc.db_set("amount_paid", new_paid)
-        
-        # Update status based on outstanding amount
-        outstanding = _get_outstanding_amount(doctype, name)
-        if outstanding <= 0:
-            doc.db_set("status", "Paid")
-        elif new_paid > 0:
-            doc.db_set("status", "Partially Paid")
-        else:
-            doc.db_set("status", "Unpaid")
+        # Update status based on payment (simplified for now)
+        doc.db_set("status", "Paid")
     
     elif doctype == "SHG Contribution":
         doc = frappe.get_doc(doctype, name)
