@@ -302,7 +302,7 @@ def _get_unpaid_records_for_member(doctype, member):
                         "reference_name": invoice.name,
                         "member": invoice.member,
                         "member_name": invoice.member_name,
-                        "date": invoice.date,
+                        "date": invoice.invoice_date,
                         "amount": flt(invoice.amount),
                         "outstanding": outstanding,
                         "status": invoice.status,
@@ -337,7 +337,7 @@ def _get_unpaid_records_for_member(doctype, member):
                         "reference_name": contribution.name,
                         "member": contribution.member,
                         "member_name": contribution.member_name,
-                        "date": contribution.date,
+                        "date": contribution.contribution_date,
                         "amount": flt(contribution.expected_amount or contribution.amount),
                         "outstanding": outstanding,
                         "status": contribution.status,
@@ -366,17 +366,12 @@ def _get_unpaid_records_for_member(doctype, member):
                     if frappe.db.has_column("SHG Meeting Fine", "posted_to_gl"):
                         posted_to_gl = frappe.db.get_value("SHG Meeting Fine", fine.name, "posted_to_gl") or 0
                     
-                    # Get meeting date if meeting exists
-                    meeting_date = fine.fine_date
-                    if fine.meeting:
-                        meeting_date = frappe.db.get_value("SHG Meeting", fine.meeting, "meeting_date") or fine.fine_date
-                    
                     unpaid_items.append({
                         "reference_doctype": "SHG Meeting Fine",
                         "reference_name": fine.name,
                         "member": fine.member,
                         "member_name": fine.member_name,
-                        "date": meeting_date,
+                        "date": fine.fine_date,
                         "amount": flt(fine.fine_amount),
                         "outstanding": outstanding,
                         "status": fine.status,

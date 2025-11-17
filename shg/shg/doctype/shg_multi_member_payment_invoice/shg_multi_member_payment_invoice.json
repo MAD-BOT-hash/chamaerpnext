@@ -90,7 +90,7 @@
   },
   {
    "fieldname": "remarks",
-   "fieldtype": "Text",
+   "fieldtype": "Small Text",
    "label": "Remarks"
   }
  ],

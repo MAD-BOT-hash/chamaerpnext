@@ -219,14 +219,25 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
 }
 
 frappe.ui.form.on('SHG Multi Member Payment Invoice', {
+    reference_doctype: function(frm, cdt, cdn) {
+        var row = frappe.get_doc(cdt, cdn);
+        
+        // Set date label based on reference_doctype
+        if (row.reference_doctype === "SHG Contribution Invoice") {
+            frappe.meta.get_docfield("SHG Multi Member Payment Invoice", "date", frm.doc.name).label = "Invoice Date";
+        } else if (row.reference_doctype === "SHG Contribution") {
+            frappe.meta.get_docfield("SHG Multi Member Payment Invoice", "date", frm.doc.name).label = "Contribution Date";
+        } else if (row.reference_doctype === "SHG Meeting Fine") {
+            frappe.meta.get_docfield("SHG Multi Member Payment Invoice", "date", frm.doc.name).label = "Fine Date";
+        }
+        
+        frm.refresh_field("invoices");
+        frappe.model.set_value(cdt, cdn, 'reference_name', '');
+    },
+    
     invoices_add: function(frm, cdt, cdn) {
         var row = frappe.get_doc(cdt, cdn);
         // Set default values for new row if needed
-    },
-    
-    reference_doctype: function(frm, cdt, cdn) {
-        var row = frappe.get_doc(cdt, cdn);
-        frappe.model.set_value(cdt, cdn, 'reference_name', '');
     },
     
     reference_name: function(frm, cdt, cdn) {

@@ -34,6 +34,10 @@ class SHGMultiMemberPayment(Document):
                 frappe.throw(_("Row {0}: Reference Name is required").format(row.idx))
             if not row.payment_amount or flt(row.payment_amount) <= 0:
                 frappe.throw(_("Row {0}: Payment Amount must be greater than zero").format(row.idx))
+            if not row.outstanding_amount or row.outstanding_amount < 0:
+                frappe.throw(_("Row {0}: Outstanding amount is missing or invalid").format(row.idx))
+            if row.payment_amount > row.outstanding_amount:
+                frappe.throw(_("Row {0}: Payment amount cannot exceed outstanding amount").format(row.idx))
             
         # Run all validation checks
         self.validate_no_closed_documents()
