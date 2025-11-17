@@ -53,15 +53,10 @@ doc_events = {
         "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     },
     "SHG Payment Entry": {
-        "validate": [
-            "shg.shg.hooks.payment_entry.payment_entry_validate",
-            "shg.shg.utils.member_account_mapping.set_member_credit_account"
-        ],
-        "on_submit": "shg.shg.hooks.payment_entry.payment_entry_on_submit",
         "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     },
-    "Sales Invoice": {
-        "before_validate": "shg.shg.utils.invoice_override.allow_backdated_invoices"
+    "SHG Multi Member Payment": {
+        "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     }
 }
 
@@ -98,14 +93,13 @@ doctype_js = {
     "SHG Member Attendance": "public/js/shg_member_attendance.js",
     "SHG Settings": "public/js/shg_settings.js",
     "SHG Contribution Invoice": "public/js/shg_contribution_invoice.js",
-    "SHG Payment Entry": "shg/doctype/shg_payment_entry/shg_payment_entry.js",
+    "SHG Payment Entry": "shg/shg/doctype/shg_payment_entry/shg_payment_entry.js",
     "SHG Multi Member Payment": "shg/shg/doctype/shg_multi_member_payment/shg_multi_member_payment.js"
 }
 
 # List JS
 doctype_list_js = {
-    "SHG Payment Entry": "public/js/shg_payment_entry_list.js",
-    "SHG Contribution Invoice": "shg/shg/doctype/shg_contribution_invoice/shg_contribution_invoice_list.js"
+    "SHG Payment Entry": "shg/shg/doctype/shg_payment_entry/shg_payment_entry_list.js"
 }
 
 # Fix for workspace path issue

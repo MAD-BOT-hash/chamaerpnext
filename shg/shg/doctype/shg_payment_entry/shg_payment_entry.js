@@ -1,27 +1,66 @@
-// Copyright (c) 2025
+// Copyright (c) 2025, SHG Solutions
 // License: MIT
 
 frappe.ui.form.on('SHG Payment Entry', {
     setup: function(frm) {
-        frm.set_query("reference_doctype", "references", function() {
+        frm.set_query('member', function() {
             return {
                 filters: {
-                    "name": ["in", ["Sales Invoice", "Journal Entry", "SHG Loan", "SHG Loan Repayment"]]
+                    'membership_status': 'Active'
+                }
+            };
+        });
+        
+        frm.set_query('reference_doctype', function() {
+            return {
+                filters: {
+                    'name': ['in', ['SHG Contribution Invoice', 'SHG Contribution', 'SHG Meeting Fine']]
+                }
+            };
+        });
+        
+        frm.set_query('mode_of_payment', function() {
+            return {
+                filters: {
+                    'type': 'Cash'
                 }
             };
         });
     },
-
+    
     refresh: function(frm) {
-        // Add custom buttons or modify UI as needed
+        if (frm.doc.docstatus === 0) {
+            frm.add_custom_button(__('Get Outstanding'), function() {
+                if (frm.doc.reference_doctype && frm.doc.reference_name) {
+                    frappe.call({
+                        method: 'shg.shg.utils.payment_utils.get_outstanding',
+                        args: {
+                            doctype: frm.doc.reference_doctype,
+                            name: frm.doc.reference_name
+                        },
+                        callback: function(r) {
+                            if (r.message) {
+                                frm.set_value('amount', r.message);
+                            }
+                        }
+                    });
+                }
+            });
+        }
     },
-
-    payment_type: function(frm) {
-        // Handle payment type changes
+    
+    member: function(frm) {
+        if (frm.doc.member) {
+            frappe.db.get_value('SHG Member', frm.doc.member, 'member_name', function(r) {
+                if (r && r.member_name) {
+                    frm.set_value('member_name', r.member_name);
+                }
+            });
+        }
     },
-
-    party: function(frm) {
-        // Handle party changes
+    
+    reference_doctype: function(frm) {
+        frm.set_value('reference_name', '');
     }
 });
 

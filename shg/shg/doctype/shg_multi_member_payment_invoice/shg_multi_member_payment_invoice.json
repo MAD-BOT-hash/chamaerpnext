@@ -4,86 +4,45 @@
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
- "js": "shg/shg/doctype/shg_multi_member_payment_invoice/shg_multi_member_payment_invoice.js",
  "field_order": [
-  "invoice",
-  "member",
-  "member_name",
-  "contribution_type",
-  "invoice_date",
-  "due_date",
+  "reference_doctype",
+  "reference_name",
   "outstanding_amount",
   "payment_amount",
   "status"
  ],
  "fields": [
   {
-   "fieldname": "invoice",
+   "fieldname": "reference_doctype",
    "fieldtype": "Link",
-   "label": "Invoice",
-   "options": "SHG Contribution Invoice",
-   "reqd": 1,
-   "in_list_view": 1
+   "label": "Reference Doctype",
+   "options": "DocType",
+   "reqd": 1
   },
   {
-   "fieldname": "member",
-   "fieldtype": "Link",
-   "label": "Member",
-   "options": "SHG Member",
-   "read_only": 1,
-   "in_list_view": 1
-  },
-  {
-   "fieldname": "member_name",
-   "fieldtype": "Data",
-   "label": "Member Name",
-   "read_only": 1,
-   "in_list_view": 1
-  },
-  {
-   "fieldname": "contribution_type",
-   "fieldtype": "Link",
-   "label": "Contribution Type",
-   "options": "SHG Contribution Type",
-   "read_only": 1,
-   "in_list_view": 1
-  },
-  {
-   "fieldname": "invoice_date",
-   "fieldtype": "Date",
-   "label": "Invoice Date",
-   "read_only": 1,
-   "in_list_view": 1
-  },
-  {
-   "fieldname": "due_date",
-   "fieldtype": "Date",
-   "label": "Due Date",
-   "read_only": 1,
-   "in_list_view": 1
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Name",
+   "options": "reference_doctype",
+   "reqd": 1
   },
   {
    "fieldname": "outstanding_amount",
    "fieldtype": "Currency",
    "label": "Outstanding Amount",
-   "read_only": 1,
-   "in_list_view": 1,
-   "precision": 2
+   "read_only": 1
   },
   {
    "fieldname": "payment_amount",
    "fieldtype": "Currency",
    "label": "Payment Amount",
-   "in_list_view": 1,
-   "precision": 2,
    "reqd": 1
   },
   {
    "fieldname": "status",
    "fieldtype": "Data",
    "label": "Status",
-   "read_only": 1,
-   "in_list_view": 1
+   "read_only": 1
   }
  ],
  "istable": 1,

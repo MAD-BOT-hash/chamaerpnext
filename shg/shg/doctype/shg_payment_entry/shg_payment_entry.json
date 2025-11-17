@@ -8,368 +8,95 @@
  "engine": "InnoDB",
  "field_order": [
   "naming_series",
-  "payment_type",
-  "party_type",
-  "party",
-  "party_name",
-  "book_advance_payments_in_separate_party_account",
-  "column_break1",
+  "member",
+  "member_name",
   "company",
-  "posting_date",
-  "paid_amount",
-  "received_amount",
-  "allocate_payment_amount",
-  "section_break_11",
-  "references",
-  "section_break_15",
-  "paid_from",
-  "paid_from_account_type",
-  "paid_from_account_currency",
-  "column_break2",
-  "paid_to",
-  "paid_to_account_type",
-  "paid_to_account_currency",
-  "section_break_16",
-  "deductions",
-  "section_break_18",
-  "reference_no",
-  "reference_date",
-  "column_break3",
-  "clearance_date",
-  "section_break_21",
+  "payment_date",
+  "mode_of_payment",
+  "reference_doctype",
+  "reference_name",
+  "amount",
+  "payment_entry",
   "remarks",
-  "section_break_23",
-  "print_heading",
-  "column_break4",
-  "letter_head",
-  "section_break_26",
-  "bank_account",
-  "column_break5",
-  "payment_order",
-  "in_blanket_order",
-  "section_break_30",
-  "status",
-  "column_break6",
-  "custom_remarks",
-  "amended_from"
+  "status"
  ],
  "fields": [
   {
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Series",
-   "no_copy": 1,
-   "oldfieldname": "naming_series",
-   "oldfieldtype": "Select",
    "options": "SHG-PE-.YYYY.-",
-   "print_hide": 1,
-   "reqd": 1,
-   "set_only_once": 1
-  },
-  {
-   "fieldname": "payment_type",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "label": "Payment Type",
-   "oldfieldname": "payment_type",
-   "oldfieldtype": "Select",
-   "options": "\nReceive\nPay\nInternal Transfer",
    "reqd": 1
   },
   {
-   "fieldname": "party_type",
+   "fieldname": "member",
    "fieldtype": "Link",
-   "label": "Party Type",
-   "oldfieldname": "party_type",
-   "oldfieldtype": "Link",
-   "options": "DocType",
+   "label": "Member",
+   "options": "SHG Member",
    "reqd": 1
   },
   {
-   "fieldname": "party",
-   "fieldtype": "Dynamic Link",
-   "in_standard_filter": 1,
-   "label": "Party",
-   "oldfieldname": "party",
-   "oldfieldtype": "Link",
-   "options": "party_type",
-   "reqd": 1,
-   "search_index": 1
-  },
-  {
-   "fieldname": "party_name",
+   "fieldname": "member_name",
    "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Party Name",
+   "label": "Member Name",
    "read_only": 1
-  },
-  {
-   "default": "0",
-   "fieldname": "book_advance_payments_in_separate_party_account",
-   "fieldtype": "Check",
-   "label": "Book Advance Payments in Separate Party Account"
-  },
-  {
-   "fieldname": "column_break1",
-   "fieldtype": "Column Break"
   },
   {
    "fieldname": "company",
    "fieldtype": "Link",
-   "in_standard_filter": 1,
    "label": "Company",
-   "oldfieldname": "company",
-   "oldfieldtype": "Link",
    "options": "Company",
    "reqd": 1
   },
   {
-   "default": "Today",
-   "fieldname": "posting_date",
+   "fieldname": "payment_date",
    "fieldtype": "Date",
-   "in_list_view": 1,
-   "label": "Posting Date",
-   "oldfieldname": "posting_date",
-   "oldfieldtype": "Date",
+   "label": "Payment Date",
+   "reqd": 1,
+   "default": "Today"
+  },
+  {
+   "fieldname": "mode_of_payment",
+   "fieldtype": "Link",
+   "label": "Mode of Payment",
+   "options": "Mode of Payment",
    "reqd": 1
   },
   {
-   "fieldname": "paid_amount",
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference Doctype",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Name",
+   "options": "reference_doctype"
+  },
+  {
+   "fieldname": "amount",
    "fieldtype": "Currency",
-   "label": "Paid Amount",
-   "oldfieldname": "paid_amount",
-   "oldfieldtype": "Currency",
-   "options": "paid_from_account_currency",
+   "label": "Amount",
    "reqd": 1
   },
   {
-   "fieldname": "received_amount",
-   "fieldtype": "Currency",
-   "label": "Received Amount",
-   "oldfieldname": "received_amount",
-   "oldfieldtype": "Currency",
-   "options": "paid_to_account_currency",
-   "reqd": 1
-  },
-  {
-   "default": "1",
-   "fieldname": "allocate_payment_amount",
-   "fieldtype": "Check",
-   "label": "Allocate Payment Amount"
-  },
-  {
-   "fieldname": "section_break_11",
-   "fieldtype": "Section Break",
-   "label": "Reference"
-  },
-  {
-   "fieldname": "references",
-   "fieldtype": "Table",
-   "label": "Payment References",
-   "oldfieldname": "entries",
-   "oldfieldtype": "Table",
-   "options": "SHG Payment Entry Reference"
-  },
-  {
-   "fieldname": "section_break_15",
-   "fieldtype": "Section Break",
-   "label": "Accounts"
-  },
-  {
-   "fieldname": "paid_from",
+   "fieldname": "payment_entry",
    "fieldtype": "Link",
-   "label": "Account Paid From",
-   "oldfieldname": "paid_from",
-   "oldfieldtype": "Link",
-   "options": "Account",
-   "reqd": 1
-  },
-  {
-   "fieldname": "paid_from_account_type",
-   "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Paid From Account Type",
+   "label": "Payment Entry",
+   "options": "Payment Entry",
    "read_only": 1
-  },
-  {
-   "fieldname": "paid_from_account_currency",
-   "fieldtype": "Link",
-   "hidden": 1,
-   "label": "Paid From Account Currency",
-   "options": "Currency",
-   "read_only": 1
-  },
-  {
-   "fieldname": "column_break2",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "paid_to",
-   "fieldtype": "Link",
-   "label": "Account Paid To",
-   "oldfieldname": "paid_to",
-   "oldfieldtype": "Link",
-   "options": "Account",
-   "reqd": 1
-  },
-  {
-   "fieldname": "paid_to_account_type",
-   "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Paid To Account Type",
-   "read_only": 1
-  },
-  {
-   "fieldname": "paid_to_account_currency",
-   "fieldtype": "Link",
-   "hidden": 1,
-   "label": "Paid To Account Currency",
-   "options": "Currency",
-   "read_only": 1
-  },
-  {
-   "fieldname": "section_break_16",
-   "fieldtype": "Section Break",
-   "label": "Deductions or Loss"
-  },
-  {
-   "fieldname": "deductions",
-   "fieldtype": "Table",
-   "label": "Tax Deduction Account",
-   "options": "Payment Entry Deduction"
-  },
-  {
-   "fieldname": "section_break_18",
-   "fieldtype": "Section Break",
-   "label": "Reference Numbers"
-  },
-  {
-   "fieldname": "reference_no",
-   "fieldtype": "Data",
-   "label": "Cheque/Reference No",
-   "oldfieldname": "cheque_no",
-   "oldfieldtype": "Data"
-  },
-  {
-   "fieldname": "reference_date",
-   "fieldtype": "Date",
-   "label": "Cheque/Reference Date",
-   "oldfieldname": "cheque_date",
-   "oldfieldtype": "Date"
-  },
-  {
-   "fieldname": "column_break3",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "clearance_date",
-   "fieldtype": "Date",
-   "label": "Clearance Date",
-   "no_copy": 1,
-   "oldfieldname": "clearance_date",
-   "oldfieldtype": "Date",
-   "read_only": 1
-  },
-  {
-   "fieldname": "section_break_21",
-   "fieldtype": "Section Break"
   },
   {
    "fieldname": "remarks",
    "fieldtype": "Text",
-   "label": "Remarks",
-   "oldfieldname": "remarks",
-   "oldfieldtype": "Text"
-  },
-  {
-   "fieldname": "section_break_23",
-   "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "print_heading",
-   "fieldtype": "Link",
-   "label": "Print Heading",
-   "no_copy": 1,
-   "oldfieldname": "print_heading",
-   "oldfieldtype": "Link",
-   "options": "Print Heading"
-  },
-  {
-   "fieldname": "column_break4",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "letter_head",
-   "fieldtype": "Link",
-   "label": "Letter Head",
-   "no_copy": 1,
-   "oldfieldname": "letter_head",
-   "oldfieldtype": "Select",
-   "options": "Letter Head"
-  },
-  {
-   "fieldname": "section_break_26",
-   "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "bank_account",
-   "fieldtype": "Link",
-   "label": "Bank Account",
-   "options": "Bank Account"
-  },
-  {
-   "fieldname": "column_break5",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "payment_order",
-   "fieldtype": "Link",
-   "label": "Payment Order",
-   "options": "Payment Order",
-   "read_only": 1
-  },
-  {
-   "fieldname": "in_blanket_order",
-   "fieldtype": "Check",
-   "hidden": 1,
-   "label": "In Blanket Order",
-   "read_only": 1
-  },
-  {
-   "fieldname": "section_break_30",
-   "fieldtype": "Section Break"
+   "label": "Remarks"
   },
   {
    "fieldname": "status",
    "fieldtype": "Select",
-   "in_standard_filter": 1,
    "label": "Status",
-   "no_copy": 1,
-   "oldfieldname": "status",
-   "oldfieldtype": "Select",
-   "options": "\nDraft\nSubmitted\nCancelled",
-   "read_only": 1
-  },
-  {
-   "fieldname": "column_break6",
-   "fieldtype": "Column Break"
-  },
-  {
-   "default": "0",
-   "fieldname": "custom_remarks",
-   "fieldtype": "Check",
-   "label": "Custom Remarks"
-  },
-  {
-   "fieldname": "amended_from",
-   "fieldtype": "Link",
-   "hidden": 1,
-   "label": "Amended From",
-   "no_copy": 1,
-   "oldfieldname": "amended_from",
-   "oldfieldtype": "Data",
-   "options": "SHG Payment Entry",
-   "print_hide": 1,
+   "options": "Draft\nSubmitted\nCancelled",
    "read_only": 1
   }
  ],
