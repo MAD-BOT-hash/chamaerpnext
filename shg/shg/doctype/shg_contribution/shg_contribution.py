@@ -61,7 +61,8 @@ class SHGContribution(Document):
                     "name": ["!=", self.name]
                 })
                 if existing:
-                    frappe.throw(_("A contribution already exists for invoice {0}").format(self.invoice_reference))
+                    frappe.logger().info(f"[SHG] Contribution validation blocked - invoice {self.invoice_reference} already used in another contribution")
+                    frappe.throw(_("A contribution already exists for invoice {0}. Only one contribution is allowed per invoice.").format(self.invoice_reference))
             except Exception:
                 # If invoice_reference field doesn't exist yet, skip this check
                 pass

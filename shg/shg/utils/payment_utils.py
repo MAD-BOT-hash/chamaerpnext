@@ -53,21 +53,34 @@ def process_bulk_payment(parent_doc_name):
 @frappe.whitelist(allow_guest=False)
 def get_unpaid_items():
     """
-    Get all unpaid items (invoices, contributions, fines) for bulk payment.
-    
-    Returns:
-        list: List of unpaid items
+    Return a unified list of unpaid/partially-paid SHG documents
+    for selection in Bulk Payment UI.
+
+    Output: list of dicts with keys:
+    - doctype
+    - name
+    - member
+    - member_name
+    - date
+    - amount
+    - outstanding
     """
     try:
         unpaid_items = []
         
         # Get unpaid SHG Contribution Invoices
         # SHG Contribution Invoice has: amount, status (NO amount_paid)
-        invoice_data = frappe.db.sql("""
+        query = """
             SELECT name, member, member_name, invoice_date AS date, amount, status
             FROM `tabSHG Contribution Invoice`
-            WHERE status IN ('Unpaid', 'Partially Paid') AND docstatus = 1
-        """, as_dict=True)
+            WHERE status IN ('Unpaid', 'Partially Paid') 
+              AND docstatus = 1
+        """
+        # Add is_closed check if column exists
+        if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+            query += " AND (is_closed IS NULL OR is_closed = 0)"
+        
+        invoice_data = frappe.db.sql(query, as_dict=True)
         
         for invoice in invoice_data:
             # For contribution invoices: if status = Partially Paid, treat outstanding = full amount
@@ -403,6 +416,9 @@ def _apply_payment_to_document(doctype, name, amount, payment_entry_name):
         
         # Update status based on payment (simplified for now)
         doc.db_set("status", "Paid")
+        
+        # Auto-close invoice after full payment
+        mark_invoice_paid_and_closed(name, payment_entry_name)
     
     elif doctype == "SHG Contribution":
         doc = frappe.get_doc(doctype, name)
@@ -445,6 +461,23 @@ def _apply_payment_to_document(doctype, name, amount, payment_entry_name):
         
         # Update status
         doc.db_set("status", "Paid")
+
+
+def mark_invoice_paid_and_closed(invoice_name, payment_entry_name=None):
+    """
+    Mark an invoice as paid and closed after full payment.
+    
+    Args:
+        invoice_name (str): Name of the SHG Contribution Invoice
+        payment_entry_name (str): Payment Entry name
+    """
+    invoice = frappe.get_doc("SHG Contribution Invoice", invoice_name)
+    invoice.db_set("status", "Paid")
+    if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+        invoice.db_set("is_closed", 1)
+    if payment_entry_name and frappe.db.has_column("SHG Contribution Invoice", "payment_reference"):
+        invoice.db_set("payment_reference", payment_entry_name)
+    frappe.logger().info(f"[SHG] Invoice {invoice_name} marked Paid & closed via {payment_entry_name}")
 
 
 def _validate_doc_exists(doctype, name):

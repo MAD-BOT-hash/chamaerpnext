@@ -2,16 +2,6 @@
 // License: MIT
 
 frappe.ui.form.on('SHG Multi Member Payment', {
-    setup: function(frm) {
-        frm.set_query('mode_of_payment', function() {
-            return {
-                filters: {
-                    'type': 'Cash'
-                }
-            };
-        });
-    },
-    
     refresh: function(frm) {
         if (frm.doc.docstatus === 0) {
             frm.add_custom_button(__('Fetch Unpaid Items'), function() {
@@ -60,7 +50,7 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
                                     <th>Member</th>
                                     <th>Date</th>
                                     <th>Amount</th>
-<th>Outstanding</th>
+                                    <th>Outstanding</th>
                                 </tr>
                             </thead>
                             <tbody id="unpaid-items-body">
@@ -94,11 +84,9 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
                 const item = unpaid_items[index];
                 const row = frm.add_child('invoices', {
                     reference_doctype: item.doctype,
-                    reference_name: item.name,
+                    invoice: item.name,
                     member: item.member,
                     member_name: item.member_name,
-                    date: item.date,
-                    amount: item.amount,
                     outstanding_amount: item.outstanding,
                     payment_amount: item.outstanding
                 });

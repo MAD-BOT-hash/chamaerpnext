@@ -1,5 +1,42 @@
 // SHG Contribution Client Script
+// Copyright (c) 2025, SHG Solutions
+// License: MIT
+
 frappe.ui.form.on('SHG Contribution', {
+    setup: function(frm) {
+        frm.set_query('invoice_reference', function() {
+            return {
+                filters: {
+                    'status': ['in', ['Unpaid', 'Partially Paid']],
+                    'docstatus': 1
+                }
+            };
+        });
+    },
+    
+    invoice_reference: function(frm) {
+        if (frm.doc.invoice_reference) {
+            // Check if another contribution already exists for this invoice
+            frappe.call({
+                method: 'frappe.client.get_list',
+                args: {
+                    doctype: 'SHG Contribution',
+                    filters: {
+                        'invoice_reference': frm.doc.invoice_reference,
+                        'docstatus': ['!=', 2],
+                        'name': ['!=', frm.doc.name]
+                    },
+                    fields: ['name']
+                },
+                callback: function(r) {
+                    if (r.message && r.message.length > 0) {
+                        frappe.msgprint(__("Warning: A contribution already exists for this invoice. Only one contribution is allowed per invoice."));
+                    }
+                }
+            });
+        }
+    },
+    
     refresh: function(frm) {
         if (frm.doc.docstatus === 1 && frm.doc.journal_entry) {
             frm.dashboard.add_indicator(__('Posted to General Ledger'), 'green');

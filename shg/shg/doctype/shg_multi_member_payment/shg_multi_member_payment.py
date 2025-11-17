@@ -36,6 +36,19 @@ class SHGMultiMemberPayment(Document):
             if not frappe.db.exists("SHG Contribution Invoice", row.invoice):
                 frappe.throw(_("Invoice {0} does not exist").format(row.invoice))
                 
+            # Check if invoice is already paid
+            status = frappe.db.get_value("SHG Contribution Invoice", row.invoice, "status")
+            if status == "Paid":
+                frappe.logger().info(f"[SHG] Blocked payment for Paid invoice {row.invoice}")
+                frappe.throw(_("Invoice {0} is already Paid and cannot be included in a new payment batch.").format(row.invoice))
+                
+            # Check if invoice is closed
+            if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+                is_closed = frappe.db.get_value("SHG Contribution Invoice", row.invoice, "is_closed")
+                if is_closed:
+                    frappe.logger().info(f"[SHG] Blocked payment for closed invoice {row.invoice}")
+                    frappe.throw(_("Invoice {0} is closed and cannot be processed again.").format(row.invoice))
+                
             outstanding = get_outstanding("SHG Contribution Invoice", row.invoice)
             if outstanding < flt(row.payment_amount):
                 frappe.throw(_("Invoice {0} has only {1} outstanding, cannot allocate {2}").format(
