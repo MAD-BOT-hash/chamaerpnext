@@ -10,8 +10,15 @@
   "company",
   "payment_date",
   "mode_of_payment",
+  "section_break_totals",
+  "total_outstanding_before",
   "total_payment_amount",
+  "total_remaining_after",
+  "total_documents_selected",
+  "payment_summary",
   "payment_entry",
+  "posted_to_gl",
+  "payment_status",
   "remarks",
   "invoices"
  ],
@@ -44,9 +51,38 @@
    "reqd": 1
   },
   {
+   "fieldname": "section_break_totals",
+   "fieldtype": "Section Break",
+   "label": "Payment Summary"
+  },
+  {
+   "fieldname": "total_outstanding_before",
+   "fieldtype": "Currency",
+   "label": "Total Outstanding Before",
+   "read_only": 1
+  },
+  {
    "fieldname": "total_payment_amount",
    "fieldtype": "Currency",
    "label": "Total Payment Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_remaining_after",
+   "fieldtype": "Currency",
+   "label": "Total Remaining After",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_documents_selected",
+   "fieldtype": "Int",
+   "label": "Total Documents Selected",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_summary",
+   "fieldtype": "Long Text",
+   "label": "Payment Summary",
    "read_only": 1
   },
   {
@@ -54,6 +90,19 @@
    "fieldtype": "Link",
    "label": "Payment Entry",
    "options": "Payment Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "posted_to_gl",
+   "fieldtype": "Check",
+   "label": "Posted to GL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_status",
+   "fieldtype": "Select",
+   "label": "Payment Status",
+   "options": "Draft\nPaid\nPartially Paid\nUnpaid",
    "read_only": 1
   },
   {

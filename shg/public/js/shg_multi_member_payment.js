@@ -4,9 +4,48 @@
 frappe.ui.form.on('SHG Multi Member Payment', {
     refresh: function(frm) {
         if (frm.doc.docstatus === 0) {
-            frm.add_custom_button(__('Fetch Unpaid Items'), function() {
+            frm.add_custom_button(__('Fetch Unpaid Invoices'), function() {
                 frappe.call({
-                    method: 'shg.shg.utils.payment_utils.get_unpaid_items',
+                    method: 'shg.shg.utils.payment_utils.get_unpaid_invoices',
+                    callback: function(r) {
+                        if (r.message && r.message.length > 0) {
+                            show_unpaid_items_dialog(frm, r.message);
+                        } else {
+                            frappe.msgprint(__('No unpaid invoices found'));
+                        }
+                    }
+                });
+            });
+            
+            frm.add_custom_button(__('Fetch Unpaid Contributions'), function() {
+                frappe.call({
+                    method: 'shg.shg.utils.payment_utils.get_unpaid_contributions',
+                    callback: function(r) {
+                        if (r.message && r.message.length > 0) {
+                            show_unpaid_items_dialog(frm, r.message);
+                        } else {
+                            frappe.msgprint(__('No unpaid contributions found'));
+                        }
+                    }
+                });
+            });
+            
+            frm.add_custom_button(__('Fetch Unpaid Fines'), function() {
+                frappe.call({
+                    method: 'shg.shg.utils.payment_utils.get_unpaid_fines',
+                    callback: function(r) {
+                        if (r.message && r.message.length > 0) {
+                            show_unpaid_items_dialog(frm, r.message);
+                        } else {
+                            frappe.msgprint(__('No unpaid fines found'));
+                        }
+                    }
+                });
+            });
+            
+            frm.add_custom_button(__('Fetch All Unpaid'), function() {
+                frappe.call({
+                    method: 'shg.shg.utils.payment_utils.get_all_unpaid',
                     callback: function(r) {
                         if (r.message && r.message.length > 0) {
                             show_unpaid_items_dialog(frm, r.message);
@@ -15,6 +54,31 @@ frappe.ui.form.on('SHG Multi Member Payment', {
                         }
                     }
                 });
+            });
+            
+            frm.add_custom_button(__('Recalculate Totals'), function() {
+                frappe.call({
+                    method: 'shg.shg.doctype.shg_multi_member_payment.shg_multi_member_payment.recalculate_totals',
+                    args: {
+                        doc: frm.doc
+                    },
+                    callback: function(r) {
+                        if (r.message) {
+                            frm.set_value('total_outstanding_before', r.message.total_outstanding_before);
+                            frm.set_value('total_payment_amount', r.message.total_payment_amount);
+                            frm.set_value('total_remaining_after', r.message.total_remaining_after);
+                            frm.set_value('total_documents_selected', r.message.total_documents_selected);
+                            frm.set_value('payment_summary', r.message.payment_summary);
+                            frm.refresh_fields();
+                        }
+                    }
+                });
+            });
+        }
+        
+        if (frm.doc.docstatus === 1 && frm.doc.payment_entry) {
+            frm.add_custom_button(__('Open Linked Payment Entry'), function() {
+                frappe.set_route('Form', 'Payment Entry', frm.doc.payment_entry);
             });
         }
     }
@@ -29,7 +93,10 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
         item.member_name || item.member,
         item.date,
         item.amount,
-        item.outstanding
+        item.outstanding,
+        item.status,
+        item.is_closed ? 'Yes' : 'No',
+        item.posted_to_gl ? 'Yes' : 'No'
     ]);
     
     // Create dialog
@@ -51,20 +118,31 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
                                     <th>Date</th>
                                     <th>Amount</th>
                                     <th>Outstanding</th>
+                                    <th>Status</th>
+                                    <th>Closed</th>
+                                    <th>Posted to GL</th>
                                 </tr>
                             </thead>
                             <tbody id="unpaid-items-body">
-                                ${data.map((row, index) => `
-                                    <tr>
-                                        <td><input type="checkbox" class="item-checkbox" data-index="${index}"></td>
-                                        <td>${row[1]}</td>
-                                        <td>${row[2]}</td>
-                                        <td>${row[3]}</td>
-                                        <td>${row[4]}</td>
-                                        <td>${row[5]}</td>
-                                        <td>${row[6]}</td>
-                                    </tr>
-                                `).join('')}
+                                ${data.map((row, index) => {
+                                    const isClosedOrPaid = row[8] === 'Yes' || row[7] === 'Paid';
+                                    const rowClass = isClosedOrPaid ? 'style="background-color: #ffe6e6;"' : '';
+                                    const disabledAttr = isClosedOrPaid ? 'disabled' : '';
+                                    return `
+                                        <tr ${rowClass}>
+                                            <td><input type="checkbox" class="item-checkbox" data-index="${index}" ${disabledAttr}></td>
+                                            <td>${row[1]}</td>
+                                            <td>${row[2]}</td>
+                                            <td>${row[3]}</td>
+                                            <td>${row[4]}</td>
+                                            <td>${row[5]}</td>
+                                            <td>${row[6]}</td>
+                                            <td>${row[7]}</td>
+                                            <td>${row[8]}</td>
+                                            <td>${row[9]}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -84,15 +162,39 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
                 const item = unpaid_items[index];
                 const row = frm.add_child('invoices', {
                     reference_doctype: item.doctype,
-                    invoice: item.name,
+                    reference_name: item.name,
                     member: item.member,
                     member_name: item.member_name,
+                    date: item.date,
+                    amount: item.amount,
                     outstanding_amount: item.outstanding,
-                    payment_amount: item.outstanding
+                    payment_amount: item.outstanding,
+                    status: item.status,
+                    is_closed: item.is_closed,
+                    posted_to_gl: item.posted_to_gl
                 });
             });
             
             frm.refresh_field('invoices');
+            
+            // Recalculate totals
+            frappe.call({
+                method: 'shg.shg.doctype.shg_multi_member_payment.shg_multi_member_payment.recalculate_totals',
+                args: {
+                    doc: frm.doc
+                },
+                callback: function(r) {
+                    if (r.message) {
+                        frm.set_value('total_outstanding_before', r.message.total_outstanding_before);
+                        frm.set_value('total_payment_amount', r.message.total_payment_amount);
+                        frm.set_value('total_remaining_after', r.message.total_remaining_after);
+                        frm.set_value('total_documents_selected', r.message.total_documents_selected);
+                        frm.set_value('payment_summary', r.message.payment_summary);
+                        frm.refresh_fields();
+                    }
+                }
+            });
+            
             dialog.hide();
         }
     });
@@ -100,7 +202,7 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
     // Handle select all checkbox
     dialog.$wrapper.on('change', '#select-all-items', function() {
         const checked = $(this).is(':checked');
-        dialog.$wrapper.find('.item-checkbox').prop('checked', checked);
+        dialog.$wrapper.find('.item-checkbox').not(':disabled').prop('checked', checked);
     });
     
     // Show dialog
@@ -144,5 +246,21 @@ frappe.ui.form.on('SHG Multi Member Payment Invoice', {
             total += row.payment_amount || 0;
         });
         frm.set_value('total_payment_amount', total);
+        
+        // Recalculate totals
+        frappe.call({
+            method: 'shg.shg.doctype.shg_multi_member_payment.shg_multi_member_payment.recalculate_totals',
+            args: {
+                doc: frm.doc
+            },
+            callback: function(r) {
+                if (r.message) {
+                    frm.set_value('total_outstanding_before', r.message.total_outstanding_before);
+                    frm.set_value('total_remaining_after', r.message.total_remaining_after);
+                    frm.set_value('payment_summary', r.message.payment_summary);
+                    frm.refresh_fields();
+                }
+            }
+        });
     }
 });

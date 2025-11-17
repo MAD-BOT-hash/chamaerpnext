@@ -13,7 +13,10 @@
   "amount",
   "outstanding_amount",
   "payment_amount",
-  "status"
+  "status",
+  "is_closed",
+  "posted_to_gl",
+  "remarks"
  ],
  "fields": [
   {
@@ -72,6 +75,23 @@
    "fieldtype": "Data",
    "label": "Status",
    "read_only": 1
+  },
+  {
+   "fieldname": "is_closed",
+   "fieldtype": "Check",
+   "label": "Is Closed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "posted_to_gl",
+   "fieldtype": "Check",
+   "label": "Posted to GL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Text",
+   "label": "Remarks"
   }
  ],
  "istable": 1,

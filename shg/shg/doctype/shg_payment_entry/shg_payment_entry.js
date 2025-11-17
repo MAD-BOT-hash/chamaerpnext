@@ -48,6 +48,12 @@ frappe.ui.form.on('SHG Payment Entry', {
                 }
             });
         }
+        
+        if (frm.doc.docstatus === 1 && frm.doc.payment_entry) {
+            frm.add_custom_button(__('Open Linked Payment Entry'), function() {
+                frappe.set_route('Form', 'Payment Entry', frm.doc.payment_entry);
+            });
+        }
     },
     
     member: function(frm) {
@@ -62,6 +68,24 @@ frappe.ui.form.on('SHG Payment Entry', {
     
     reference_doctype: function(frm) {
         frm.set_value('reference_name', '');
+    },
+    
+    reference_name: function(frm) {
+        if (frm.doc.reference_doctype && frm.doc.reference_name) {
+            // Get outstanding amount when reference changes
+            frappe.call({
+                method: 'shg.shg.utils.payment_utils.get_outstanding',
+                args: {
+                    doctype: frm.doc.reference_doctype,
+                    name: frm.doc.reference_name
+                },
+                callback: function(r) {
+                    if (r.message) {
+                        frm.set_value('outstanding_amount', r.message);
+                    }
+                }
+            });
+        }
     }
 });
 

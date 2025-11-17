@@ -16,7 +16,13 @@
   "reference_doctype",
   "reference_name",
   "amount",
+  "outstanding_amount",
   "payment_entry",
+  "linked_payment_entry",
+  "payment_status",
+  "is_closed",
+  "posted_to_gl",
+  "linked_gl_entries",
   "remarks",
   "status"
  ],
@@ -81,10 +87,48 @@
    "reqd": 1
   },
   {
+   "fieldname": "outstanding_amount",
+   "fieldtype": "Currency",
+   "label": "Outstanding Amount",
+   "read_only": 1
+  },
+  {
    "fieldname": "payment_entry",
    "fieldtype": "Link",
    "label": "Payment Entry",
    "options": "Payment Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "linked_payment_entry",
+   "fieldtype": "Link",
+   "label": "Linked Payment Entry",
+   "options": "Payment Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_status",
+   "fieldtype": "Select",
+   "label": "Payment Status",
+   "options": "Draft\nPaid\nPartially Paid\nUnpaid\nCancelled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "is_closed",
+   "fieldtype": "Check",
+   "label": "Is Closed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "posted_to_gl",
+   "fieldtype": "Check",
+   "label": "Posted to GL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "linked_gl_entries",
+   "fieldtype": "Text",
+   "label": "Linked GL Entries",
    "read_only": 1
   },
   {

@@ -23,50 +23,150 @@ class SHGMultiMemberPayment(Document):
         if flt(self.total_payment_amount) <= 0:
             frappe.throw(_("Total payment amount must be greater than zero"))
             
-        # Validate no duplicate invoice rows
-        invoice_names = []
+        # Run all validation checks
+        self.validate_no_closed_documents()
+        self.validate_no_fully_paid_documents()
+        self.validate_no_duplicate_across_batches()
+        self.validate_payment_amount_vs_outstanding()
+        self.validate_totals()
+    
+    def validate_no_closed_documents(self):
+        """Validate that no closed documents are included"""
         for row in self.invoices:
-            if row.invoice in invoice_names:
-                frappe.throw(_("Duplicate invoice {0} found in rows").format(row.invoice))
-            invoice_names.append(row.invoice)
-            
-        # Validate referenced docs exist and have outstanding amounts
+            if row.reference_doctype and row.reference_name:
+                # Check if document is closed
+                if frappe.db.has_column(row.reference_doctype, "is_closed"):
+                    is_closed = frappe.db.get_value(row.reference_doctype, row.reference_name, "is_closed")
+                    if is_closed:
+                        frappe.logger().info(f"[SHG] Blocked payment for closed document {row.reference_name}")
+                        frappe.throw(_("Document {0} is closed and cannot be processed again.").format(row.reference_name))
+    
+    def validate_no_fully_paid_documents(self):
+        """Validate that no fully paid documents are included"""
+        for row in self.invoices:
+            if row.reference_doctype and row.reference_name:
+                # Check if document is fully paid
+                status = frappe.db.get_value(row.reference_doctype, row.reference_name, "status")
+                if status == "Paid":
+                    frappe.logger().info(f"[SHG] Blocked payment for Paid document {row.reference_name}")
+                    frappe.throw(_("Document {0} is already Paid and cannot be included in a new payment batch.").format(row.reference_name))
+    
+    def validate_no_duplicate_across_batches(self):
+        """Validate that documents are not processed in another submitted payment batch"""
+        for row in self.invoices:
+            if row.reference_doctype and row.reference_name:
+                # Check if document is already processed in another submitted payment batch
+                existing_payments = frappe.db.sql("""
+                    SELECT parent
+                    FROM `tabSHG Multi Member Payment Invoice`
+                    WHERE reference_doctype = %s AND reference_name = %s AND parent != %s
+                """, (row.reference_doctype, row.reference_name, self.name))
+                
+                for payment in existing_payments:
+                    payment_docstatus = frappe.db.get_value("SHG Multi Member Payment", payment[0], "docstatus")
+                    if payment_docstatus == 1:  # Submitted
+                        frappe.logger().info(f"[SHG] Blocked payment for document {row.reference_name} already in payment {payment[0]}")
+                        frappe.throw(_("Document {0} is already processed in another submitted payment batch {1}.").format(row.reference_name, payment[0]))
+    
+    def validate_payment_amount_vs_outstanding(self):
+        """Validate that payment amounts do not exceed outstanding amounts"""
         from shg.shg.utils.payment_utils import get_outstanding
         for row in self.invoices:
-            if not frappe.db.exists("SHG Contribution Invoice", row.invoice):
-                frappe.throw(_("Invoice {0} does not exist").format(row.invoice))
-                
-            # Check if invoice is already paid
-            status = frappe.db.get_value("SHG Contribution Invoice", row.invoice, "status")
-            if status == "Paid":
-                frappe.logger().info(f"[SHG] Blocked payment for Paid invoice {row.invoice}")
-                frappe.throw(_("Invoice {0} is already Paid and cannot be included in a new payment batch.").format(row.invoice))
-                
-            # Check if invoice is closed
-            if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
-                is_closed = frappe.db.get_value("SHG Contribution Invoice", row.invoice, "is_closed")
-                if is_closed:
-                    frappe.logger().info(f"[SHG] Blocked payment for closed invoice {row.invoice}")
-                    frappe.throw(_("Invoice {0} is closed and cannot be processed again.").format(row.invoice))
-                
-            outstanding = get_outstanding("SHG Contribution Invoice", row.invoice)
-            if outstanding < flt(row.payment_amount):
-                frappe.throw(_("Invoice {0} has only {1} outstanding, cannot allocate {2}").format(
-                    row.invoice, outstanding, row.payment_amount))
+            if row.reference_doctype and row.reference_name and row.payment_amount:
+                outstanding = get_outstanding(row.reference_doctype, row.reference_name)
+                if flt(row.payment_amount) > outstanding:
+                    frappe.throw(_("Document {0} has only {1} outstanding, cannot allocate {2}").format(
+                        row.reference_name, outstanding, row.payment_amount))
+    
+    def validate_totals(self):
+        """Validate and compute totals"""
+        total_outstanding = 0.0
+        total_payment = 0.0
+        total_documents = 0
+        
+        from shg.shg.utils.payment_utils import get_outstanding
+        for row in self.invoices:
+            if row.reference_doctype and row.reference_name:
+                outstanding = get_outstanding(row.reference_doctype, row.reference_name)
+                total_outstanding += outstanding
+                total_payment += flt(row.payment_amount or 0)
+                total_documents += 1
+        
+        self.total_outstanding_before = total_outstanding
+        self.total_payment_amount = total_payment
+        self.total_remaining_after = total_outstanding - total_payment
+        self.total_documents_selected = total_documents
+        
+        # Generate payment summary
+        self.payment_summary = _("""{0} documents selected
+Total outstanding: {1}
+Paid now: {2}
+Remaining after payment: {3}""").format(
+            total_documents,
+            self.total_outstanding_before,
+            self.total_payment_amount,
+            self.total_remaining_after
+        )
     
     def on_submit(self):
         """Process bulk payment"""
         from shg.shg.utils.payment_utils import process_bulk_payment
         process_bulk_payment(self.name)
+        
+        # Update display fields
+        self.update_display_fields()
     
     def on_cancel(self):
         """Cancel Payment Entry & reverse statuses"""
         # Note: In a real implementation, you would need to implement cancel functionality
         # For now, we'll just update the status
-        self.db_set("status", "Cancelled")
+        self.db_set("payment_status", "Cancelled")
     
     @frappe.whitelist()
     def fetch_unpaid_items(self):
         """Fetch unpaid items for bulk payment"""
-        from shg.shg.utils.payment_utils import get_unpaid_items
-        return get_unpaid_items()
+        from shg.shg.utils.payment_utils import get_all_unpaid
+        return get_all_unpaid()
+    
+    @frappe.whitelist()
+    def fetch_unpaid_invoices(self):
+        """Fetch unpaid contribution invoices"""
+        from shg.shg.utils.payment_utils import get_unpaid_invoices
+        return get_unpaid_invoices()
+    
+    @frappe.whitelist()
+    def fetch_unpaid_contributions(self):
+        """Fetch unpaid contributions"""
+        from shg.shg.utils.payment_utils import get_unpaid_contributions
+        return get_unpaid_contributions()
+    
+    @frappe.whitelist()
+    def fetch_unpaid_fines(self):
+        """Fetch unpaid meeting fines"""
+        from shg.shg.utils.payment_utils import get_unpaid_fines
+        return get_unpaid_fines()
+    
+    @frappe.whitelist()
+    def recalculate_totals(self):
+        """Recalculate totals"""
+        self.validate_totals()
+        return {
+            "total_outstanding_before": self.total_outstanding_before,
+            "total_payment_amount": self.total_payment_amount,
+            "total_remaining_after": self.total_remaining_after,
+            "total_documents_selected": self.total_documents_selected,
+            "payment_summary": self.payment_summary
+        }
+    
+    def update_display_fields(self):
+        """Update display fields after submission"""
+        # Set payment status
+        if self.total_remaining_after <= 0:
+            self.db_set("payment_status", "Paid")
+        elif self.total_payment_amount > 0:
+            self.db_set("payment_status", "Partially Paid")
+        else:
+            self.db_set("payment_status", "Unpaid")
+        
+        # Set posted to GL flag (simplified)
+        self.db_set("posted_to_gl", 1 if self.payment_entry else 0)
