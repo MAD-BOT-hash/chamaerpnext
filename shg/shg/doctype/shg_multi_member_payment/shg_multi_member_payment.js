@@ -19,7 +19,7 @@ frappe.ui.form.on('SHG Multi Member Payment', {
                 (frm.doc.invoices || []).forEach(function(row) {
                     if (row.reference_doctype && row.reference_name) {
                         frappe.call({
-                            method: 'shg.shg.utils.payment_utils.get_outstanding',
+                            method: "shg.shg.utils.payment_utils.get_outstanding",
                             args: {
                                 doctype: row.reference_doctype,
                                 name: row.reference_name
@@ -52,7 +52,7 @@ frappe.ui.form.on('SHG Multi Member Payment Invoice', {
         var row = frappe.get_doc(cdt, cdn);
         if (row.reference_doctype && row.reference_name) {
             frappe.call({
-                method: 'shg.shg.utils.payment_utils.get_outstanding',
+                method: "shg.shg.utils.payment_utils.get_outstanding",
                 args: {
                     doctype: row.reference_doctype,
                     name: row.reference_name

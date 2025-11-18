@@ -11,7 +11,7 @@ frappe.ui.form.on('SHG Multi Member Payment', {
                 }
                 
                 frappe.call({
-                    method: 'shg.shg.utils.payment_utils.get_unpaid_invoices',
+                    method: "shg.shg.utils.payment_utils.get_unpaid_invoices",
                     args: { member: frm.doc.member },
                     callback: function(r) {
                         if (r.message && r.message.length > 0) {
@@ -30,7 +30,7 @@ frappe.ui.form.on('SHG Multi Member Payment', {
                 }
                 
                 frappe.call({
-                    method: 'shg.shg.utils.payment_utils.get_unpaid_contributions',
+                    method: "shg.shg.utils.payment_utils.get_unpaid_contributions",
                     args: { member: frm.doc.member },
                     callback: function(r) {
                         if (r.message && r.message.length > 0) {
@@ -49,7 +49,7 @@ frappe.ui.form.on('SHG Multi Member Payment', {
                 }
                 
                 frappe.call({
-                    method: 'shg.shg.utils.payment_utils.get_unpaid_fines',
+                    method: "shg.shg.utils.payment_utils.get_unpaid_fines",
                     args: { member: frm.doc.member },
                     callback: function(r) {
                         if (r.message && r.message.length > 0) {
@@ -68,7 +68,7 @@ frappe.ui.form.on('SHG Multi Member Payment', {
                 }
                 
                 frappe.call({
-                    method: 'shg.shg.utils.payment_utils.get_all_unpaid',
+                    method: "shg.shg.utils.payment_utils.get_all_unpaid",
                     args: { member: frm.doc.member },
                     callback: function(r) {
                         if (r.message && r.message.length > 0) {
@@ -250,7 +250,7 @@ frappe.ui.form.on('SHG Multi Member Payment Invoice', {
         var row = frappe.get_doc(cdt, cdn);
         if (row.reference_doctype && row.reference_name) {
             frappe.call({
-                method: 'shg.shg.utils.payment_utils.get_outstanding',
+                method: "shg.shg.utils.payment_utils.get_outstanding",
                 args: {
                     doctype: row.reference_doctype,
                     name: row.reference_name

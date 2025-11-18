@@ -6,7 +6,6 @@
   "editable_grid": 1,
   "autoname": "hash",
   "fields": [
-
     {
       "fieldname": "reference_doctype",
       "label": "Reference Doctype",
@@ -23,7 +22,6 @@
       "reqd": 1,
       "in_list_view": 1
     },
-
     {
       "fieldname": "member",
       "label": "Member",
@@ -38,7 +36,6 @@
       "fieldtype": "Data",
       "read_only": 1
     },
-
     {
       "fieldname": "date",
       "label": "Document Date",
@@ -52,7 +49,6 @@
       "fieldtype": "Currency",
       "read_only": 1
     },
-
     {
       "fieldname": "outstanding_amount",
       "label": "Outstanding Amount",
@@ -67,7 +63,6 @@
       "reqd": 1,
       "in_list_view": 1
     },
-
     {
       "fieldname": "status",
       "label": "Status",
@@ -86,14 +81,12 @@
       "fieldtype": "Check",
       "read_only": 1
     },
-
     {
       "fieldname": "remarks",
       "label": "Remarks",
       "fieldtype": "Small Text"
     }
   ],
-
   "engine": "InnoDB",
   "track_changes": 1,
   "permissions": [

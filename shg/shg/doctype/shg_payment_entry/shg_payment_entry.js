@@ -33,7 +33,7 @@ frappe.ui.form.on('SHG Payment Entry', {
             frm.add_custom_button(__('Get Outstanding'), function() {
                 if (frm.doc.reference_doctype && frm.doc.reference_name) {
                     frappe.call({
-                        method: 'shg.shg.utils.payment_utils.get_outstanding',
+                        method: "shg.shg.utils.payment_utils.get_outstanding",
                         args: {
                             doctype: frm.doc.reference_doctype,
                             name: frm.doc.reference_name
@@ -74,7 +74,7 @@ frappe.ui.form.on('SHG Payment Entry', {
         if (frm.doc.reference_doctype && frm.doc.reference_name) {
             // Get outstanding amount when reference changes
             frappe.call({
-                method: 'shg.shg.utils.payment_utils.get_outstanding',
+                method: "shg.shg.utils.payment_utils.get_outstanding",
                 args: {
                     doctype: frm.doc.reference_doctype,
                     name: frm.doc.reference_name
