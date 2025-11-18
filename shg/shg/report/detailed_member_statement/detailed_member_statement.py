@@ -15,14 +15,13 @@ def execute(filters=None):
 
 def get_columns():
     return [
-        {"label": _("Date"), "fieldname": "date", "fieldtype": "Date", "width": 120},
-        {"label": _("Reference Type"), "fieldname": "reference_type", "fieldtype": "Data", "width": 160},
-        {"label": _("Reference Name"), "fieldname": "reference_name", "fieldtype": "Data", "width": 150},
-        {"label": _("Document"), "fieldname": "document_link", "fieldtype": "Dynamic Link", "options": "reference_type", "width": 200},
-        {"label": _("Description"), "fieldname": "description", "fieldtype": "Data", "width": 300},
-        {"label": _("Debit (KES)"), "fieldname": "debit", "fieldtype": "Currency", "width": 120},
-        {"label": _("Credit (KES)"), "fieldname": "credit", "fieldtype": "Currency", "width": 120},
-        {"label": _("Running Balance (KES)"), "fieldname": "balance", "fieldtype": "Currency", "width": 150},
+        {"label": "Date", "fieldname": "date", "fieldtype": "Date", "width": 120},
+        {"label": "DocType", "fieldname": "document_doctype", "fieldtype": "Data", "width": 150},
+        {"label": "Document", "fieldname": "document_link", "fieldtype": "Link", "options": "document_doctype", "width": 150},
+        {"label": "Description", "fieldname": "description", "fieldtype": "Data", "width": 300},
+        {"label": "Debit (KES)", "fieldname": "debit", "fieldtype": "Currency", "width": 120},
+        {"label": "Credit (KES)", "fieldname": "credit", "fieldtype": "Currency", "width": 120},
+        {"label": "Running Balance (KES)", "fieldname": "balance", "fieldtype": "Currency", "width": 150},
     ]
 
 
@@ -54,8 +53,7 @@ def get_data(filters):
     query = f"""
         SELECT 
             t.date,
-            t.reference_type,
-            t.reference_name,
+            t.document_doctype,
             t.document_link,
             t.description,
             t.debit,
@@ -63,8 +61,7 @@ def get_data(filters):
         FROM (
             SELECT
                 c.contribution_date AS date,
-                'SHG Contribution' AS reference_type,
-                c.name AS reference_name,
+                'SHG Contribution' AS document_doctype,
                 c.name AS document_link,
                 CONCAT('Contribution - ', COALESCE(ct.contribution_type_name, 'Regular')) AS description,
                 0 AS debit,
@@ -77,8 +74,7 @@ def get_data(filters):
 
             SELECT
                 i.invoice_date AS date,
-                'SHG Contribution Invoice' AS reference_type,
-                i.name AS reference_name,
+                'SHG Contribution Invoice' AS document_doctype,
                 i.name AS document_link,
                 'Contribution Invoice' AS description,
                 0 AS debit,
@@ -90,8 +86,7 @@ def get_data(filters):
 
             SELECT
                 f.fine_date AS date,
-                'SHG Meeting Fine' AS reference_type,
-                f.name AS reference_name,
+                'SHG Meeting Fine' AS document_doctype,
                 f.name AS document_link,
                 CONCAT('Fine - ', f.fine_reason) AS description,
                 0 AS debit,
@@ -103,8 +98,7 @@ def get_data(filters):
 
             SELECT
                 l.disbursement_date AS date,
-                'SHG Loan' AS reference_type,
-                l.name AS reference_name,
+                'SHG Loan' AS document_doctype,
                 l.name AS document_link,
                 CONCAT('Loan Disbursement - ', l.name) AS description,
                 l.loan_amount AS debit,
@@ -116,8 +110,7 @@ def get_data(filters):
 
             SELECT
                 r.repayment_date AS date,
-                'SHG Loan Repayment' AS reference_type,
-                r.name AS reference_name,
+                'SHG Loan Repayment' AS document_doctype,
                 r.name AS document_link,
                 CONCAT('Loan Repayment - ', r.loan) AS description,
                 0 AS debit,
@@ -129,8 +122,7 @@ def get_data(filters):
 
             SELECT
                 pe.payment_date AS date,
-                'SHG Payment Entry' AS reference_type,
-                pe.name AS reference_name,
+                'SHG Payment Entry' AS document_doctype,
                 pe.name AS document_link,
                 'Payment Received' AS description,
                 0 AS debit,
@@ -139,7 +131,7 @@ def get_data(filters):
             WHERE pe.member = %(member)s AND pe.docstatus = 1
         ) AS t
         WHERE 1=1 {date_filter}
-        ORDER BY t.date, t.reference_type, t.reference_name
+        ORDER BY t.date, t.document_doctype, t.document_link
     """
 
     rows = frappe.db.sql(query, params, as_dict=True)
