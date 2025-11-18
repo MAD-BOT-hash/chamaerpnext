@@ -522,7 +522,7 @@ def _process_bulk_payment(parent_doc):
         pe_name = _create_payment_entry_for_shg(
             company=parent_doc.company,
             mode_of_payment=parent_doc.mode_of_payment,
-            member=None,  # For bulk payments, we don't set a specific member
+            member=parent_doc.member,  # Use the member from the parent document
             posting_date=parent_doc.payment_date,
             paid_amount=total_allocated,
             received_amount=total_allocated,
@@ -600,12 +600,13 @@ def _create_payment_entry_for_shg(company, mode_of_payment, member, posting_date
     pe.paid_amount = flt(paid_amount)
     pe.received_amount = flt(received_amount)
     
-    # Add party info - for bulk payments, we still need to set party_type
+    # Add party info - for bulk payments, we need to set party_type and party
     if member:
         pe.party_type = "SHG Member"
         pe.party = member
     else:
-        # For bulk payments, we don't set party_type or party since it's a bulk payment
+        # For bulk payments with no specific member, we still need to set party_type
+        # But we don't set a specific party since it's a bulk payment
         # This avoids the "Party is mandatory" error in ERPNext
         pass
     
