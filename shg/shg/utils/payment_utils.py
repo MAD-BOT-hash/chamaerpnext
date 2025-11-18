@@ -170,7 +170,7 @@ def _get_unpaid_records(doctype):
                         "member_name": invoice.member_name,
                         "date": invoice.date,
                         "amount": flt(invoice.amount),
-                        "outstanding": outstanding,
+                        "outstanding_amount": outstanding,
                         "status": invoice.status,
                         "is_closed": is_closed,
                         "posted_to_gl": posted_to_gl
@@ -204,7 +204,7 @@ def _get_unpaid_records(doctype):
                         "member_name": contribution.member_name,
                         "date": contribution.date,
                         "amount": flt(contribution.expected_amount or contribution.amount),
-                        "outstanding": outstanding,
+                        "outstanding_amount": outstanding,
                         "status": contribution.status,
                         "is_closed": is_closed,
                         "posted_to_gl": posted_to_gl
@@ -242,7 +242,7 @@ def _get_unpaid_records(doctype):
                         "member_name": fine.member_name,
                         "date": meeting_date,
                         "amount": flt(fine.fine_amount),
-                        "outstanding": outstanding,
+                        "outstanding_amount": outstanding,
                         "status": fine.status,
                         "is_closed": is_closed,
                         "posted_to_gl": posted_to_gl
@@ -304,7 +304,7 @@ def _get_unpaid_records_for_member(doctype, member):
                         "member_name": invoice.member_name,
                         "date": invoice.date,
                         "amount": flt(invoice.amount),
-                        "outstanding": outstanding,
+                        "outstanding_amount": outstanding,
                         "status": invoice.status,
                         "is_closed": is_closed,
                         "posted_to_gl": posted_to_gl
@@ -339,7 +339,7 @@ def _get_unpaid_records_for_member(doctype, member):
                         "member_name": contribution.member_name,
                         "date": contribution.date,
                         "amount": flt(contribution.expected_amount or contribution.amount),
-                        "outstanding": outstanding,
+                        "outstanding_amount": outstanding,
                         "status": contribution.status,
                         "is_closed": is_closed,
                         "posted_to_gl": posted_to_gl
@@ -373,7 +373,7 @@ def _get_unpaid_records_for_member(doctype, member):
                         "member_name": fine.member_name,
                         "date": fine.fine_date,
                         "amount": flt(fine.fine_amount),
-                        "outstanding": outstanding,
+                        "outstanding_amount": outstanding,
                         "status": fine.status,
                         "is_closed": is_closed,
                         "posted_to_gl": posted_to_gl
