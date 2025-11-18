@@ -5,12 +5,27 @@ def get_or_create_member_receivable(member_id, company):
     if not member_id:
         frappe.throw("Member ID is required to get or create receivable account.")
 
-    # --- Handle case when company is None ---
+    # --- Handle case when company is None with proper fallbacks ---
     if not company:
-        # Try to get company from SHG Settings as fallback
+        # Try to get company from SHG Settings
         company = frappe.db.get_single_value("SHG Settings", "company")
-        if not company:
-            frappe.throw("Company is required but could not be resolved from SHG Settings.")
+        
+    if not company:
+        # Try to get company from user defaults
+        company = frappe.defaults.get_user_default("Company")
+        
+    if not company:
+        # Try to get default company from Global Defaults
+        company = frappe.db.get_single_value("Global Defaults", "default_company")
+        
+    if not company:
+        # Get first available company
+        companies = frappe.get_all("Company", limit=1)
+        if companies:
+            company = companies[0].name
+            
+    if not company:
+        frappe.throw("Company is required but could not be determined. Please set a company in SHG Settings or Global Defaults.")
 
     # --- Get company abbreviation ---
     abbr = frappe.db.get_value("Company", company, "abbr")
@@ -30,18 +45,19 @@ def get_or_create_member_receivable(member_id, company):
     account_name = f"{member_name.strip().upper()} - {abbr}"
 
     # --- If subaccount missing, create it ---
-    if not frappe.db.exists("Account", account_name):
-        acc = frappe.get_doc({
+    if not frappe.db.exists("Account", {"account_name": account_name, "company": company}):
+        child = frappe.get_doc({
             "doctype": "Account",
-            "account_name": member_name.strip().upper(),
+            "account_name": account_name,
             "parent_account": parent_account,
             "company": company,
-            "is_group": 0,
             "account_type": "Receivable",
+            "is_group": 0,
             "root_type": "Asset",
+            "report_type": "Balance Sheet"
         })
-        acc.insert(ignore_permissions=True)
-        frappe.db.commit()
+        child.insert(ignore_permissions=True)
+        frappe.msgprint(f"✅ Created subaccount {account_name} under {parent_account}")
+        return child.name
 
-    # --- ✅ Always return the child account ---
-    return account_name
+    return frappe.db.get_value("Account", {"account_name": account_name, "company": company}, "name")

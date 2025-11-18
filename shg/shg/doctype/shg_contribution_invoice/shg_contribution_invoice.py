@@ -716,11 +716,32 @@ def mark_overdue_invoices():
 
 def get_or_create_member_account(member_id, company):
     """
-    Ensure each SHG Member has a personal ledger account under 'SHG Members - [Company Abbr]'.
+    Ensure each SHG Member has a personal ledger account under 'SHG Members - [Company Abbr]'。
     Auto-creates the parent and child accounts if missing.
     """
 
-    # --- Get company abbreviation ---
+    # --- Get company abbreviation with proper fallbacks ---
+    if not company:
+        # Try to get company from SHG Settings
+        company = frappe.db.get_single_value("SHG Settings", "company")
+        
+    if not company:
+        # Try to get company from user defaults
+        company = frappe.defaults.get_user_default("Company")
+        
+    if not company:
+        # Try to get default company from Global Defaults
+        company = frappe.db.get_single_value("Global Defaults", "default_company")
+        
+    if not company:
+        # Get first available company
+        companies = frappe.get_all("Company", limit=1)
+        if companies:
+            company = companies[0].name
+            
+    if not company:
+        frappe.throw("Company is required but could not be determined. Please set a company in SHG Settings or Global Defaults.")
+        
     company_abbr = frappe.db.get_value("Company", company, "abbr")
     if not company_abbr:
         frappe.throw(f"Company abbreviation not found for {company}")

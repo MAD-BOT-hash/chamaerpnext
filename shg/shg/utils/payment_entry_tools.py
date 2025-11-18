@@ -68,6 +68,28 @@ def auto_create_payment_entry(repayment_doc):
 
 def get_or_create_member_receivable(member, company):
     """Get or create member receivable account."""
+    # --- Get company abbreviation with proper fallbacks ---
+    if not company:
+        # Try to get company from SHG Settings
+        company = frappe.db.get_single_value("SHG Settings", "company")
+        
+    if not company:
+        # Try to get company from user defaults
+        company = frappe.defaults.get_user_default("Company")
+        
+    if not company:
+        # Try to get default company from Global Defaults
+        company = frappe.db.get_single_value("Global Defaults", "default_company")
+        
+    if not company:
+        # Get first available company
+        companies = frappe.get_all("Company", limit=1)
+        if companies:
+            company = companies[0].name
+            
+    if not company:
+        frappe.throw("Company is required but could not be determined. Please set a company in SHG Settings or Global Defaults.")
+    
     # Try to get existing member receivable account
     account_name = f"{member} - Receivable"
     account = frappe.db.get_value("Account", 
