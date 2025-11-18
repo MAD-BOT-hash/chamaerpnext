@@ -101,10 +101,12 @@ def create_contribution_payment_entry(contribution_doc):
     Returns:
         Payment Entry document
     """
-    # Get company
-    company = frappe.get_value("Global Defaults", None, "default_company")
+    # Get company from document with fallback to SHG Settings
+    company = getattr(contribution_doc, "company", None)
     if not company:
-        company = contribution_doc.company
+        company = frappe.db.get_single_value("SHG Settings", "company")
+    if not company:
+        company = frappe.get_value("Global Defaults", None, "default_company")
     
     # Get accounts from SHG Settings for ERPNext 15 compliance
     settings = frappe.get_single("SHG Settings")
@@ -195,10 +197,12 @@ def create_contribution_journal_entry(contribution_doc):
     Returns:
         Journal Entry document
     """
-    # Get company
-    company = frappe.get_value("Global Defaults", None, "default_company")
+    # Get company from document with fallback to SHG Settings
+    company = getattr(contribution_doc, "company", None)
     if not company:
-        company = contribution_doc.company
+        company = frappe.db.get_single_value("SHG Settings", "company")
+    if not company:
+        company = frappe.get_value("Global Defaults", None, "default_company")
     
     # Get accounts from SHG Settings for ERPNext 15 compliance
     settings = frappe.get_single("SHG Settings")
@@ -294,10 +298,12 @@ def create_loan_repayment_payment_entry(repayment_doc):
     Returns:
         Payment Entry document
     """
-    # Get company
-    company = frappe.get_value("Global Defaults", None, "default_company")
+    # Get company from document with fallback to SHG Settings
+    company = getattr(repayment_doc, "company", None)
     if not company:
-        company = repayment_doc.company
+        company = frappe.db.get_single_value("SHG Settings", "company")
+    if not company:
+        company = frappe.get_value("Global Defaults", None, "default_company")
     
     # Get accounts
     from shg.shg.utils.account_utils import get_or_create_member_account
@@ -379,10 +385,12 @@ def create_meeting_fine_payment_entry(fine_doc):
     Returns:
         Payment Entry document
     """
-    # Get company
-    company = frappe.get_value("Global Defaults", None, "default_company")
+    # Get company from document with fallback to SHG Settings
+    company = getattr(fine_doc, "company", None)
     if not company:
-        company = fine_doc.company
+        company = frappe.db.get_single_value("SHG Settings", "company")
+    if not company:
+        company = frappe.get_value("Global Defaults", None, "default_company")
     
     # Get accounts
     from shg.shg.utils.account_utils import (
