@@ -605,9 +605,9 @@ def _create_payment_entry_for_shg(company, mode_of_payment, member, posting_date
         pe.party_type = "SHG Member"
         pe.party = member
     else:
-        # For bulk payments, we still need to set party_type
-        # But we don't set a specific party since it's a bulk payment
-        pe.party_type = "SHG Member"
+        # For bulk payments, we don't set party_type or party since it's a bulk payment
+        # This avoids the "Party is mandatory" error in ERPNext
+        pass
     
     # Add references
     if references:
