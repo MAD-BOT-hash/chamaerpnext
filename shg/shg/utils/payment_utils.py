@@ -600,10 +600,14 @@ def _create_payment_entry_for_shg(company, mode_of_payment, member, posting_date
     pe.paid_amount = flt(paid_amount)
     pe.received_amount = flt(received_amount)
     
-    # Add party info if member is provided
+    # Add party info - for bulk payments, we still need to set party_type
     if member:
-        pe.party_type = "SHG Member"  # Fixed party type
+        pe.party_type = "SHG Member"
         pe.party = member
+    else:
+        # For bulk payments, we still need to set party_type
+        # But we don't set a specific party since it's a bulk payment
+        pe.party_type = "SHG Member"
     
     # Add references
     if references:
