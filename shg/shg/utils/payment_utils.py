@@ -520,7 +520,7 @@ def _process_bulk_payment(parent_doc):
         
         # Create Payment Entry using correct ERPNext Payment Entry fields
         pe_name = _create_payment_entry_for_shg(
-            company=parent_doc.company,
+            company=parent_doc.company,  # Use company from parent document
             mode_of_payment=parent_doc.mode_of_payment,
             member=parent_doc.member,  # Use the member from the parent document
             posting_date=parent_doc.payment_date,
