@@ -449,8 +449,13 @@ def _process_single_payment(payment_doc):
                 frappe.throw(_("Referenced document has no outstanding amount"))
         
         # Create Payment Entry using correct ERPNext Payment Entry fields
+        # Safely get company from document with fallback to SHG Settings
+        company = getattr(payment_doc, "company", None)
+        if not company:
+            company = frappe.db.get_single_value("SHG Settings", "company")
+        
         pe_name = _create_payment_entry_for_shg(
-            company=payment_doc.company,
+            company=company,
             mode_of_payment=payment_doc.mode_of_payment,
             member=payment_doc.member,
             posting_date=payment_doc.payment_date,
@@ -519,8 +524,13 @@ def _process_bulk_payment(parent_doc):
                 total_allocated, parent_doc.total_payment_amount))
         
         # Create Payment Entry using correct ERPNext Payment Entry fields
+        # Safely get company from document with fallback to SHG Settings
+        company = getattr(parent_doc, "company", None)
+        if not company:
+            company = frappe.db.get_single_value("SHG Settings", "company")
+        
         pe_name = _create_payment_entry_for_shg(
-            company=parent_doc.company,  # Use company from parent document
+            company=company,
             mode_of_payment=parent_doc.mode_of_payment,
             member=parent_doc.member,  # Use the member from the parent document
             posting_date=parent_doc.payment_date,
