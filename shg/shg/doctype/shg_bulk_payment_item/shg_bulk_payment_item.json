@@ -34,7 +34,8 @@
       "fieldname": "member_name",
       "label": "Member Name",
       "fieldtype": "Data",
-      "read_only": 1
+      "read_only": 1,
+      "in_list_view": 1
     },
     {
       "fieldname": "date",
@@ -47,7 +48,8 @@
       "fieldname": "amount",
       "label": "Document Amount",
       "fieldtype": "Currency",
-      "read_only": 1
+      "read_only": 1,
+      "in_list_view": 1
     },
     {
       "fieldname": "outstanding_amount",
@@ -67,19 +69,22 @@
       "fieldname": "status",
       "label": "Status",
       "fieldtype": "Data",
-      "read_only": 1
+      "read_only": 1,
+      "in_list_view": 1
     },
     {
       "fieldname": "is_closed",
       "label": "Closed",
       "fieldtype": "Check",
-      "read_only": 1
+      "read_only": 1,
+      "in_list_view": 1
     },
     {
       "fieldname": "posted_to_gl",
       "label": "Posted to GL",
       "fieldtype": "Check",
-      "read_only": 1
+      "read_only": 1,
+      "in_list_view": 1
     },
     {
       "fieldname": "remarks",
