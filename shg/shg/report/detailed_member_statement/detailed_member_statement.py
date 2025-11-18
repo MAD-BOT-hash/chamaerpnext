@@ -34,22 +34,33 @@ def get_data(filters):
     if not member:
         return []
 
-    date_filter = ""
+    # Build date filter conditions
+    date_conditions = []
     params = {"member": member}
-
-    if from_date and to_date:
-        date_filter = " AND date BETWEEN %(from_date)s AND %(to_date)s"
+    
+    if from_date:
+        date_conditions.append("t.date >= %(from_date)s")
         params["from_date"] = from_date
+        
+    if to_date:
+        date_conditions.append("t.date <= %(to_date)s")
         params["to_date"] = to_date
-    elif from_date:
-        date_filter = " AND date >= %(from_date)s"
-        params["from_date"] = from_date
-    elif to_date:
-        date_filter = " AND date <= %(to_date)s"
-        params["to_date"] = to_date
+    
+    # Join all date conditions
+    date_filter = ""
+    if date_conditions:
+        date_filter = " AND " + " AND ".join(date_conditions)
 
     query = f"""
-        SELECT * FROM (
+        SELECT 
+            t.date,
+            t.reference_type,
+            t.reference_name,
+            t.document_link,
+            t.description,
+            t.debit,
+            t.credit
+        FROM (
             SELECT
                 c.contribution_date AS date,
                 'SHG Contribution' AS reference_type,
@@ -60,7 +71,7 @@ def get_data(filters):
                 c.amount AS credit
             FROM `tabSHG Contribution` c
             LEFT JOIN `tabSHG Contribution Type` ct ON ct.name = c.contribution_type
-            WHERE c.member = %(member)s AND c.docstatus = 1 {date_filter}
+            WHERE c.member = %(member)s AND c.docstatus = 1
 
             UNION ALL
 
@@ -73,7 +84,7 @@ def get_data(filters):
                 0 AS debit,
                 i.amount AS credit
             FROM `tabSHG Contribution Invoice` i
-            WHERE i.member = %(member)s AND i.docstatus = 1 {date_filter}
+            WHERE i.member = %(member)s AND i.docstatus = 1
 
             UNION ALL
 
@@ -86,7 +97,7 @@ def get_data(filters):
                 0 AS debit,
                 f.fine_amount AS credit
             FROM `tabSHG Meeting Fine` f
-            WHERE f.member = %(member)s AND f.docstatus = 1 {date_filter}
+            WHERE f.member = %(member)s AND f.docstatus = 1
 
             UNION ALL
 
@@ -99,7 +110,7 @@ def get_data(filters):
                 l.loan_amount AS debit,
                 0 AS credit
             FROM `tabSHG Loan` l
-            WHERE l.member = %(member)s AND l.docstatus = 1 {date_filter}
+            WHERE l.member = %(member)s AND l.docstatus = 1
 
             UNION ALL
 
@@ -112,7 +123,7 @@ def get_data(filters):
                 0 AS debit,
                 r.total_paid AS credit
             FROM `tabSHG Loan Repayment` r
-            WHERE r.member = %(member)s AND r.docstatus = 1 {date_filter}
+            WHERE r.member = %(member)s AND r.docstatus = 1
 
             UNION ALL
 
@@ -125,13 +136,15 @@ def get_data(filters):
                 0 AS debit,
                 pe.total_amount AS credit
             FROM `tabSHG Payment Entry` pe
-            WHERE pe.member = %(member)s AND pe.docstatus = 1 {date_filter}
+            WHERE pe.member = %(member)s AND pe.docstatus = 1
         ) AS t
-        ORDER BY date, reference_type, reference_name
+        WHERE 1=1 {date_filter}
+        ORDER BY t.date, t.reference_type, t.reference_name
     """
 
     rows = frappe.db.sql(query, params, as_dict=True)
 
+    # Calculate running balance
     balance = 0
     for r in rows:
         balance += flt(r.credit) - flt(r.debit)
