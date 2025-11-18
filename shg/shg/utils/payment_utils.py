@@ -568,10 +568,11 @@ def _create_payment_entry_for_shg(company, mode_of_payment, member, posting_date
     Returns:
         str: Payment Entry name
     """
-    # Get company
-    company = company or get_default_company()
+    # Get company from SHG Settings instead of from document
+    from shg.shg.utils.company_utils import get_default_company
+    company = get_default_company()
     if not company:
-        frappe.throw(_("Company is required for payment processing"))
+        frappe.throw(_("Company is required for payment processing. Please set company in SHG Settings."))
     
     # Get default bank account from SHG Settings or fallback to Cash
     default_bank_account = frappe.db.get_single_value("SHG Settings", "default_bank_account")
