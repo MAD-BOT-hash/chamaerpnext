@@ -9,15 +9,22 @@ def execute(filters=None):
 
     columns = get_columns()
     data = get_data(filters)
-    
+
     return columns, data
 
 
+# ------------------------------------------------------
+# COLUMNS (Fully Frappe-Compatible)
+# ------------------------------------------------------
 def get_columns():
     return [
         {"label": "Date", "fieldname": "date", "fieldtype": "Date", "width": 120},
-        {"label": "Document Type", "fieldname": "document_doctype", "fieldtype": "Data", "width": 180},
-        {"label": "Document", "fieldname": "document_link", "fieldtype": "Link", "options": "document_doctype", "width": 160},
+
+        # Fully valid dynamic link pattern:
+        {"label": "DocType", "fieldname": "document_doctype", "fieldtype": "Data", "width": 180},
+        {"label": "Document", "fieldname": "document_link", 
+         "fieldtype": "Dynamic Link", "options": "document_doctype", "width": 180},
+
         {"label": "Description", "fieldname": "description", "fieldtype": "Data", "width": 350},
         {"label": "Debit (KES)", "fieldname": "debit", "fieldtype": "Currency", "width": 120},
         {"label": "Credit (KES)", "fieldname": "credit", "fieldtype": "Currency", "width": 120},
@@ -25,6 +32,9 @@ def get_columns():
     ]
 
 
+# ------------------------------------------------------
+# DATA FETCH
+# ------------------------------------------------------
 def get_data(filters):
     member = filters.get("member")
     from_date = filters.get("from_date")
@@ -33,6 +43,7 @@ def get_data(filters):
     if not member:
         return []
 
+    # Build date filter safely
     date_filter = ""
     params = {"member": member}
 
@@ -46,8 +57,12 @@ def get_data(filters):
         date_filter = " AND date <= %(to_date)s"
         params.update({"to_date": to_date})
 
+    # --------------------------------------------------
+    # THE FINAL COMBINED SQL QUERY
+    # --------------------------------------------------
     query = f"""
         SELECT * FROM (
+
             -- Contributions
             SELECT
                 c.contribution_date AS date,
@@ -124,12 +139,17 @@ def get_data(filters):
                 pe.total_amount AS credit
             FROM `tabSHG Payment Entry` pe
             WHERE pe.member = %(member)s AND pe.docstatus = 1 {date_filter}
+
         ) AS combined
+
         ORDER BY date ASC, document_doctype ASC, document_link ASC
     """
 
     rows = frappe.db.sql(query, params, as_dict=True)
 
+    # --------------------------------------------------
+    # RUNNING BALANCE CALCULATION
+    # --------------------------------------------------
     balance = 0
     for r in rows:
         balance += flt(r.credit) - flt(r.debit)
