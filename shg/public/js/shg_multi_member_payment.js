@@ -173,26 +173,31 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
                 selected_indices.push(parseInt($(this).data('index')));
             });
             
+            // Temporarily disable validation to prevent "Reference Name is required" error
+            frm.doc.__during_dialog_operation = true;
+            
             // Add selected items to child table
             selected_indices.forEach(index => {
                 const item = unpaid_items[index];
-                const row = frm.add_child('invoices', {
-                    reference_doctype: item.reference_doctype,
-                    reference_name: item.reference_name,
-                    member: item.member,
-                    member_name: item.member_name,
-                    date: item.date,
-                    amount: item.amount,
-                    outstanding_amount: item.outstanding_amount,
-                    payment_amount: item.outstanding_amount,
-                    status: item.status,
-                    is_closed: item.is_closed,
-                    posted_to_gl: item.posted_to_gl,
-                    remarks: ""
-                });
+                const row = frappe.model.add_child(frm.doc, 'SHG Bulk Payment Item', 'invoices');
+                row.reference_doctype = item.reference_doctype;
+                row.reference_name = item.reference_name;
+                row.member = item.member;
+                row.member_name = item.member_name;
+                row.date = item.date;
+                row.amount = item.amount;
+                row.outstanding_amount = item.outstanding_amount;
+                row.payment_amount = item.outstanding_amount;
+                row.status = item.status;
+                row.is_closed = item.is_closed;
+                row.posted_to_gl = item.posted_to_gl;
+                row.remarks = "";
             });
             
             frm.refresh_field('invoices');
+            
+            // Re-enable validation
+            frm.doc.__during_dialog_operation = false;
             
             // Recalculate totals
             frappe.call({
@@ -224,17 +229,17 @@ function format_currency(value) {
     return frappe.format(value, { fieldtype: 'Currency' });
 }
 
-frappe.ui.form.on('SHG Multi Member Payment Invoice', {
+frappe.ui.form.on('SHG Bulk Payment Item', {
     reference_doctype: function(frm, cdt, cdn) {
         var row = frappe.get_doc(cdt, cdn);
         
         // Set date label based on reference_doctype
         if (row.reference_doctype === "SHG Contribution Invoice") {
-            frappe.meta.get_docfield("SHG Multi Member Payment Invoice", "date", frm.doc.name).label = "Invoice Date";
+            frappe.meta.get_docfield("SHG Bulk Payment Item", "date", frm.doc.name).label = "Invoice Date";
         } else if (row.reference_doctype === "SHG Contribution") {
-            frappe.meta.get_docfield("SHG Multi Member Payment Invoice", "date", frm.doc.name).label = "Contribution Date";
+            frappe.meta.get_docfield("SHG Bulk Payment Item", "date", frm.doc.name).label = "Contribution Date";
         } else if (row.reference_doctype === "SHG Meeting Fine") {
-            frappe.meta.get_docfield("SHG Multi Member Payment Invoice", "date", frm.doc.name).label = "Fine Date";
+            frappe.meta.get_docfield("SHG Bulk Payment Item", "date", frm.doc.name).label = "Fine Date";
         }
         
         frm.refresh_field("invoices");

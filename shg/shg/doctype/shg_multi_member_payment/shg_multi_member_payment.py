@@ -22,6 +22,10 @@ class SHGMultiMemberPayment(Document):
     
     def validate(self):
         """Validate bulk payment"""
+        # Skip validation during dialog operations
+        if getattr(self, "__during_dialog_operation", False):
+            return
+            
         # Validate total_payment_amount > 0
         if flt(self.total_payment_amount) <= 0:
             frappe.throw(_("Total payment amount must be greater than zero"))
