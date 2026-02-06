@@ -94,10 +94,10 @@ function load_repayment_history(frm, dialog) {
 }
 
 function render_repayment_history(schedule, dialog) {
-    let html = \`
+    let html = `
         <div class="timeline" style="position: relative; padding-left: 30px;">
             <div style="position: absolute; left: 15px; top: 0; bottom: 0; width: 2px; background: #ddd;"></div>
-    \`;
+    `;
     
     schedule.forEach(row => {
         let status_class = '';
@@ -129,7 +129,7 @@ function render_repayment_history(schedule, dialog) {
         let payment_date = row.actual_payment_date ? frappe.datetime.str_to_user(row.actual_payment_date) : 'Not paid';
         let due_date = frappe.datetime.str_to_user(row.due_date);
         
-        html += \`
+        html += `
             <div class="timeline-item" style="margin-bottom: 20px; position: relative;">
                 <div style="position: absolute; left: -25px; top: 5px; width: 16px; height: 16px; border-radius: 50%; background: \${getStatusColor(status_class)}; border: 2px solid white;"></div>
                 <div class="card" style="border-left: 3px solid \${getStatusColor(status_class)};">
@@ -161,10 +161,10 @@ function render_repayment_history(schedule, dialog) {
                     </div>
                 </div>
             </div>
-        \`;
+        `;
     });
     
-    html += \`</div>\`;
+    html += `</div>`;
     
     dialog.fields_dict.history_html.$wrapper.html(html);
 }
