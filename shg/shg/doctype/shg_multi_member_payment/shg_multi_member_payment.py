@@ -43,6 +43,9 @@ class SHGMultiMemberPayment(Document):
             if row.payment_amount > row.outstanding_amount:
                 frappe.throw(_("Row {0}: Payment amount cannot exceed outstanding amount").format(row.idx))
             
+        # Validate posting date against locked periods
+        self.validate_posting_date()
+        
         # Run all validation checks
         self.validate_no_closed_documents()
         self.validate_no_fully_paid_documents()
@@ -127,6 +130,16 @@ Remaining after payment: {3}""").format(
             self.total_payment_amount,
             self.total_remaining_after
         )
+
+    def validate_posting_date(self):
+        """Validate that the posting date is not in a locked period"""
+        from shg.shg.utils.posting_locks import validate_posting_date
+        
+        # Use the posting date if available, otherwise use today
+        posting_date = self.posting_date or self.payment_date or frappe.utils.today()
+        
+        if posting_date:
+            validate_posting_date(posting_date)
     
     def on_submit(self):
         """Process bulk payment"""

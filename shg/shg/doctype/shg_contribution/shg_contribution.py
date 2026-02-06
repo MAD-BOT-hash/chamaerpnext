@@ -10,6 +10,7 @@ class SHGContribution(Document):
         self.validate_duplicate()
         self.validate_invoice_reference()
         self.validate_contribution_type()
+        self.validate_posting_date()
         self.set_contribution_details()
         self.calculate_unpaid_amount()
         
@@ -90,6 +91,16 @@ class SHGContribution(Document):
         elif not self.contribution_type_link:
             # If no type is provided and no link, set a default
             self.contribution_type = "Regular Weekly"
+
+    def validate_posting_date(self):
+        """Validate that the posting date is not in a locked period"""
+        from shg.shg.utils.posting_locks import validate_posting_date
+        
+        # Use the posting date if available, otherwise use contribution date
+        posting_date = self.posting_date or self.contribution_date
+        
+        if posting_date:
+            validate_posting_date(posting_date)
 
     def set_contribution_details(self):
         """Set contribution details from contribution type"""

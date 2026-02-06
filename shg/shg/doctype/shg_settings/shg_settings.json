@@ -22,6 +22,12 @@
   "loan_tenure_months",
   "penalty_rate",
   "penalty_calculation_method",
+  "posting_lock_settings_section",
+  "enable_posting_lock",
+  "posting_locked_until",
+  "locked_months",
+  "column_break_28",
+  "posting_lock_message",
   "meeting_settings_section",
   "meeting_frequency",
   "absentee_fine",
@@ -170,8 +176,23 @@
    "options": "Flat Rate\nReducing Balance"
   },
   {
+   "default": "50000",
+   "fieldname": "maximum_loan_amount",
+   "fieldtype": "Currency",
+   "label": "Maximum Loan Amount (KES)",
+   "precision": 2,
+   "reqd": 1
+  },
+  {
    "fieldname": "column_break_9",
    "fieldtype": "Column Break"
+  },
+  {
+   "default": "5",
+   "fieldname": "loan_tenure_months",
+   "fieldtype": "Int",
+   "label": "Default Loan Tenure (months)",
+   "non_negative": 1
   },
   {
    "default": "5",
@@ -179,6 +200,48 @@
    "fieldtype": "Percent",
    "label": "Penalty Rate (%)",
    "precision": 2
+  },
+  {
+   "default": "Percentage of Principal",
+   "fieldname": "penalty_calculation_method",
+   "fieldtype": "Select",
+   "label": "Penalty Calculation Method",
+   "options": "Fixed Amount\nPercentage of Principal\nPercentage of Outstanding Balance"
+  },
+  {
+   "fieldname": "posting_lock_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Posting Lock Settings"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_posting_lock",
+   "fieldtype": "Check",
+   "label": "Enable Posting Lock"
+  },
+  {
+   "fieldname": "posting_locked_until",
+   "fieldtype": "Date",
+   "label": "Lock All Entries Until Date",
+   "description": "All entries with posting dates before this date will be locked"
+  },
+  {
+   "fieldname": "locked_months",
+   "fieldtype": "Table",
+   "label": "Locked Months",
+   "options": "SHG Locked Month",
+   "description": "List of months that are locked for posting"
+  },
+  {
+   "fieldname": "column_break_28",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "This period is locked. Contact administrator to unlock.",
+   "fieldname": "posting_lock_message",
+   "fieldtype": "Small Text",
+   "label": "Posting Lock Message",
+   "description": "Message shown when trying to post in a locked period"
   },
   {
    "fieldname": "meeting_settings_section",
@@ -329,8 +392,15 @@
    "label": "SMS Sender ID"
   },
   {
-   "fieldname": "column_break_22",
-   "fieldtype": "Column Break"
+   "fieldname": "email_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Email Notifications"
+  },
+  {
+   "depends_on": "email_enabled",
+   "fieldname": "smtp_server",
+   "fieldtype": "Data",
+   "label": "SMTP Server"
   },
   {
    "default": "1",
@@ -360,7 +430,7 @@
    "fieldname": "statement_email_template",
    "fieldtype": "Text Editor",
    "label": "Statement Email Template",
-   "default": "Dear {member_name},\n\nPlease find your monthly statement attached.\n\nTotal Contributions: KES {total_contributions}\nTotal Loan Repayments: KES {total_repayments}\nOutstanding Loan Balance: KES {outstanding_balance}\n\nThank you for your continued support.\n\nSHG Management"
+   "default": "Dear {member_name},\\n\\nPlease find your monthly statement attached.\\n\\nTotal Contributions: KES {total_contributions}\\nTotal Loan Repayments: KES {total_repayments}\\nOutstanding Loan Balance: KES {outstanding_balance}\\n\\nThank you for your continued support.\\n\\nSHG Management"
   },
   {
    "fieldname": "accounting_settings_section",
@@ -559,6 +629,20 @@
    "fieldtype": "Link",
    "label": "Default Currency",
    "options": "Currency"
+  },
+  {
+   "fieldname": "fiscal_year_start_month",
+   "fieldtype": "Select",
+   "label": "Fiscal Year Start Month",
+   "options": "January\nFebruary\nMarch\nApril\nMay\nJune\nJuly\nAugust\nSeptember\nOctober\nNovember\nDecember",
+   "default": "January"
+  },
+  {
+   "default": "Weekly",
+   "fieldname": "backup_frequency",
+   "fieldtype": "Select",
+   "label": "Backup Frequency",
+   "options": "Daily\nWeekly\nMonthly"
   }
  ],
  "issingle": 1,

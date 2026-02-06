@@ -56,8 +56,6 @@ class SHGSettings(Document):
 # Copyright (c) 2025, Your Company and contributors
 # For license information, please see license.txt
 
-import frappe
-
 def update_shg_settings_fields():
     """Ensure SHG Settings record exists and has default values"""
     if not frappe.db.exists("SHG Settings"):

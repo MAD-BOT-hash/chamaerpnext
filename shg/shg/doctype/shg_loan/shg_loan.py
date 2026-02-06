@@ -408,6 +408,9 @@ class SHGLoan(Document):
         if not getattr(self, "company", None):
             self.company = frappe.db.get_single_value("SHG Settings", "company")
 
+        # Validate posting date against locked periods
+        self.validate_posting_date()
+
         if is_group_loan:
             self.sync_group_allocations_total()
 
@@ -627,6 +630,16 @@ class SHGLoan(Document):
                     _check(r.member)
         elif self.member:
             _check(self.member)
+
+    def validate_posting_date(self):
+        """Validate that the posting date is not in a locked period"""
+        from shg.shg.utils.posting_locks import validate_posting_date
+        
+        # Use the disbursement date if available, otherwise use today
+        posting_date = self.disbursement_date or today()
+        
+        if posting_date:
+            validate_posting_date(posting_date)
 
     # ---------------------------------------------------
     # REPAYMENT CALCULATIONS

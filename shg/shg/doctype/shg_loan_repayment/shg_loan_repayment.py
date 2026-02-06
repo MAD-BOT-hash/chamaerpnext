@@ -27,6 +27,9 @@ class SHGLoanRepayment(Document):
                 f"Repayment ({self.total_paid}) exceeds remaining balance ({loan_doc.balance_amount})."
             )
 
+        # Validate posting date against locked periods
+        self.validate_posting_date()
+
         # Auto-calculate repayment breakdown
         self.calculate_repayment_breakdown()
 
@@ -443,6 +446,16 @@ class SHGLoanRepayment(Document):
             "principal_amount": self.principal_amount,
             "balance_after_payment": self.balance_after_payment
         }
+
+    def validate_posting_date(self):
+        """Validate that the posting date is not in a locked period"""
+        from shg.shg.utils.posting_locks import validate_posting_date
+        
+        # Use the posting date if available, otherwise use repayment date
+        posting_date = self.posting_date or self.repayment_date or today()
+        
+        if posting_date:
+            validate_posting_date(posting_date)
 
 
 # --- Hook functions ---
