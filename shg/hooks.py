@@ -67,7 +67,8 @@ scheduler_events = {
         "shg.tasks.calculate_loan_penalties",
         "shg.tasks.generate_billable_contribution_invoices",
         "shg.shg.doctype.shg_contribution.shg_contribution.update_overdue_contributions",
-        "shg.shg.utils.loan_utils.flag_overdue_loans"
+        "shg.shg.utils.loan_utils.flag_overdue_loans",
+        "shg.shg.utils.notification_service.process_scheduled_notifications"
     ],
     "weekly": [
         "shg.tasks.send_weekly_contribution_reminders"
@@ -133,7 +134,14 @@ whitelisted_methods = [
     "shg.shg.api.loan.generate_schedule",
     "shg.shg.api.loan.refresh_repayment_summary",
     "shg.shg.api.loan.get_member_loan_statement",
-    "shg.shg.api.loan.mark_installment_paid"
+    "shg.shg.api.loan.mark_installment_paid",
+    "shg.shg.api.notifications.send_member_notification",
+    "shg.shg.api.notifications.get_member_notifications",
+    "shg.shg.api.notifications.schedule_member_notification",
+    "shg.shg.api.notifications.get_scheduled_notifications",
+    "shg.shg.api.notifications.send_batch_notifications_api",
+    "shg.shg.api.notifications.get_unread_notifications_count",
+    "shg.shg.api.notifications.test_notification_connection"
 ]
 
 # Patches

@@ -206,24 +206,24 @@ class SHGMeetingFine(Document):
     @frappe.whitelist()
     def send_fine_notification(self):
         """Send fine notification to member"""
+        from shg.shg.utils.notification_service import send_notification
+        
         try:
             member = frappe.get_doc("SHG Member", self.member)
             
             message = f"Dear {member.member_name}, a fine of KES {self.fine_amount:,.2f} has been applied for {self.fine_reason.lower()}."
             
-            notification = frappe.get_doc({
-                "doctype": "SHG Notification Log",
-                "member": self.member,
-                "notification_type": "Meeting Fine",
-                "message": message,
-                "channel": "SMS",
-                "reference_document": "SHG Meeting Fine",
-                "reference_name": self.name
-            })
-            notification.insert()
+            # Send notification using the new service
+            result = send_notification(
+                member_id=self.member,
+                notification_type="Meeting Fine",
+                message=message,
+                channel="SMS",
+                reference_document="SHG Meeting Fine",
+                reference_name=self.name
+            )
             
-            # Send SMS (would be implemented in actual system)
-            # send_sms(member.phone_number, message)
+            return result
         except Exception as e:
             frappe.log_error(frappe.get_traceback(), f"SHG Meeting Fine - Failed to send fine notification for {self.name}")
             frappe.throw(_(f"Failed to send fine notification: {str(e)}"))

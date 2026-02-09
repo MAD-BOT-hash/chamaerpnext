@@ -1,0 +1,150 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "SHG-SCHED-NOTIFY-.#####",
+    "creation": "2025-09-25 10:00:00",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "member",
+        "member_name",
+        "notification_type",
+        "column_break_4",
+        "channel",
+        "status",
+        "scheduled_date",
+        "message_section",
+        "message",
+        "reference_section",
+        "reference_document",
+        "reference_name",
+        "notification_log",
+        "error_message_section",
+        "error_message"
+    ],
+    "fields": [
+        {
+            "fieldname": "member",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Member",
+            "options": "SHG Member",
+            "reqd": 1
+        },
+        {
+            "fetch_from": "member.member_name",
+            "fieldname": "member_name",
+            "fieldtype": "Data",
+            "label": "Member Name",
+            "read_only": 1
+        },
+        {
+            "fieldname": "notification_type",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "label": "Notification Type",
+            "options": "Contribution Reminder\nLoan Reminder\nOverdue Reminder\nMeeting Reminder\nPayment Receipt\nGeneral Announcement\nLoan Approval\nMeeting Fine\nBirthday Greeting\nAnniversary Greeting",
+            "reqd": 1
+        },
+        {
+            "fieldname": "column_break_4",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "SMS",
+            "fieldname": "channel",
+            "fieldtype": "Select",
+            "label": "Channel",
+            "options": "SMS\nEmail\nWhatsApp\nPush Notification"
+        },
+        {
+            "default": "Scheduled",
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "label": "Status",
+            "options": "Scheduled\nSent\nFailed"
+        },
+        {
+            "fieldname": "scheduled_date",
+            "fieldtype": "Date",
+            "in_list_view": 1,
+            "label": "Scheduled Date",
+            "reqd": 1
+        },
+        {
+            "fieldname": "message_section",
+            "fieldtype": "Section Break",
+            "label": "Message"
+        },
+        {
+            "fieldname": "message",
+            "fieldtype": "Text",
+            "label": "Message Content",
+            "reqd": 1
+        },
+        {
+            "fieldname": "reference_section",
+            "fieldtype": "Section Break",
+            "label": "Reference Document"
+        },
+        {
+            "fieldname": "reference_document",
+            "fieldtype": "Data",
+            "label": "Reference Document Type"
+        },
+        {
+            "fieldname": "reference_name",
+            "fieldtype": "Data",
+            "label": "Reference Document Name"
+        },
+        {
+            "fieldname": "notification_log",
+            "fieldtype": "Link",
+            "label": "Notification Log",
+            "options": "SHG Notification Log",
+            "read_only": 1
+        },
+        {
+            "fieldname": "error_message_section",
+            "fieldtype": "Section Break",
+            "label": "Error Information"
+        },
+        {
+            "fieldname": "error_message",
+            "fieldtype": "Text",
+            "label": "Error Message"
+        }
+    ],
+    "links": [],
+    "modified": "2025-09-25 10:00:00",
+    "modified_by": "Administrator",
+    "module": "SHG",
+    "name": "SHG Scheduled Notification",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Admin",
+            "share": 1,
+            "write": 1
+        },
+        {
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "SHG Treasurer"
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "track_changes": 1
+}

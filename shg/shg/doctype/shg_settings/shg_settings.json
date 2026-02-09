@@ -94,7 +94,15 @@
   "system_settings_section",
   "currency",
   "fiscal_year_start_month",
-  "backup_frequency"
+  "backup_frequency",
+  "security_settings_section",
+  "enable_data_encryption",
+  "encryption_key",
+  "gdpr_compliance_enabled",
+  "data_retention_period_days",
+  "column_break_29",
+  "privacy_policy_url",
+  "terms_of_service_url"
  ],
  "fields": [
   {
@@ -643,6 +651,52 @@
    "fieldtype": "Select",
    "label": "Backup Frequency",
    "options": "Daily\nWeekly\nMonthly"
+  },
+  {
+   "fieldname": "security_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Security Settings"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_data_encryption",
+   "fieldtype": "Check",
+   "label": "Enable Data Encryption"
+  },
+  {
+   "fieldname": "encryption_key",
+   "fieldtype": "Password",
+   "label": "Encryption Key",
+   "hidden": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "gdpr_compliance_enabled",
+   "fieldtype": "Check",
+   "label": "Enable GDPR Compliance"
+  },
+  {
+   "default": "365",
+   "fieldname": "data_retention_period_days",
+   "fieldtype": "Int",
+   "label": "Data Retention Period (Days)",
+   "description": "Number of days to retain data before anonymization/deletion"
+  },
+  {
+   "fieldname": "column_break_29",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "privacy_policy_url",
+   "fieldtype": "Data",
+   "label": "Privacy Policy URL",
+   "description": "URL to privacy policy document"
+  },
+  {
+   "fieldname": "terms_of_service_url",
+   "fieldtype": "Data",
+   "label": "Terms of Service URL",
+   "description": "URL to terms of service document"
   }
  ],
  "issingle": 1,

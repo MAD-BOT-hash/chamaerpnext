@@ -52,7 +52,14 @@ class SHGSettings(Document):
         # Validate member account settings
         if self.default_parent_ledger and not frappe.db.exists("Account", self.default_parent_ledger):
             frappe.throw("Default Parent Ledger does not exist")
-
+        
+        # Validate security settings
+        if self.enable_data_encryption and not self.encryption_key:
+            frappe.throw("Encryption Key is required when Data Encryption is enabled")
+        
+        if self.data_retention_period_days and self.data_retention_period_days < 0:
+            frappe.throw("Data Retention Period cannot be negative")
+            
 # Copyright (c) 2025, Your Company and contributors
 # For license information, please see license.txt
 

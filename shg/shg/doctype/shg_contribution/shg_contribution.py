@@ -342,25 +342,23 @@ class SHGContribution(Document):
     @frappe.whitelist()
     def send_payment_confirmation(self):
         """Send payment confirmation SMS"""
+        from shg.shg.utils.notification_service import send_notification
+        
         member = frappe.get_doc("SHG Member", self.member)
         
         message = f"Dear {member.member_name}, your contribution of KES {self.amount:,.2f} has been received. Thank you for your continued support."
         
-        # Log notification
-        notification = frappe.get_doc({
-            "doctype": "SHG Notification Log",
-            "member": self.member,
-            "notification_type": "Payment Confirmation",
-            "message": message,
-            "channel": "SMS",
-            "reference_document": "SHG Contribution",
-            "reference_name": self.name
-        })
-        notification.insert()
+        # Send notification using the new service
+        result = send_notification(
+            member_id=self.member,
+            notification_type="Payment Confirmation",
+            message=message,
+            channel="SMS",
+            reference_document="SHG Contribution",
+            reference_name=self.name
+        )
         
-        # In a real implementation, you would send the actual SMS
-        # send_sms(member.phone_number, message)
-        return True
+        return result
         
     @frappe.whitelist()
     def initiate_mpesa_stk_push(self):
