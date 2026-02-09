@@ -1,279 +1,279 @@
-# Copyright (c) 2026, SHG Solutions
-# License: MIT
-
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, nowdate
+from frappe.utils import flt, today
 from shg.shg.utils.company_utils import get_default_company
-
 
 class SHGMultiMemberLoanRepayment(Document):
     def before_validate(self):
-        """Set default values and auto-calculate totals"""
-        # Set default company
-        if not self.company:
-            self.company = get_default_company()
+        """Auto-set company from SHG Settings and handle naming_series"""
+        # Handle naming_series for backward compatibility
+        if not getattr(self, "naming_series", None):
+            self.naming_series = "SHG-MMLR-.YYYY.-"
         
-        # Set default repayment date
-        if not self.repayment_date:
-            self.repayment_date = nowdate()
+        self.company = self.company or get_default_company()
         
-        # Auto-calculate totals
-        self.calculate_totals()
-    
-    def validate(self):
-        """Validate the multi-member loan repayment"""
-        self.validate_payment_method()
-        self.validate_payment_amounts()
-        self.validate_account()
-        
-    def validate_payment_method(self):
-        """Validate payment method is selected"""
-        if not self.payment_method:
-            frappe.throw(_("Payment Method is required"))
-    
-    def validate_payment_amounts(self):
-        """Validate payment amounts for all loan items"""
-        total_payment = 0.0
-        selected_loans = 0
-        
-        for row in self.loans:
-            # Skip rows with zero payment
-            if flt(row.payment_amount) <= 0:
-                continue
-                
-            selected_loans += 1
-            total_payment += flt(row.payment_amount)
-            
-            # Validate payment amount doesn't exceed outstanding balance
-            if flt(row.payment_amount) > flt(row.outstanding_balance):
-                frappe.throw(
-                    _("Payment amount {0} for member {1} cannot exceed outstanding balance {2}").format(
-                        row.payment_amount, row.member_name, row.outstanding_balance
-                    )
-                )
-            
-            # Validate payment amount is greater than zero
-            if flt(row.payment_amount) <= 0:
-                frappe.throw(
-                    _("Payment amount for member {0} must be greater than zero").format(row.member_name)
-                )
-        
-        # Validate that at least one loan has a payment
-        if selected_loans == 0:
-            frappe.throw(_("At least one loan must have a payment amount greater than zero"))
-        
-        # Update totals
-        self.total_payment_amount = total_payment
-        self.total_selected_loans = selected_loans
-    
-    def validate_account(self):
-        """Validate account based on payment method"""
-        if not self.account:
-            frappe.throw(_("Account is required"))
-        
-        # Validate account exists
-        if not frappe.db.exists("Account", self.account):
-            frappe.throw(_("Account {0} does not exist").format(self.account))
-    
-    def calculate_totals(self):
-        """Calculate total payment amount and selected loans count"""
-        total_payment = 0.0
-        selected_loans = 0
-        
+        # Auto-calculate total repayment amount
+        total = 0.0
         if self.loans:
             for row in self.loans:
-                if flt(row.payment_amount) > 0:
-                    total_payment += flt(row.payment_amount)
-                    selected_loans += 1
+                total += flt(row.repayment_amount or 0)
+        self.total_repayment_amount = total
+
+    def validate(self):
+        """Validate bulk loan repayment with comprehensive mandatory field checks"""
+        # Skip validation during dialog operations
+        if getattr(self, "__during_dialog_operation", False):
+            return
+            
+        # Validate parent-level mandatory fields
+        self.validate_parent_mandatory_fields()
         
-        self.total_payment_amount = total_payment
-        self.total_selected_loans = selected_loans
-    
-    def on_submit(self):
-        """Process the multi-member loan repayment"""
-        try:
-            self.process_repayments()
-            frappe.msgprint(_("Multi-member loan repayment processed successfully"))
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Multi-Member Loan Repayment Processing Failed")
-            frappe.throw(_("Failed to process loan repayments: {0}").format(str(e)))
-    
-    def process_repayments(self):
-        """Process individual loan repayments for each selected loan"""
-        payment_entries = []
+        # Validate that we have at least one repayment with amount > 0
+        self.validate_repayment_documents_exist()
+        
+        # Validate required fields in child table
+        self.validate_loan_mandatory_fields()
+        
+        # Validate repayment amount rules
+        self.validate_repayment_amounts()
+        
+        # Validate loan compatibility rules
+        self.validate_loan_compatibility()
+        
+        # Validate blocking conditions
+        self.validate_blocking_conditions()
+        
+        # Validate posting date against locked periods
+        self.validate_posting_date()
+        
+        # Run all validation checks
+        self.validate_totals()
+
+    def validate_parent_mandatory_fields(self):
+        """Validate all mandatory parent-level fields"""
+        # Validate Company
+        if not self.company:
+            frappe.throw(_("Company is mandatory"))
+        
+        # Validate Posting Date
+        if not self.posting_date:
+            frappe.throw(_("Posting Date is mandatory"))
+        
+        # Validate Payment Mode
+        if not self.payment_mode:
+            frappe.throw(_("Payment Mode is mandatory"))
+        
+        # Validate Payment Account
+        if not self.payment_account:
+            frappe.throw(_("Payment Account is mandatory"))
+        
+        # Validate Batch Number
+        if not self.batch_number:
+            frappe.throw(_("Reference / Batch Number is mandatory"))
+
+    def validate_repayment_documents_exist(self):
+        """Validate that at least one loan has repayment amount > 0"""
+        has_repayment = False
+        for row in self.loans:
+            if flt(row.repayment_amount) > 0:
+                has_repayment = True
+                break
+        
+        if not has_repayment:
+            frappe.throw(_("At least one loan repayment amount must be greater than zero"))
+
+    def validate_loan_mandatory_fields(self):
+        """Validate required fields in child table rows"""
+        for row in self.loans:
+            # Validate Member
+            if not row.member:
+                frappe.throw(_("Row {0}: Member is required").format(row.idx))
+            
+            # Validate Member Name
+            if not row.member_name:
+                frappe.throw(_("Row {0}: Member Name is required").format(row.idx))
+            
+            # Validate Loan Reference
+            if not row.loan:
+                frappe.throw(_("Row {0}: Loan Reference is required").format(row.idx))
+            
+            # Validate Loan Type
+            if not row.loan_type:
+                frappe.throw(_("Row {0}: Loan Type is required").format(row.idx))
+            
+            # Validate Outstanding Loan Balance
+            if not row.outstanding_loan_balance or flt(row.outstanding_loan_balance) <= 0:
+                frappe.throw(_("Row {0}: Outstanding Loan Balance must be greater than zero").format(row.idx))
+            
+            # Validate Repayment Amount
+            if not row.repayment_amount or flt(row.repayment_amount) <= 0:
+                frappe.throw(_("Row {0}: Repayment Amount must be greater than zero").format(row.idx))
+
+    def validate_repayment_amounts(self):
+        """Validate repayment amount rules"""
+        for row in self.loans:
+            if row.loan and row.repayment_amount:
+                # Validate Repayment Amount <= Outstanding Loan Balance
+                if flt(row.repayment_amount) > flt(row.outstanding_loan_balance):
+                    frappe.throw(_("Row {0}: Repayment amount ({1}) cannot exceed outstanding loan balance ({2})").format(
+                        row.idx, row.repayment_amount, row.outstanding_loan_balance))
+
+    def validate_loan_compatibility(self):
+        """Validate loan compatibility rules"""
+        processed_loans = set()
         
         for row in self.loans:
-            # Skip loans with zero payment
-            if flt(row.payment_amount) <= 0:
-                continue
-            
-            # Create individual loan repayment
-            repayment_doc = self.create_loan_repayment(row)
-            payment_entries.append(repayment_doc.name)
-        
-        # Create consolidated payment entry
-        if payment_entries:
-            payment_entry = self.create_payment_entry(payment_entries)
-            self.payment_entry = payment_entry
-    
-    def create_loan_repayment(self, loan_row):
-        """Create individual SHG Loan Repayment document"""
-        repayment_doc = frappe.new_doc("SHG Loan Repayment")
-        repayment_doc.loan = loan_row.loan
-        repayment_doc.member = loan_row.member
-        repayment_doc.member_name = loan_row.member_name
-        repayment_doc.repayment_date = self.repayment_date
-        repayment_doc.total_paid = flt(loan_row.payment_amount)
-        repayment_doc.payment_method = self.payment_method
-        repayment_doc.description = f"Multi-member repayment batch {self.name}"
-        
-        # Save and submit the repayment
-        repayment_doc.insert(ignore_permissions=True)
-        repayment_doc.submit()
-        
-        return repayment_doc
-    
-    def create_payment_entry(self, repayment_entries):
-        """Create consolidated Payment Entry for accounting"""
-        try:
-            # Get member accounts and total amount
-            total_amount = flt(self.total_payment_amount)
-            
-            # Create Payment Entry
-            pe = frappe.new_doc("Payment Entry")
-            pe.payment_type = "Receive"
-            pe.company = self.company
-            pe.posting_date = self.repayment_date
-            pe.paid_amount = total_amount
-            pe.received_amount = total_amount
-            pe.reference_no = self.name
-            pe.reference_date = self.repayment_date
-            pe.remarks = f"Multi-member loan repayment batch {self.name}"
-            
-            # Set accounts based on payment method
-            if self.payment_method == "Cash":
-                cash_account = frappe.db.get_single_value("SHG Settings", "default_cash_account")
-                if cash_account:
-                    pe.paid_to = cash_account
-            else:
-                bank_account = frappe.db.get_single_value("SHG Settings", "default_bank_account")
-                if bank_account:
-                    pe.paid_to = bank_account
-            
-            # Add references to individual repayments
-            for repayment_name in repayment_entries:
-                pe.append("references", {
-                    "reference_doctype": "SHG Loan Repayment",
-                    "reference_name": repayment_name,
-                    "allocated_amount": frappe.db.get_value("SHG Loan Repayment", repayment_name, "total_paid")
-                })
-            
-            # Save and submit Payment Entry
-            pe.insert(ignore_permissions=True)
-            pe.submit()
-            
-            return pe.name
-            
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Payment Entry Creation Failed")
-            frappe.throw(_("Failed to create payment entry: {0}").format(str(e)))
+            if row.loan:
+                # Check for duplicate loans in same batch
+                if row.loan in processed_loans:
+                    frappe.throw(_("Row {0}: Loan {1} appears multiple times in this repayment batch").format(
+                        row.idx, row.loan))
+                processed_loans.add(row.loan)
+                
+                # Verify member compatibility
+                loan_member = frappe.db.get_value("SHG Loan", row.loan, "member")
+                if loan_member and row.member and loan_member != row.member:
+                    frappe.throw(_("Row {0}: Loan {1} does not belong to member {2}").format(
+                        row.idx, row.loan, row.member))
 
+    def validate_blocking_conditions(self):
+        """Validate all blocking conditions"""
+        for row in self.loans:
+            if row.loan:
+                # Check if member is active
+                if row.member:
+                    member_status = frappe.db.get_value("SHG Member", row.member, "status")
+                    if member_status and member_status != "Active":
+                        frappe.throw(_("Row {0}: Member {1} is inactive and cannot post repayments").format(row.idx, row.member))
+                
+                # Check if loan is active
+                loan_status = frappe.db.get_value("SHG Loan", row.loan, "status")
+                if loan_status not in ["Disbursed", "Partially Paid"]:
+                    frappe.throw(_("Row {0}: Member has no active loan or loan is closed").format(row.idx))
+                
+                # Check if loan is cancelled or closed
+                if loan_status in ["Cancelled", "Closed"]:
+                    frappe.throw(_("Row {0}: Loan {1} is {2} and cannot be processed").format(
+                        row.idx, row.loan, loan_status.lower()))
 
-@frappe.whitelist()
-def get_members_with_active_loans(company=None):
-    """
-    Get all members with active loans and outstanding balances
-    
-    Args:
-        company (str): Optional company filter
+    def validate_posting_date(self):
+        """Validate that the posting date is not in a locked period"""
+        from shg.shg.utils.posting_locks import validate_posting_date
         
-    Returns:
-        list: List of members with active loans
-    """
-    try:
-        # Build query to get members with active loans
-        query = """
-            SELECT 
-                m.name as member,
-                m.member_name,
-                l.name as loan,
-                lt.loan_type_name as loan_type,
-                (SELECT COALESCE(SUM(unpaid_balance), 0) 
-                 FROM `tabSHG Loan Repayment Schedule` 
-                 WHERE parent = l.name AND parenttype = 'SHG Loan') as outstanding_balance
-            FROM `tabSHG Member` m
-            INNER JOIN `tabSHG Loan` l ON l.member = m.name
-            LEFT JOIN `tabSHG Loan Type` lt ON l.loan_type = lt.name
-            WHERE l.docstatus = 1 
-            AND l.status IN ('Disbursed', 'Active')
-            AND (SELECT COALESCE(SUM(unpaid_balance), 0) 
-                 FROM `tabSHG Loan Repayment Schedule` 
-                 WHERE parent = l.name AND parenttype = 'SHG Loan') > 0
-        """
+        if self.posting_date:
+            validate_posting_date(self.posting_date)
+
+    def validate_totals(self):
+        """Validate and compute totals"""
+        total_outstanding = 0.0
+        total_repayment = 0.0
+        total_loans = 0
         
-        # Add company filter if provided
-        if company:
-            query += " AND l.company = %(company)s"
-            result = frappe.db.sql(query, {"company": company}, as_dict=True)
+        for row in self.loans:
+            if row.loan:
+                # Get current outstanding balance for the loan
+                outstanding = frappe.db.get_value("SHG Loan", row.loan, "total_outstanding_amount")
+                if outstanding is None:
+                    outstanding = 0.0
+                total_outstanding += outstanding
+                total_repayment += flt(row.repayment_amount or 0)
+                total_loans += 1
+        
+        self.total_repayment_amount = total_repayment
+        self.total_selected_loans = total_loans
+
+    def on_submit(self):
+        """Process bulk loan repayments"""
+        self.process_bulk_loan_repayments()
+        
+        # Update display fields
+        self.update_display_fields()
+
+    def on_cancel(self):
+        """Cancel Loan Repayment entries"""
+        # Mark as cancelled
+        self.db_set("status", "Cancelled")
+
+    def process_bulk_loan_repayments(self):
+        """Process all loan repayments in the batch"""
+        from shg.shg.utils.loan_repayment_utils import process_loan_repayment
+        
+        for row in self.loans:
+            if row.repayment_amount and flt(row.repayment_amount) > 0:
+                # Create loan repayment record
+                loan_repayment = frappe.new_doc("SHG Loan Repayment")
+                loan_repayment.loan = row.loan
+                loan_repayment.member = row.member
+                loan_repayment.posting_date = self.posting_date
+                loan_repayment.amount = row.repayment_amount
+                loan_repayment.mode_of_payment = self.payment_mode
+                loan_repayment.company = self.company
+                loan_repayment.multi_member_repayment_batch = self.name
+                loan_repayment.batch_number = self.batch_number
+                
+                # Calculate interest and principal portions (simplified)
+                loan_repayment.principal_amount = row.repayment_amount
+                loan_repayment.interest_amount = 0.0  # Will be calculated by the system
+                
+                loan_repayment.save()
+                loan_repayment.submit()
+                
+                # Update the status in the child table row
+                row.status = "Processed"
+        
+        # Save the parent document to update statuses
+        self.save(ignore_permissions=True)
+
+    def update_display_fields(self):
+        """Update display fields after submission"""
+        # Update status based on processing results
+        processed_count = 0
+        for row in self.loans:
+            if row.status == "Processed":
+                processed_count += 1
+        
+        if processed_count == len(self.loans):
+            self.db_set("status", "Completed")
         else:
-            result = frappe.db.sql(query, as_dict=True)
-        
-        return result
-        
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Get Members with Active Loans Failed")
-        frappe.throw(_("Failed to fetch members with active loans: {0}").format(str(e)))
+            self.db_set("status", "Partially Processed")
 
+    @frappe.whitelist()
+    def fetch_active_loans(self, member=None):
+        """Fetch active loans for a member or all active loans"""
+        filters = {"status": ["in", ["Disbursed", "Partially Paid"]]}
+        if member:
+            filters["member"] = member
+        
+        loans = frappe.get_all(
+            "SHG Loan",
+            filters=filters,
+            fields=["name", "member", "loan_type", "total_outstanding_amount", "repayment_start_date"],
+            order_by="member, name"
+        )
+        
+        return loans
 
-@frappe.whitelist()
-def create_multi_member_loan_repayment(repayment_data):
-    """
-    Create multi-member loan repayment from provided data
-    
-    Args:
-        repayment_data (dict): Repayment data including loans and payment details
+    @frappe.whitelist()
+    def recalculate_totals(self):
+        """Recalculate totals"""
+        total_repayment = 0.0
+        total_loans = 0
         
-    Returns:
-        dict: Result with status and created document name
-    """
-    try:
-        # Create new multi-member loan repayment document
-        repayment_doc = frappe.new_doc("SHG Multi Member Loan Repayment")
+        # Loop through loans child table
+        for row in self.loans:
+            total_repayment += flt(row.repayment_amount or 0)
+            total_loans += 1
         
-        # Set main fields
-        repayment_doc.repayment_date = repayment_data.get("repayment_date", nowdate())
-        repayment_doc.company = repayment_data.get("company")
-        repayment_doc.payment_method = repayment_data.get("payment_method")
-        repayment_doc.account = repayment_data.get("account")
-        repayment_doc.description = repayment_data.get("description", "")
+        # Update parent fields
+        self.total_repayment_amount = total_repayment
+        self.total_selected_loans = total_loans
         
-        # Add loan items
-        for loan_item in repayment_data.get("loans", []):
-            if flt(loan_item.get("payment_amount", 0)) > 0:
-                repayment_doc.append("loans", {
-                    "member": loan_item.get("member"),
-                    "member_name": loan_item.get("member_name"),
-                    "loan": loan_item.get("loan"),
-                    "loan_type": loan_item.get("loan_type"),
-                    "outstanding_balance": loan_item.get("outstanding_balance"),
-                    "payment_amount": loan_item.get("payment_amount"),
-                    "status": loan_item.get("status", "Active")
-                })
+        # Save the doc
+        self.save(ignore_permissions=True)
         
-        # Validate and save
-        repayment_doc.insert(ignore_permissions=True)
-        repayment_doc.submit()
-        
-        frappe.db.commit()
-        
+        # Return updated numbers as dict
         return {
-            "status": "success",
-            "message": _("Multi-member loan repayment {0} created successfully").format(repayment_doc.name),
-            "repayment_name": repayment_doc.name
+            "total_repayment_amount": self.total_repayment_amount,
+            "total_selected_loans": self.total_selected_loans
         }
-        
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Create Multi-Member Loan Repayment Failed")
-        frappe.throw(_("Failed to create multi-member loan repayment: {0}").format(str(e)))

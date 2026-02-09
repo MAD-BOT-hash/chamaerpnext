@@ -8,20 +8,21 @@
  "engine": "InnoDB",
  "field_order": [
   "section_break_1",
-  "repayment_date",
+  "posting_date",
+  "payment_mode",
+  "payment_account",
   "company",
   "column_break_1",
-  "payment_method",
-  "account",
-  "section_break_2",
+  "batch_number",
   "description",
+  "section_break_2",
   "loans_section",
   "loans",
   "totals_section",
-  "total_payment_amount",
+  "total_repayment_amount",
   "total_selected_loans",
   "accounting_section",
-  "payment_entry"
+  "journal_entry"
  ],
  "fields": [
   {
@@ -31,10 +32,24 @@
   },
   {
    "default": "Today",
-   "fieldname": "repayment_date",
+   "fieldname": "posting_date",
    "fieldtype": "Date",
    "in_list_view": 1,
-   "label": "Repayment Date",
+   "label": "Posting Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "payment_mode",
+   "fieldtype": "Select",
+   "label": "Payment Mode",
+   "options": "Cash\nBank Transfer\nCheque\nMobile Money",
+   "reqd": 1
+  },
+  {
+   "fieldname": "payment_account",
+   "fieldtype": "Link",
+   "label": "Payment Account",
+   "options": "Account",
    "reqd": 1
   },
   {
@@ -50,22 +65,10 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "payment_method",
-   "fieldtype": "Select",
-   "label": "Payment Method",
-   "options": "Cash\nMobile Money\nBank Transfer\nCheque",
+   "fieldname": "batch_number",
+   "fieldtype": "Data",
+   "label": "Reference / Batch Number",
    "reqd": 1
-  },
-  {
-   "fieldname": "account",
-   "fieldtype": "Link",
-   "label": "Account",
-   "options": "Account",
-   "reqd": 1
-  },
-  {
-   "fieldname": "section_break_2",
-   "fieldtype": "Section Break"
   },
   {
    "fieldname": "description",
@@ -73,26 +76,30 @@
    "label": "Description"
   },
   {
+   "fieldname": "section_break_2",
+   "fieldtype": "Section Break"
+  },
+  {
    "fieldname": "loans_section",
    "fieldtype": "Section Break",
-   "label": "Members with Active Loans"
+   "label": "Loans for Repayment"
   },
   {
    "fieldname": "loans",
    "fieldtype": "Table",
-   "label": "Loans",
+   "label": "Loan Repayments",
    "options": "SHG Multi Member Loan Repayment Item",
    "reqd": 1
   },
   {
    "fieldname": "totals_section",
    "fieldtype": "Section Break",
-   "label": "Totals"
+   "label": "Repayment Totals"
   },
   {
-   "fieldname": "total_payment_amount",
+   "fieldname": "total_repayment_amount",
    "fieldtype": "Currency",
-   "label": "Total Payment Amount",
+   "label": "Total Repayment Amount",
    "read_only": 1
   },
   {
@@ -104,13 +111,13 @@
   {
    "fieldname": "accounting_section",
    "fieldtype": "Section Break",
-   "label": "Accounting"
+   "label": "Accounting Entries"
   },
   {
-   "fieldname": "payment_entry",
+   "fieldname": "journal_entry",
    "fieldtype": "Link",
-   "label": "Payment Entry",
-   "options": "Payment Entry",
+   "label": "Journal Entry",
+   "options": "Journal Entry",
    "read_only": 1
   }
  ],
