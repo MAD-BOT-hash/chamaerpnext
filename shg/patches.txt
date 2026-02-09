@@ -10,7 +10,7 @@ shg.shg.patches.patch_fix_account_references
 shg.shg.patches.patch_validate_shg_members_account
 shg.shg.patches.add_phone_field_to_related_doctypes
 shg.patches.migrate_repayment_schedule_field_names
-shg.shg.patches.verify_hook_signatures
+shg.patches.verify_hook_signatures
 shg.shg.patches.add_company_field_to_shg_loan
 shg.shg.patches.fix_draft_loan_journal_entries
 shg.shg.patches.add_disbursed_on_field
@@ -43,7 +43,7 @@ shg.shg.patches.fix_loan_repayment_balance_validation
 shg.shg.patches.add_get_active_members_functionality
 shg.shg.patches.add_generate_individual_loans_function
 shg.shg.patches.fix_repayment_balance_calculation
-shg.shg.patches.add_repayment_breakdown_doctype
+shg.patches.add_repayment_breakdown_doctype
 shg.shg.patches.add_emi_amount_field_to_repayment_schedule
 shg.shg.patches.update_loan_summary_calculation
 shg.shg.patches.log_repayment_status_corrections
