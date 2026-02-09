@@ -457,6 +457,60 @@ class SHGLoanRepayment(Document):
         if posting_date:
             validate_posting_date(posting_date)
 
+    @frappe.whitelist()
+    def fetch_unpaid_balances(self):
+        """
+        Fetch unpaid balances for the selected loan
+        This method is called from the frontend JavaScript
+        """
+        if not self.loan:
+            frappe.throw("Please select a loan first")
+        
+        # Get the loan document
+        loan_doc = frappe.get_doc("SHG Loan", self.loan)
+        
+        # Update member information
+        self.member = loan_doc.member
+        self.member_name = loan_doc.member_name
+        
+        # Update outstanding balance
+        self.outstanding_balance = loan_doc.balance_amount or 0
+        
+        # If there's a repayment schedule, populate the breakdown table
+        if loan_doc.get("repayment_schedule"):
+            # Clear existing breakdown entries
+            self.set("repayment_breakdown", [])
+            
+            # Add unpaid schedule items to the breakdown
+            for schedule_row in loan_doc.repayment_schedule:
+                if schedule_row.unpaid_balance and schedule_row.unpaid_balance > 0:
+                    breakdown_row = self.append("repayment_breakdown", {})
+                    breakdown_row.installment_no = schedule_row.installment_no
+                    breakdown_row.due_date = schedule_row.due_date
+                    breakdown_row.total_payment = schedule_row.total_payment
+                    breakdown_row.unpaid_balance = schedule_row.unpaid_balance
+                    breakdown_row.status = schedule_row.status
+                    breakdown_row.amount_to_pay = 0  # Initialize with 0, user will update as needed
+        
+        # Calculate the total unpaid amount
+        total_unpaid = sum(
+            row.unpaid_balance or 0 
+            for row in loan_doc.repayment_schedule 
+            if row.unpaid_balance and row.unpaid_balance > 0
+        ) if loan_doc.get("repayment_schedule") else loan_doc.balance_amount or 0
+        
+        self.outstanding_balance = total_unpaid
+        
+        # Refresh the form
+        self.save()
+        
+        return {
+            "status": "success",
+            "outstanding_balance": self.outstanding_balance,
+            "breakdown_items_count": len(self.repayment_breakdown or []),
+            "member": self.member,
+            "member_name": self.member_name
+        }
 
 # --- Hook functions ---
 # These are hook functions called from hooks.py and should NOT have @frappe.whitelist()
