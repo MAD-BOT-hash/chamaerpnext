@@ -40,3 +40,20 @@ def flag_overdue_loans():
                 frappe.log_error(frappe.get_traceback(), f"Failed to refresh summary for loan {loan_name}")
     
     frappe.msgprint(f"Flagged {updated_count} installments as overdue")
+
+@frappe.whitelist()
+def get_outstanding_amount(loan):
+    """
+    Get the current outstanding amount for a loan
+    
+    Args:
+        loan (str): Loan document name
+    
+    Returns:
+        float: Outstanding amount
+    """
+    if not loan:
+        return 0.0
+    
+    loan_doc = frappe.get_doc("SHG Loan", loan)
+    return loan_doc.total_outstanding_amount or 0.0

@@ -16,6 +16,63 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
     refresh: function(frm) {
         if (frm.doc.docstatus === 0) {
             frm.add_custom_button(__('Get Active Loans'), function() {
+                frappe.call({
+                    method: "shg.shg.doctype.shg_multi_member_loan_repayment.shg_multi_member_loan_repayment.fetch_active_loans",
+                    args: {
+                        member: frm.doc.member || null
+                    },
+                    callback: function(r) {
+                        if (r.message && r.message.length > 0) {
+                            // Clear existing rows
+                            frm.clear_table('loans');
+                            
+                            // Add new rows for each active loan
+                            r.message.forEach(function(loan) {
+                                var row = frm.add_child('loans');
+                                row.member = loan.member;
+                                row.loan = loan.name;
+                                row.loan_type = loan.loan_type;
+                                row.outstanding_loan_balance = loan.total_outstanding_amount;
+                                row.repayment_amount = loan.total_outstanding_amount; // Set default to full amount
+                                row.installment_due_date = loan.repayment_start_date;
+                                
+                                // Fetch member name
+                                if (loan.member) {
+                                    frappe.call({
+                                        method: "frappe.client.get_value",
+                                        args: {
+                                            doctype: "SHG Member",
+                                            fieldname: "member_name",
+                                            filters: { name: loan.member }
+                                        },
+                                        callback: function(member_r) {
+                                            if (member_r.message && member_r.message.member_name) {
+                                                frappe.model.set_value(row.doctype, row.name, 'member_name', member_r.message.member_name);
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+                            
+                            frm.refresh_field('loans');
+                            frm.trigger('recalculate_totals');
+                            
+                            frappe.show_alert({
+                                message: __("Loaded {0} active loans", [r.message.length]),
+                                indicator: 'green'
+                            });
+                        } else {
+                            frappe.show_alert({
+                                message: __("No active loans found"),
+                                indicator: 'orange'
+                            });
+                        }
+                    }
+                });
+            });
+            
+            // Add button to refresh outstanding amounts for existing rows
+            frm.add_custom_button(__('Refresh Outstanding'), function() {
                 // Refresh outstanding amounts for all rows
                 (frm.doc.loans || []).forEach(function(row) {
                     if (row.loan) {
@@ -34,6 +91,17 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
                 });
             });
         }
+    },
+    
+    recalculate_totals: function(frm) {
+        var total = 0;
+        var count = 0;
+        (frm.doc.loans || []).forEach(function(row) {
+            total += row.repayment_amount || 0;
+            count += 1;
+        });
+        frm.set_value('total_repayment_amount', total);
+        frm.set_value('total_selected_loans', count);
     }
 });
 
