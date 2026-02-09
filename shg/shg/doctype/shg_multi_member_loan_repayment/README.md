@@ -1,110 +1,45 @@
 # SHG Multi Member Loan Repayment
 
-This doctype allows processing loan repayments from multiple SHG members in a single entry, similar to the existing Multi-Member Payment functionality but specifically for loans.
-
-## Features
-
-1. **Multi-Loan Selection**: Select multiple members with active loans and outstanding balances
-2. **Batch Repayment Processing**: Process repayments for all selected loans in one go
-3. **Automatic Accounting**: Creates proper accounting entries with debit to bank/cash account and credit to member ledger accounts
-4. **Loan Schedule Updates**: Automatically updates loan repayment schedules with actual payment dates and amounts
-5. **Validation**: Prevents invalid payments and validates payment amounts against outstanding balances
+## Overview
+This doctype enables bulk processing of loan repayments for multiple SHG members in a single transaction.
 
 ## Fields
 
-### Main Document
-- **Repayment Date**: Date of the repayment
-- **Company**: Company for which the repayment is being recorded
-- **Payment Method**: Method of payment (Cash, Mobile Money, Bank Transfer, Cheque)
-- **Account**: Bank/Cash account to debit
-- **Total Payment Amount**: Total repayment amount (auto-calculated)
-- **Total Selected Loans**: Number of loans with payments (auto-calculated)
-- **Description**: Optional description
+### Parent Document Fields
+- posting_date: 'YYYY-MM-DD' (required)
+- payment_mode: 'Cash/Bank Transfer/Cheque/Mobile Money' (required)
+- payment_account: 'Account Link' (required)
+- company: 'Company Link' (required)
+- batch_number: 'Reference/Batch Number' (required)
+- description: 'Text field for additional information'
+- total_repayment_amount: 'Currency field (auto-calculated)'
+- total_selected_loans: 'Integer field (auto-calculated)'
 
-### Loans Table
-- **Member ID**: ID of the member
-- **Member Name**: Name of the member
-- **Loan Number**: Loan document number
-- **Loan Type**: Type of loan
-- **Outstanding Balance**: Current outstanding balance (read-only)
-- **Payment Amount**: Amount being repaid (editable)
-- **Status**: Current loan status (read-only)
+### Child Table Fields (SHG Multi Member Loan Repayment Item)
+- member: 'SHG Member Link' (required)
+- member_name: 'Member Name' (auto-fetched, read-only)
+- loan: 'SHG Loan Link' (required)
+- loan_type: 'Loan Type' (auto-fetched, read-only)
+- installment_due_date: 'Date' (auto-fetched, read-only)
+- outstanding_amount: 'Currency' (auto-fetched, read-only, required)
+- repayment_amount: 'Currency' (user editable, required)
+- status: 'Data field' (system managed)
 
 ## Workflow
-
-1. Create a new SHG Multi Member Loan Repayment
-2. Click "Fetch Members with Active Loans" to get all members with outstanding loan balances
-3. Enter payment amounts for members making repayments (leave blank for no payment)
-4. Select payment method and account
-5. Submit the document
-6. System automatically:
-   - Creates individual SHG Loan Repayment documents for each payment
-   - Updates loan repayment schedules with actual payment data
-   - Creates Payment Entry for accounting
-   - Updates loan summary fields
-
-## API Endpoints
-
-### Get Members with Active Loans
-```javascript
-frappe.call({
-    method: 'shg.shg.doctype.shg_multi_member_loan_repayment.shg_multi_member_loan_repayment.get_members_with_active_loans',
-    args: {
-        company: 'Company Name'  // Optional
-    },
-    callback: function(r) {
-        // Handle response
-    }
-});
-```
-
-### Create Multi-Member Loan Repayment
-```javascript
-frappe.call({
-    method: 'shg.shg.doctype.shg_multi_member_loan_repayment.shg_multi_member_loan_repayment.create_multi_member_loan_repayment',
-    args: {
-        repayment_data: {
-            repayment_date: 'YYYY-MM-DD',
-            company: 'Company Name',
-            payment_method: 'Cash',
-            account: 'Account Name',
-            loans: [
-                {
-                    member: 'Member ID',
-                    member_name: 'Member Name',
-                    loan: 'Loan Number',
-                    loan_type: 'Loan Type',
-                    outstanding_balance: 5000,
-                    payment_amount: 2000
-                }
-                // ... more loans
-            ]
-        }
-    },
-    callback: function(r) {
-        // Handle response
-    }
-});
-```
+1. User creates new SHG Multi Member Loan Repayment document
+2. Selects posting date, payment mode, payment account, and company
+3. Enters batch number and optional description
+4. Clicks "Get Active Loans" to populate child table with active loans
+5. Reviews and adjusts repayment amounts as needed
+6. Submits document to process all loan repayments
 
 ## Validation Rules
+- All parent-level mandatory fields must be filled
+- Each child table row must have all required fields
+- Repayment amount cannot exceed outstanding amount
+- No duplicate loans allowed in same batch
+- Only active members and loans in "Disbursed" or "Partially Paid" status can be processed
 
-- Payment amount must be greater than zero
-- Payment amount cannot exceed outstanding balance
-- At least one loan must have a payment amount greater than zero
-- Members with zero payment amounts are ignored
-- Payment method and account must be selected
-
-## Permissions
-
-- **SHG Admin**: Full access
-- **SHG Treasurer**: Full access
-- **System Manager**: Full access
-
-## Integration Points
-
-- Links to SHG Loan and SHG Loan Repayment doctypes
-- Creates Payment Entry documents for accounting
-- Updates loan repayment schedules
-- Integrates with member account mapping
-- Follows company and account settings from SHG Settings
+## API Methods
+- fetch_active_loans(member=None): Get active loans for member or all members
+- recalculate_totals(): Recalculate total amounts and loan count
