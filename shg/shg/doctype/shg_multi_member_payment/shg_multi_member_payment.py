@@ -91,6 +91,10 @@ class SHGMultiMemberPayment(Document):
             if not row.member:
                 frappe.throw(_("Row {0}: Member is required").format(row.idx))
             
+            # Validate Member Name
+            if not row.member_name:
+                frappe.throw(_("Row {0}: Member Name is required").format(row.idx))
+            
             # Validate Reference Doctype (Invoice Type)
             if not row.reference_doctype:
                 frappe.throw(_("Row {0}: Invoice Type is required").format(row.idx))

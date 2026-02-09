@@ -37,20 +37,78 @@ frappe.ui.form.on('SHG Multi Member Payment', {
     }
 });
 
-frappe.ui.form.on('SHG Bulk Payment Item', {
+frappe.ui.form.on('SHG Multi Member Payment Invoice', {
     invoices_add: function(frm, cdt, cdn) {
         var row = frappe.get_doc(cdt, cdn);
         // Set default values for new row if needed
     },
     
-    reference_doctype: function(frm, cdt, cdn) {
+    member: function(frm, cdt, cdn) {
         var row = frappe.get_doc(cdt, cdn);
-        frappe.model.set_value(cdt, cdn, 'reference_name', '');
+        if (row.member) {
+            // Auto-fetch member name
+            frappe.call({
+                method: "frappe.client.get_value",
+                args: {
+                    doctype: "SHG Member",
+                    fieldname: "member_name",
+                    filters: { name: row.member }
+                },
+                callback: function(r) {
+                    if (r.message && r.message.member_name) {
+                        frappe.model.set_value(cdt, cdn, 'member_name', r.message.member_name);
+                    }
+                }
+            });
+        }
     },
     
     reference_name: function(frm, cdt, cdn) {
         var row = frappe.get_doc(cdt, cdn);
         if (row.reference_doctype && row.reference_name) {
+            // Auto-fetch invoice date and outstanding amount
+            frappe.call({
+                method: "frappe.client.get_value",
+                args: {
+                    doctype: row.reference_doctype,
+                    fieldname: ["posting_date", "date", "due_date"],
+                    filters: { name: row.reference_name }
+                },
+                callback: function(r) {
+                    if (r.message) {
+                        // Try different possible date field names
+                        var date_value = r.message.posting_date || r.message.date || r.message.due_date;
+                        if (date_value) {
+                            frappe.model.set_value(cdt, cdn, 'date', date_value);
+                        }
+                        
+                        // Also try to get member if not set
+                        if (!row.member) {
+                            var member_value = r.message.member;
+                            if (member_value) {
+                                frappe.model.set_value(cdt, cdn, 'member', member_value);
+                                
+                                // Fetch member name
+                                frappe.call({
+                                    method: "frappe.client.get_value",
+                                    args: {
+                                        doctype: "SHG Member",
+                                        fieldname: "member_name",
+                                        filters: { name: member_value }
+                                    },
+                                    callback: function(member_r) {
+                                        if (member_r.message && member_r.message.member_name) {
+                                            frappe.model.set_value(cdt, cdn, 'member_name', member_r.message.member_name);
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Get outstanding amount
             frappe.call({
                 method: "shg.shg.utils.payment_utils.get_outstanding",
                 args: {
@@ -58,8 +116,9 @@ frappe.ui.form.on('SHG Bulk Payment Item', {
                     name: row.reference_name
                 },
                 callback: function(r) {
-                    if (r.message) {
+                    if (r.message !== undefined) {
                         frappe.model.set_value(cdt, cdn, 'outstanding_amount', r.message);
+                        // Set payment amount to outstanding amount by default
                         frappe.model.set_value(cdt, cdn, 'payment_amount', r.message);
                     }
                 }
@@ -68,6 +127,20 @@ frappe.ui.form.on('SHG Bulk Payment Item', {
     },
     
     payment_amount: function(frm, cdt, cdn) {
+        var row = frappe.get_doc(cdt, cdn);
+        
+        // Validate that payment amount does not exceed outstanding amount
+        if (row.payment_amount && row.outstanding_amount && row.payment_amount > row.outstanding_amount) {
+            frappe.show_alert({
+                message: __("Payment amount cannot exceed outstanding amount"),
+                indicator: 'red'
+            });
+            
+            // Reset payment amount to outstanding amount
+            frappe.model.set_value(cdt, cdn, 'payment_amount', row.outstanding_amount);
+            frappe.validated = false;
+        }
+        
         // Update total when payment amount changes
         var total = 0;
         (frm.doc.invoices || []).forEach(function(row) {
