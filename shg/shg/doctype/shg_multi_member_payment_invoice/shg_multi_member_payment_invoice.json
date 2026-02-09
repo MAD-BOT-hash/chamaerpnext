@@ -5,10 +5,10 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "reference_doctype",
-  "reference_name",
   "member",
   "member_name",
+  "reference_doctype",
+  "reference_name",
   "date",
   "amount",
   "outstanding_amount",
@@ -20,53 +20,63 @@
  ],
  "fields": [
   {
+   "fieldname": "member",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Member",
+   "options": "SHG Member",
+   "reqd": 1
+  },
+  {
+   "fieldname": "member_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Member Name",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
    "fieldname": "reference_doctype",
    "fieldtype": "Select",
-   "label": "Reference Doctype",
+   "in_list_view": 1,
+   "label": "Invoice Type",
    "options": "SHG Contribution Invoice\nSHG Contribution\nSHG Meeting Fine",
    "reqd": 1
   },
   {
    "fieldname": "reference_name",
    "fieldtype": "Dynamic Link",
-   "label": "Reference Name",
+   "in_list_view": 1,
+   "label": "Invoice Reference",
    "options": "reference_doctype",
    "reqd": 1
   },
   {
-   "fieldname": "member",
-   "fieldtype": "Link",
-   "label": "Member",
-   "options": "SHG Member",
-   "read_only": 1
-  },
-  {
-   "fieldname": "member_name",
-   "fieldtype": "Data",
-   "label": "Member Name",
-   "read_only": 1
-  },
-  {
    "fieldname": "date",
    "fieldtype": "Date",
-   "label": "Date",
-   "read_only": 1
+   "in_list_view": 1,
+   "label": "Invoice Date",
+   "reqd": 1
   },
   {
    "fieldname": "amount",
    "fieldtype": "Currency",
-   "label": "Amount",
+   "in_list_view": 1,
+   "label": "Invoice Amount",
    "read_only": 1
   },
   {
    "fieldname": "outstanding_amount",
    "fieldtype": "Currency",
+   "in_list_view": 1,
    "label": "Outstanding Amount",
-   "read_only": 1
+   "read_only": 1,
+   "reqd": 1
   },
   {
    "fieldname": "payment_amount",
    "fieldtype": "Currency",
+   "in_list_view": 1,
    "label": "Payment Amount",
    "reqd": 1
   },
@@ -97,7 +107,6 @@
  "istable": 1,
  "links": [],
  "modified": "2025-10-22 10:00:00",
- "modified_by": "Administrator",
  "module": "SHG",
  "name": "SHG Multi Member Payment Invoice",
  "owner": "Administrator",

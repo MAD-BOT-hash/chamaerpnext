@@ -21,28 +21,29 @@ class SHGMultiMemberPayment(Document):
         self.total_payment_amount = total
     
     def validate(self):
-        """Validate bulk payment"""
+        """Validate bulk payment with comprehensive mandatory field checks"""
         # Skip validation during dialog operations
         if getattr(self, "__during_dialog_operation", False):
             return
             
-        # Validate total_payment_amount > 0
-        if flt(self.total_payment_amount) <= 0:
-            frappe.throw(_("Total payment amount must be greater than zero"))
-            
+        # Validate parent-level mandatory fields
+        self.validate_parent_mandatory_fields()
+        
+        # Validate that we have at least one invoice with payment amount > 0
+        self.validate_payment_documents_exist()
+        
         # Validate required fields in child table
-        for row in self.invoices:
-            if not row.reference_doctype:
-                frappe.throw(_("Row {0}: Reference Doctype is required").format(row.idx))
-            if not row.reference_name:
-                frappe.throw(_("Row {0}: Reference Name is required").format(row.idx))
-            if not row.payment_amount or flt(row.payment_amount) <= 0:
-                frappe.throw(_("Row {0}: Payment Amount must be greater than zero").format(row.idx))
-            if not row.outstanding_amount or row.outstanding_amount < 0:
-                frappe.throw(_("Row {0}: Outstanding amount is missing or invalid").format(row.idx))
-            if row.payment_amount > row.outstanding_amount:
-                frappe.throw(_("Row {0}: Payment amount cannot exceed outstanding amount").format(row.idx))
-            
+        self.validate_invoice_mandatory_fields()
+        
+        # Validate payment amount rules
+        self.validate_payment_amounts()
+        
+        # Validate invoice compatibility rules
+        self.validate_invoice_compatibility()
+        
+        # Validate blocking conditions
+        self.validate_blocking_conditions()
+        
         # Validate posting date against locked periods
         self.validate_posting_date()
         
@@ -52,6 +53,129 @@ class SHGMultiMemberPayment(Document):
         self.validate_no_duplicate_across_batches()
         self.validate_payment_amount_vs_outstanding()
         self.validate_totals()
+    
+    def validate_parent_mandatory_fields(self):
+        """Validate all mandatory parent-level fields"""
+        # Validate Company/SHG
+        if not self.company:
+            frappe.throw(_("Company is mandatory"))
+        
+        # Validate Posting Date (assuming payment_date is the posting date)
+        if not self.payment_date:
+            frappe.throw(_("Payment Date is mandatory"))
+        
+        # Validate Mode of Payment
+        if not self.mode_of_payment:
+            frappe.throw(_("Mode of Payment is mandatory"))
+        
+        # Validate that member field exists (though it's not mandatory in the JSON)
+        # If you want to make it mandatory, uncomment the next lines:
+        # if not self.member:
+        #     frappe.throw(_("Member is mandatory"))
+    
+    def validate_payment_documents_exist(self):
+        """Validate that at least one invoice has payment amount > 0"""
+        has_payment = False
+        for row in self.invoices:
+            if flt(row.payment_amount) > 0:
+                has_payment = True
+                break
+        
+        if not has_payment:
+            frappe.throw(_("At least one invoice must have a payment amount greater than zero"))
+    
+    def validate_invoice_mandatory_fields(self):
+        """Validate required fields in child table rows"""
+        for row in self.invoices:
+            # Validate Member
+            if not row.member:
+                frappe.throw(_("Row {0}: Member is required").format(row.idx))
+            
+            # Validate Reference Doctype (Invoice Type)
+            if not row.reference_doctype:
+                frappe.throw(_("Row {0}: Invoice Type is required").format(row.idx))
+            
+            # Validate Reference Name (Invoice Reference)
+            if not row.reference_name:
+                frappe.throw(_("Row {0}: Invoice Reference is required").format(row.idx))
+            
+            # Validate Date (Invoice Date)
+            if not row.date:
+                frappe.throw(_("Row {0}: Invoice Date is required").format(row.idx))
+            
+            # Validate Outstanding Amount
+            if not row.outstanding_amount or flt(row.outstanding_amount) <= 0:
+                frappe.throw(_("Row {0}: Outstanding Amount must be greater than zero").format(row.idx))
+            
+            # Validate Payment Amount
+            if not row.payment_amount or flt(row.payment_amount) <= 0:
+                frappe.throw(_("Row {0}: Payment Amount must be greater than zero").format(row.idx))
+    
+    def validate_payment_amounts(self):
+        """Validate payment amount rules"""
+        for row in self.invoices:
+            if row.reference_doctype and row.reference_name and row.payment_amount:
+                # Validate Payment Amount <= Outstanding Amount
+                if flt(row.payment_amount) > flt(row.outstanding_amount):
+                    frappe.throw(_("Row {0}: Payment amount ({1}) cannot exceed outstanding amount ({2})").format(
+                        row.idx, row.payment_amount, row.outstanding_amount))
+                
+                # Validate that invoice reference exists and is submitted
+                if not frappe.db.exists(row.reference_doctype, row.reference_name):
+                    frappe.throw(_("Row {0}: Invoice {1} does not exist").format(row.idx, row.reference_name))
+                
+                docstatus = frappe.db.get_value(row.reference_doctype, row.reference_name, "docstatus")
+                if docstatus != 1:
+                    frappe.throw(_("Row {0}: Invoice {1} is not submitted").format(row.idx, row.reference_name))
+    
+    def validate_invoice_compatibility(self):
+        """Validate invoice compatibility rules"""
+        processed_invoices = set()
+        
+        for row in self.invoices:
+            if row.reference_doctype and row.reference_name:
+                # Check currency matching (assuming invoices have currency field)
+                # This would need to be customized based on your actual invoice doctypes
+                invoice_currency = frappe.db.get_value(row.reference_doctype, row.reference_name, "currency")
+                if invoice_currency and self.currency and invoice_currency != self.currency:
+                    frappe.throw(_("Row {0}: Invoice currency {1} does not match payment currency {2}").format(
+                        row.idx, invoice_currency, self.currency))
+                
+                # Check for duplicate invoices in same batch
+                invoice_key = (row.reference_doctype, row.reference_name)
+                if invoice_key in processed_invoices:
+                    frappe.throw(_("Row {0}: Invoice {1} appears multiple times in this payment batch").format(
+                        row.idx, row.reference_name))
+                processed_invoices.add(invoice_key)
+                
+                # Verify member compatibility
+                invoice_member = frappe.db.get_value(row.reference_doctype, row.reference_name, "member")
+                if invoice_member and row.member and invoice_member != row.member:
+                    frappe.throw(_("Row {0}: Invoice {1} does not belong to member {2}").format(
+                        row.idx, row.reference_name, row.member))
+    
+    def validate_blocking_conditions(self):
+        """Validate all blocking conditions"""
+        for row in self.invoices:
+            if row.reference_doctype and row.reference_name:
+                # Check if member is active
+                if row.member:
+                    member_status = frappe.db.get_value("SHG Member", row.member, "status")
+                    if member_status and member_status != "Active":
+                        frappe.throw(_("Row {0}: Member {1} is not active").format(row.idx, row.member))
+                
+                # Check if invoice is fully paid or cancelled
+                status = frappe.db.get_value(row.reference_doctype, row.reference_name, "status")
+                if status in ["Paid", "Cancelled"]:
+                    frappe.throw(_("Row {0}: Invoice {1} is {2} and cannot be processed").format(
+                        row.idx, row.reference_name, status.lower()))
+                
+                # Check if document is closed
+                if frappe.db.has_column(row.reference_doctype, "is_closed"):
+                    is_closed = frappe.db.get_value(row.reference_doctype, row.reference_name, "is_closed")
+                    if is_closed:
+                        frappe.throw(_("Row {0}: Invoice {1} is closed and cannot be processed").format(
+                            row.idx, row.reference_name))
     
     def validate_no_closed_documents(self):
         """Validate that no closed documents are included"""
