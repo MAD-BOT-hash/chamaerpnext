@@ -12,7 +12,7 @@
   "loan_type",
   "column_break_1",
   "installment_due_date",
-  "outstanding_loan_balance",
+  "outstanding",
   "repayment_amount",
   "status"
  ],
@@ -62,10 +62,10 @@
    "read_only": 1
   },
   {
-   "fieldname": "outstanding_loan_balance",
+   "fieldname": "outstanding",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "Outstanding Loan Balance",
+   "label": "Outstanding",
    "options": "KES",
    "read_only": 1,
    "reqd": 1

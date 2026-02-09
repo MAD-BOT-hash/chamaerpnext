@@ -103,8 +103,8 @@ class SHGMultiMemberLoanRepayment(Document):
                 frappe.throw(_("Row {0}: Loan Type is required").format(row.idx))
             
             # Validate Outstanding Loan Balance
-            if not row.outstanding_loan_balance or flt(row.outstanding_loan_balance) <= 0:
-                frappe.throw(_("Row {0}: Outstanding Loan Balance must be greater than zero").format(row.idx))
+            if not row.outstanding or flt(row.outstanding) <= 0:
+                frappe.throw(_("Row {0}: Outstanding Amount must be greater than zero").format(row.idx))
             
             # Validate Repayment Amount
             if not row.repayment_amount or flt(row.repayment_amount) <= 0:
@@ -115,9 +115,9 @@ class SHGMultiMemberLoanRepayment(Document):
         for row in self.loans:
             if row.loan and row.repayment_amount:
                 # Validate Repayment Amount <= Outstanding Loan Balance
-                if flt(row.repayment_amount) > flt(row.outstanding_loan_balance):
-                    frappe.throw(_("Row {0}: Repayment amount ({1}) cannot exceed outstanding loan balance ({2})").format(
-                        row.idx, row.repayment_amount, row.outstanding_loan_balance))
+                if flt(row.repayment_amount) > flt(row.outstanding):
+                    frappe.throw(_("Row {0}: Repayment amount ({1}) cannot exceed outstanding amount ({2})").format(
+                        row.idx, row.repayment_amount, row.outstanding))
 
     def validate_loan_compatibility(self):
         """Validate loan compatibility rules"""
