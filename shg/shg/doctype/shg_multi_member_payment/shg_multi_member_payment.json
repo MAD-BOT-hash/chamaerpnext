@@ -123,7 +123,7 @@
    "fieldname": "invoices",
    "fieldtype": "Table",
    "label": "Invoices",
-   "options": "SHG Bulk Payment Item",
+   "options": "SHG Multi Member Payment Invoice",
    "reqd": 1
   }
  ],

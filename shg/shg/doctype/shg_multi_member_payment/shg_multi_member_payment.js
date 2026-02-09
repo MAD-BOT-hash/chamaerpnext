@@ -37,7 +37,7 @@ frappe.ui.form.on('SHG Multi Member Payment', {
     }
 });
 
-frappe.ui.form.on('SHG Multi Member Payment Invoice', {
+frappe.ui.form.on('SHG Bulk Payment Item', {
     invoices_add: function(frm, cdt, cdn) {
         var row = frappe.get_doc(cdt, cdn);
         // Set default values for new row if needed

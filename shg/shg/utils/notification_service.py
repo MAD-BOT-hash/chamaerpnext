@@ -616,3 +616,12 @@ def schedule_notification(
         reference_document=reference_document,
         reference_name=reference_name
     )
+
+
+def process_scheduled_notifications():
+    """
+    Convenience function to process all scheduled notifications
+    This function is designed to be called by the scheduler
+    """
+    service = NotificationService()
+    return service.process_scheduled_notifications()
