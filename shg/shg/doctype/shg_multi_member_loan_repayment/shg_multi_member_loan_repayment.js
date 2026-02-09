@@ -32,8 +32,8 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
                                 row.member = loan.member;
                                 row.loan = loan.name;
                                 row.loan_type = loan.loan_type;
-                                row.outstanding = loan.total_outstanding_amount;
-                                row.repayment_amount = loan.total_outstanding_amount; // Set default to full amount
+                                row.outstanding = loan.outstanding_amount;
+                                row.repayment_amount = loan.outstanding_amount; // Set default to full amount
                                 row.installment_due_date = loan.repayment_start_date;
                                 
                                 // Fetch member name
@@ -140,7 +140,7 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment Item', {
                 method: "frappe.client.get_value",
                 args: {
                     doctype: "SHG Loan",
-                    fieldname: ["loan_type", "total_outstanding_amount", "repayment_start_date", "member"],
+                    fieldname: ["loan_type", "outstanding_amount", "repayment_start_date", "member"],
                     filters: { name: row.loan }
                 },
                 callback: function(r) {
@@ -151,11 +151,11 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment Item', {
                         }
                         
                         // Set outstanding loan balance
-                        if (r.message.total_outstanding_amount !== undefined) {
-                            frappe.model.set_value(cdt, cdn, 'outstanding', r.message.total_outstanding_amount);
+                        if (r.message.outstanding_amount !== undefined) {
+                            frappe.model.set_value(cdt, cdn, 'outstanding', r.message.outstanding_amount);
                             
                             // Set repayment amount to outstanding amount by default
-                            frappe.model.set_value(cdt, cdn, 'repayment_amount', r.message.total_outstanding_amount);
+                            frappe.model.set_value(cdt, cdn, 'repayment_amount', r.message.outstanding_amount);
                         }
                         
                         // Set installment due date
