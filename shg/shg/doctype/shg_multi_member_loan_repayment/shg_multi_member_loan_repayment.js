@@ -17,7 +17,7 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
         if (frm.doc.docstatus === 0) {
             frm.add_custom_button(__('Get Active Loans'), function() {
                 frappe.call({
-                    method: "shg.api.loan_repayment.get_active_loans",
+                    method: "shg.loan_repayment_api.get_active_loans",
                     args: {
                         member: frm.doc.member || null
                     },
@@ -78,7 +78,7 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
                 (frm.doc.loans || []).forEach(function(row) {
                     if (row.loan) {
                         frappe.call({
-                            method: "shg.api.loan_repayment.get_outstanding_amount",
+                            method: "shg.loan_repayment_api.get_outstanding_amount",
                             args: {
                                 loan: row.loan
                             },
