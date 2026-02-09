@@ -17,17 +17,17 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
         if (frm.doc.docstatus === 0) {
             frm.add_custom_button(__('Get Active Loans'), function() {
                 frappe.call({
-                    method: "shg.shg.doctype.shg_multi_member_loan_repayment.shg_multi_member_loan_repayment.fetch_active_loans",
+                    method: "shg.api.loan_repayment.get_active_loans",
                     args: {
                         member: frm.doc.member || null
                     },
                     callback: function(r) {
-                        if (r.message && r.message.length > 0) {
+                        if (r.message && r.message.success && r.message.data.length > 0) {
                             // Clear existing rows
                             frm.clear_table('loans');
                             
                             // Add new rows for each active loan
-                            r.message.forEach(function(loan) {
+                            r.message.data.forEach(function(loan) {
                                 var row = frm.add_child('loans');
                                 row.member = loan.member;
                                 row.loan = loan.name;
@@ -58,12 +58,13 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
                             frm.trigger('recalculate_totals');
                             
                             frappe.show_alert({
-                                message: __("Loaded {0} active loans", [r.message.length]),
+                                message: __("Loaded {0} active loans", [r.message.data.length]),
                                 indicator: 'green'
                             });
                         } else {
+                            var message = r.message ? r.message.message : "No active loans found";
                             frappe.show_alert({
-                                message: __("No active loans found"),
+                                message: __(message),
                                 indicator: 'orange'
                             });
                         }
@@ -77,13 +78,13 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
                 (frm.doc.loans || []).forEach(function(row) {
                     if (row.loan) {
                         frappe.call({
-                            method: "shg.shg.utils.loan_utils.get_outstanding_amount",
+                            method: "shg.api.loan_repayment.get_outstanding_amount",
                             args: {
                                 loan: row.loan
                             },
                             callback: function(r) {
-                                if (r.message !== undefined) {
-                                    frappe.model.set_value(row.doctype, row.name, 'outstanding', r.message);
+                                if (r.message && r.message.success) {
+                                    frappe.model.set_value(row.doctype, row.name, 'outstanding', r.message.data);
                                 }
                             }
                         });

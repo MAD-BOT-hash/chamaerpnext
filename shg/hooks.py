@@ -141,7 +141,9 @@ whitelisted_methods = [
     "shg.shg.api.notifications.get_scheduled_notifications",
     "shg.shg.api.notifications.send_batch_notifications_api",
     "shg.shg.api.notifications.get_unread_notifications_count",
-    "shg.shg.api.notifications.test_notification_connection"
+    "shg.shg.api.notifications.test_notification_connection",
+    "shg.api.loan_repayment.get_active_loans",
+    "shg.api.loan_repayment.get_outstanding_amount"
 ]
 
 # Patches
