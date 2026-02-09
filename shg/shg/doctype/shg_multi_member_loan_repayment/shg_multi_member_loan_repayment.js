@@ -32,7 +32,7 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
                                 row.member = loan.member;
                                 row.loan = loan.name;
                                 row.loan_type = loan.loan_type;
-                                row.outstanding = loan.outstanding_amount;
+                                row.outstanding_amount = loan.outstanding_amount;
                                 row.repayment_amount = loan.outstanding_amount; // Set default to full amount
                                 row.installment_due_date = loan.repayment_start_date;
                                 
@@ -84,7 +84,7 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
                             },
                             callback: function(r) {
                                 if (r.message && r.message.success) {
-                                    frappe.model.set_value(row.doctype, row.name, 'outstanding', r.message.data);
+                                    frappe.model.set_value(row.doctype, row.name, 'outstanding_amount', r.message.data);
                                 }
                             }
                         });
@@ -150,9 +150,9 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment Item', {
                             frappe.model.set_value(cdt, cdn, 'loan_type', r.message.loan_type);
                         }
                         
-                        // Set outstanding loan balance
+                        // Set outstanding amount
                         if (r.message.outstanding_amount !== undefined) {
-                            frappe.model.set_value(cdt, cdn, 'outstanding', r.message.outstanding_amount);
+                            frappe.model.set_value(cdt, cdn, 'outstanding_amount', r.message.outstanding_amount);
                             
                             // Set repayment amount to outstanding amount by default
                             frappe.model.set_value(cdt, cdn, 'repayment_amount', r.message.outstanding_amount);
@@ -191,15 +191,15 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment Item', {
     repayment_amount: function(frm, cdt, cdn) {
         var row = frappe.get_doc(cdt, cdn);
         
-        // Validate that repayment amount does not exceed outstanding loan balance
-        if (row.repayment_amount && row.outstanding && row.repayment_amount > row.outstanding) {
+        // Validate that repayment amount does not exceed outstanding amount
+        if (row.repayment_amount && row.outstanding_amount && row.repayment_amount > row.outstanding_amount) {
             frappe.show_alert({
-                message: __("Repayment amount cannot exceed outstanding loan balance"),
+                message: __("Repayment amount cannot exceed outstanding amount"),
                 indicator: 'red'
             });
             
-            // Reset repayment amount to outstanding loan balance
-            frappe.model.set_value(cdt, cdn, 'repayment_amount', row.outstanding);
+            // Reset repayment amount to outstanding amount
+            frappe.model.set_value(cdt, cdn, 'repayment_amount', row.outstanding_amount);
             frappe.validated = false;
         }
         

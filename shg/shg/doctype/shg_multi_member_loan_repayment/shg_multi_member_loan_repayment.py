@@ -102,8 +102,8 @@ class SHGMultiMemberLoanRepayment(Document):
             if not row.loan_type:
                 frappe.throw(_("Row {0}: Loan Type is required").format(row.idx))
             
-            # Validate Outstanding Loan Balance
-            if not row.outstanding or flt(row.outstanding) <= 0:
+            # Validate Outstanding Amount
+            if not row.outstanding_amount or flt(row.outstanding_amount) <= 0:
                 frappe.throw(_("Row {0}: Outstanding Amount must be greater than zero").format(row.idx))
             
             # Validate Repayment Amount
@@ -114,10 +114,10 @@ class SHGMultiMemberLoanRepayment(Document):
         """Validate repayment amount rules"""
         for row in self.loans:
             if row.loan and row.repayment_amount:
-                # Validate Repayment Amount <= Outstanding Loan Balance
-                if flt(row.repayment_amount) > flt(row.outstanding):
+                # Validate Repayment Amount <= Outstanding Amount
+                if flt(row.repayment_amount) > flt(row.outstanding_amount):
                     frappe.throw(_("Row {0}: Repayment amount ({1}) cannot exceed outstanding amount ({2})").format(
-                        row.idx, row.repayment_amount, row.outstanding))
+                        row.idx, row.repayment_amount, row.outstanding_amount))
 
     def validate_loan_compatibility(self):
         """Validate loan compatibility rules"""
@@ -173,7 +173,7 @@ class SHGMultiMemberLoanRepayment(Document):
         for row in self.loans:
             if row.loan:
                 # Get current outstanding balance for the loan
-                outstanding = frappe.db.get_value("SHG Loan", row.loan, "total_outstanding_amount")
+                outstanding = frappe.db.get_value("SHG Loan", row.loan, "outstanding_amount")
                 if outstanding is None:
                     outstanding = 0.0
                 total_outstanding += outstanding
@@ -248,7 +248,7 @@ class SHGMultiMemberLoanRepayment(Document):
         loans = frappe.get_all(
             "SHG Loan",
             filters=filters,
-            fields=["name", "member", "loan_type", "total_outstanding_amount", "repayment_start_date"],
+            fields=["name", "member", "loan_type", "outstanding_amount", "repayment_start_date"],
             order_by="member, name"
         )
         
@@ -277,19 +277,3 @@ class SHGMultiMemberLoanRepayment(Document):
             "total_repayment_amount": self.total_repayment_amount,
             "total_selected_loans": self.total_selected_loans
         }
-
-@frappe.whitelist()
-def fetch_active_loans(member=None):
-    """Standalone function to fetch active loans for client-side calls"""
-    filters = {"status": ["in", ["Disbursed", "Partially Paid"]]}
-    if member:
-        filters["member"] = member
-    
-    loans = frappe.get_all(
-        "SHG Loan",
-        filters=filters,
-        fields=["name", "member", "loan_type", "total_outstanding_amount", "repayment_start_date"],
-        order_by="member, name"
-    )
-    
-    return loans
