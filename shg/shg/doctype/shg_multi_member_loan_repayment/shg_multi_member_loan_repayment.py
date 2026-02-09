@@ -277,3 +277,19 @@ class SHGMultiMemberLoanRepayment(Document):
             "total_repayment_amount": self.total_repayment_amount,
             "total_selected_loans": self.total_selected_loans
         }
+
+@frappe.whitelist()
+def fetch_active_loans(member=None):
+    """Standalone function to fetch active loans for client-side calls"""
+    filters = {"status": ["in", ["Disbursed", "Partially Paid"]]}
+    if member:
+        filters["member"] = member
+    
+    loans = frappe.get_all(
+        "SHG Loan",
+        filters=filters,
+        fields=["name", "member", "loan_type", "total_outstanding_amount", "repayment_start_date"],
+        order_by="member, name"
+    )
+    
+    return loans
