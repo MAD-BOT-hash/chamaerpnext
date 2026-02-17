@@ -101,7 +101,8 @@ doctype_js = {
 
 # List JS
 doctype_list_js = {
-    "SHG Payment Entry": "shg/shg/doctype/shg_payment_entry/shg_payment_entry_list.js"
+    "SHG Payment Entry": "shg/shg/doctype/shg_payment_entry/shg_payment_entry_list.js",
+    "SHG Member": "public/js/shg_member_statement.js"  # Add member statement JS for list view
 }
 
 # Add the new JavaScript file for member statement functionality

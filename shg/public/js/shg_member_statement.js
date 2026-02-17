@@ -1,6 +1,7 @@
 // Copyright (c) 2026, SHG Solutions
 // License: MIT
 
+// Separate file for SHG Member list view settings
 frappe.listview_settings['SHG Member'] = {
     add_fields: ["member_name", "email", "status"],
     
@@ -87,34 +88,3 @@ function send_statements_in_batches(member_ids, index, total) {
         }
     });
 }
-
-// Add button to the member form as well
-frappe.ui.form.on('SHG Member', {
-    refresh: function(frm) {
-        frm.add_custom_button(__('Send Statement via Email'), function() {
-            frappe.call({
-                method: "shg.shg.utils.member_statement_utils.send_member_statements",
-                args: {
-                    selected_members: [frm.doc.name]
-                },
-                callback: function(r) {
-                    if (r.message) {
-                        const result = r.message.results[0];
-                        
-                        if (result.status === "sent") {
-                            frappe.show_alert({
-                                message: __("Statement sent to {0}", [result.message]),
-                                indicator: 'green'
-                            });
-                        } else {
-                            frappe.show_alert({
-                                message: __("Failed to send statement: {0}", [result.message]),
-                                indicator: 'red'
-                            });
-                        }
-                    }
-                }
-            });
-        });
-    }
-});
