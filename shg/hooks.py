@@ -46,10 +46,10 @@ doc_events = {
     },
     "Payment Entry": {
         "validate": [
-            "shg.shg.hooks.payment_entry.payment_entry_validate",
+            "shg.shg.hooks.payment_entry.validate",
             "shg.shg.utils.member_account_mapping.set_member_credit_account"
         ],
-        "on_submit": "shg.shg.hooks.payment_entry.payment_entry_on_submit",
+        "on_submit": "shg.shg.hooks.payment_entry.on_submit",
         "before_validate": "shg.shg.utils.company_utils.ensure_company_field"
     },
     "SHG Payment Entry": {
@@ -104,8 +104,14 @@ doctype_list_js = {
     "SHG Payment Entry": "shg/shg/doctype/shg_payment_entry/shg_payment_entry_list.js"
 }
 
-# Fix for workspace path issue
-app_include_js = ["/assets/shg/js/shg.js", "/assets/shg/js/shg_dashboard.js", "/assets/shg/js/shg_payment_multi.js"]
+# Add the new JavaScript file for member statement functionality
+app_include_js = [
+    "/assets/shg/js/shg.js", 
+    "/assets/shg/js/shg_dashboard.js", 
+    "/assets/shg/js/shg_payment_multi.js",
+    "/assets/shg/js/shg_member_statement.js"  # Add member statement JS
+]
+
 app_include_css = ["/assets/shg/css/shg.css", "/assets/shg/css/shg_dashboard.css"]
 
 # Page extensions
@@ -143,7 +149,9 @@ whitelisted_methods = [
     "shg.shg.api.notifications.get_unread_notifications_count",
     "shg.shg.api.notifications.test_notification_connection",
     "shg.loan_repayment_api.get_active_loans",
-    "shg.loan_repayment_api.get_outstanding_amount"
+    "shg.loan_repayment_api.get_outstanding_amount",
+    "shg.shg.utils.member_statement_utils.send_member_statements",  # Add the new method
+    "shg.shg.utils.member_statement_utils.calculate_member_statement"
 ]
 
 # Patches
@@ -153,5 +161,6 @@ patches = [
     "shg.shg.patches.custom.update_repayment_summary_patch.execute",
     "shg.shg.patches.add_disbursed_on_field.execute",
     "shg.shg.patches.add_disbursed_on_field_to_loan.execute",
-    "shg.shg.patches.ensure_loan_doctype_fields.execute"
+    "shg.shg.patches.ensure_loan_doctype_fields.execute",
+    "shg.shg.patches.create_shg_email_log_doctype.execute"  # Add patch to create email log doctype
 ]

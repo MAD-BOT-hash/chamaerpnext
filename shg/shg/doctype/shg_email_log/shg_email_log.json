@@ -1,0 +1,145 @@
+{
+ "actions": [],
+ "autoname": "SHG-EMAIL-LOG-.#####",
+ "creation": "2026-02-06 14:50:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "member_section",
+  "member",
+  "member_name",
+  "email_section",
+  "email_address",
+  "subject",
+  "status",
+  "column_break_1",
+  "document_type",
+  "reference_document",
+  "activity_section",
+  "sent_by",
+  "sent_on",
+  "error_log"
+ ],
+ "fields": [
+  {
+   "fieldname": "member_section",
+   "fieldtype": "Section Break",
+   "label": "Member Information"
+  },
+  {
+   "fieldname": "member",
+   "fieldtype": "Link",
+   "label": "Member",
+   "options": "SHG Member",
+   "reqd": 1
+  },
+  {
+   "fieldname": "member_name",
+   "fieldtype": "Data",
+   "label": "Member Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "email_section",
+   "fieldtype": "Section Break",
+   "label": "Email Information"
+  },
+  {
+   "fieldname": "email_address",
+   "fieldtype": "Data",
+   "label": "Email Address",
+   "reqd": 1
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Small Text",
+   "label": "Subject",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Sent\nFailed\nPending",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "document_type",
+   "fieldtype": "Select",
+   "label": "Document Type",
+   "options": "Member Statement\nLoan Statement\nContribution Statement\nGeneral Notification",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reference_document",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Document",
+   "options": "document_type"
+  },
+  {
+   "fieldname": "activity_section",
+   "fieldtype": "Section Break",
+   "label": "Activity Information"
+  },
+  {
+   "fieldname": "sent_by",
+   "fieldtype": "Link",
+   "label": "Sent By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sent_on",
+   "fieldtype": "Datetime",
+   "label": "Sent On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_log",
+   "fieldtype": "Text",
+   "label": "Error Log",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-02-06 14:50:00",
+ "module": "SHG",
+ "name": "SHG Email Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "SHG Admin",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "SHG Treasurer",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
