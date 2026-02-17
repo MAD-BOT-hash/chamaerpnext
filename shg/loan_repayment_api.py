@@ -12,7 +12,7 @@ def get_active_loans(member=None):
         loans = frappe.get_all(
             "SHG Loan",
             filters=filters,
-            fields=["name", "member", "loan_type", "outstanding_amount", "repayment_start_date"],
+            fields=["name", "member", "loan_type", "loan_balance", "repayment_start_date"],
             order_by="member, name"
         )
         
@@ -37,12 +37,13 @@ def get_outstanding_amount(loan):
             return {"success": False, "message": "Loan name is required"}
         
         loan_doc = frappe.get_doc("SHG Loan", loan)
-        outstanding = loan_doc.outstanding_amount or 0.0
+        # Use loan_balance instead of outstanding_amount
+        loan_balance = loan_doc.loan_balance or 0.0
         
         return {
             "success": True,
-            "data": outstanding,
-            "message": f"Outstanding amount: {outstanding}"
+            "data": loan_balance,
+            "message": f"Loan balance: {loan_balance}"
         }
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), f"Get Outstanding Amount API Error for loan {loan}")

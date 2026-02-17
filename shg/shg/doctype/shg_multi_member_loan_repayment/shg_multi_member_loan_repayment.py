@@ -102,9 +102,9 @@ class SHGMultiMemberLoanRepayment(Document):
             if not row.loan_type:
                 frappe.throw(_("Row {0}: Loan Type is required").format(row.idx))
             
-            # Validate Outstanding Amount
-            if not row.outstanding_amount or flt(row.outstanding_amount) <= 0:
-                frappe.throw(_("Row {0}: Outstanding Amount must be greater than zero").format(row.idx))
+            # Validate Loan Balance
+            if not row.loan_balance or flt(row.loan_balance) <= 0:
+                frappe.throw(_("Row {0}: Loan Balance must be greater than zero").format(row.idx))
             
             # Validate Repayment Amount
             if not row.repayment_amount or flt(row.repayment_amount) <= 0:
@@ -114,10 +114,10 @@ class SHGMultiMemberLoanRepayment(Document):
         """Validate repayment amount rules"""
         for row in self.loans:
             if row.loan and row.repayment_amount:
-                # Validate Repayment Amount <= Outstanding Amount
-                if flt(row.repayment_amount) > flt(row.outstanding_amount):
-                    frappe.throw(_("Row {0}: Repayment amount ({1}) cannot exceed outstanding amount ({2})").format(
-                        row.idx, row.repayment_amount, row.outstanding_amount))
+                # Validate Repayment Amount <= Loan Balance
+                if flt(row.repayment_amount) > flt(row.loan_balance):
+                    frappe.throw(_("Row {0}: Repayment amount ({1}) cannot exceed loan balance ({2})").format(
+                        row.idx, row.repayment_amount, row.loan_balance))
 
     def validate_loan_compatibility(self):
         """Validate loan compatibility rules"""
@@ -172,11 +172,11 @@ class SHGMultiMemberLoanRepayment(Document):
         
         for row in self.loans:
             if row.loan:
-                # Get current outstanding balance for the loan
-                outstanding = frappe.db.get_value("SHG Loan", row.loan, "outstanding_amount")
-                if outstanding is None:
-                    outstanding = 0.0
-                total_outstanding += outstanding
+                # Get current loan balance for the loan
+                loan_balance = frappe.db.get_value("SHG Loan", row.loan, "loan_balance")
+                if loan_balance is None:
+                    loan_balance = 0.0
+                total_outstanding += loan_balance
                 total_repayment += flt(row.repayment_amount or 0)
                 total_loans += 1
         
@@ -248,7 +248,7 @@ class SHGMultiMemberLoanRepayment(Document):
         loans = frappe.get_all(
             "SHG Loan",
             filters=filters,
-            fields=["name", "member", "loan_type", "outstanding_amount", "repayment_start_date"],
+            fields=["name", "member", "loan_type", "loan_balance", "repayment_start_date"],
             order_by="member, name"
         )
         

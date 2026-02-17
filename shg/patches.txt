@@ -57,3 +57,4 @@ shg.shg.patches.fix_loan_balance_calculations
 shg.shg.patches.register_multi_member_loan_repayment_doctype
 shg.patches.add_status_field_to_multi_member_loan_repayment_item
 shg.patches.update_multi_member_loan_repayment_doctypes
+shg.patches.add_loan_balance_field_to_multi_member_loan_repayment_item
