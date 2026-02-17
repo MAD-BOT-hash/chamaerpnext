@@ -41,6 +41,48 @@ def calculate_member_statement(member_id):
         frappe.log_error(f"Error calculating member statement for {member_id}: {str(e)}")
         raise
 
+@frappe.whitelist()
+def populate_member_statement(member_id):
+    """
+    Populate member statement with calculated values
+    """
+    try:
+        # Get the member document
+        member_doc = frappe.get_doc("SHG Member", member_id)
+        
+        # Calculate the statement values
+        statement_data = calculate_member_statement(member_id)
+        
+        # Update the member document with calculated values
+        member_doc.total_contributions = statement_data.get('total_contributions', 0)
+        member_doc.unpaid_contributions = statement_data.get('unpaid_contributions', 0)
+        member_doc.unpaid_fines = statement_data.get('unpaid_fines', 0)
+        member_doc.current_loan_balance = statement_data.get('unpaid_loans', 0)
+        
+        # Calculate net balance
+        net_balance = (statement_data.get('unpaid_contributions', 0) + 
+                      statement_data.get('unpaid_fines', 0) + 
+                      statement_data.get('unpaid_loans', 0) - 
+                      statement_data.get('total_contributions', 0))
+        member_doc.net_balance = net_balance
+        
+        # Update timestamp
+        member_doc.statement_updated_on = now()
+        
+        # Save the document
+        member_doc.save(ignore_permissions=True)
+        
+        return {
+            "status": "success",
+            "message": f"Member statement updated for {member_doc.member_name or member_id}"
+        }
+    except Exception as e:
+        frappe.log_error(f"Error populating member statement for {member_id}: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
 def calculate_total_contributions(member_id):
     """Calculate total paid contributions for a member"""
     try:
