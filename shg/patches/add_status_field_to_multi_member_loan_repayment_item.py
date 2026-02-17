@@ -5,12 +5,11 @@ def execute():
     try:
         # Check if the column already exists
         if not frappe.db.has_column("SHG Multi Member Loan Repayment Item", "status"):
-            # Add the status column
-            frappe.db.add_column(
-                "SHG Multi Member Loan Repayment Item",
-                "status",
-                "varchar(255)"
-            )
+            # Use the correct method to add column
+            frappe.db.sql("""
+                ALTER TABLE `tabSHG Multi Member Loan Repayment Item` 
+                ADD COLUMN `status` VARCHAR(255)
+            """)
             frappe.db.commit()
             print("Successfully added 'status' column to SHG Multi Member Loan Repayment Item table")
         else:
