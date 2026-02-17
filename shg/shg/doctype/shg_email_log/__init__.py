@@ -1,0 +1,1 @@
+# SHG Email Log Doctype
