@@ -4,6 +4,7 @@ from frappe.utils import now, getdate, flt
 from datetime import datetime
 import json
 
+@frappe.whitelist()
 def calculate_member_statement(member_id):
     """
     Calculate financial statement for a specific member
@@ -180,6 +181,7 @@ def generate_member_statement_html(member_data):
     """
     return html_template
 
+@frappe.whitelist()
 def send_member_statements(selected_members):
     """
     Send email statements to selected members
@@ -256,18 +258,6 @@ def send_member_statements(selected_members):
 def log_email_activity(member_id, email_address, status):
     """Log email activity for audit purposes"""
     try:
-        email_log = frappe.new_doc("Email Queue")
-        email_log.recipient = email_address
-        email_log.subject = f"SHG Member Statement for {member_id}"
-        email_log.status = status
-        email_log.sender = frappe.session.user
-        email_log.priority = 1
-        email_log.communication_medium = "Email"
-        email_log.sent_at = now()
-        email_log.reference_doctype = "SHG Member"
-        email_log.reference_name = member_id
-        email_log.insert(ignore_permissions=True)
-        
         # Also create a custom log for SHG specific tracking
         shg_email_log = frappe.new_doc("SHG Email Log")
         shg_email_log.member = member_id
