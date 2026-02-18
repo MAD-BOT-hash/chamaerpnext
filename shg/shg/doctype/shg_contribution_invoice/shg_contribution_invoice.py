@@ -24,13 +24,18 @@ class SHGContributionInvoice(Document):
         
         # Skip date validation for backdated invoices if allowed
         if not allow_historical:
-            # Ensure due_date is not before invoice_date
-            if self.due_date and self.invoice_date:
-                invoice_date = getdate(self.invoice_date)
+            # Ensure due_date is not before invoice_date or supplier_invoice_date
+            if self.due_date and (self.invoice_date or self.supplier_invoice_date):
+                # Use invoice_date as primary, fallback to supplier_invoice_date
+                primary_date = getdate(self.invoice_date) if self.invoice_date else getdate(today())
+                supplier_date = getdate(self.supplier_invoice_date) if self.supplier_invoice_date else primary_date
+                
+                # Use the later of the two dates as the reference
+                reference_date = max(primary_date, supplier_date)
                 due_date = getdate(self.due_date)
                 
-                if due_date < invoice_date:
-                    frappe.throw(_("Due Date cannot be before Invoice Date"))
+                if due_date < reference_date:
+                    frappe.throw(_("Due Date cannot be before Invoice Date or Supplier Invoice Date"))
                 
     def before_validate(self):
         """Ensure company is populated from SHG Settings."""
