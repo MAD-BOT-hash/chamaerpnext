@@ -77,18 +77,34 @@ class SHGMember(Document):
             frappe.throw(f"ID Number {self.id_number} is already used by another member.")
 
     def validate_phone_number(self):
-        """Normalize and validate Kenyan phone number (07XXXXXXXX)."""
-        phone = self.phone_number.strip().replace(" ", "")
+        """Normalize and validate Kenyan phone number. Accepts multiple formats."""
+        phone = self.phone_number.strip().replace(" ", "").replace("-", "")
 
-        # Normalize variants
+        # Normalize variants to standard format
         if phone.startswith("+254"):
             phone = "0" + phone[4:]
         elif phone.startswith("254"):
             phone = "0" + phone[3:]
+        elif phone.startswith("011"):
+            # New Kenyan format starting with 011
+            pass
+        elif phone.startswith("07"):
+            # Standard Kenyan format
+            pass
+        elif phone.startswith("01"):
+            # New Kenyan format
+            pass
 
-        # Must be 10 digits starting with 07
-        if not re.match(r"^07\d{8}$", phone):
-            frappe.throw("Phone number must be 10 digits starting with 07.")
+        # Validate: Must be 10 digits starting with 07, 01, or 011
+        if not re.match(r"^(07\d{8}|01\d{8}|011\d{7})$", phone):
+            frappe.throw(
+                "Invalid phone number format.<br>"
+                "Accepted formats:<br>"
+                "• 07XX XXX XXX (e.g., 0712 345 678)<br>"
+                "• 01XX XXX XXX (e.g., 0112 345 678)<br>"
+                "• +254 7XX XXX XXX<br>"
+                "• 254 7XX XXX XXX"
+            )
 
         self.phone_number = phone
 
