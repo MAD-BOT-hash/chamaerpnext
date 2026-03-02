@@ -1,0 +1,212 @@
+import frappe
+from frappe.model.document import Document
+from frappe import _
+from frappe.utils import flt, now
+
+
+class SHGBulkPayment(Document):
+    """
+    SHG Bulk Payment Document
+    Enterprise-grade bulk payment processing with full safety guarantees
+    """
+    
+    def validate(self):
+        """Validate bulk payment document"""
+        self.validate_required_fields()
+        self.validate_amounts()
+        self.validate_allocations()
+        self.update_totals()
+    
+    def validate_required_fields(self):
+        """Validate all required fields are present"""
+        if not self.company:
+            frappe.throw(_("Company is required"))
+        
+        if not self.posting_date:
+            frappe.throw(_("Posting Date is required"))
+        
+        if not self.mode_of_payment:
+            frappe.throw(_("Mode of Payment is required"))
+        
+        if not self.payment_account:
+            frappe.throw(_("Payment Account is required"))
+        
+        if not self.reference_no:
+            frappe.throw(_("Reference No is required"))
+        
+        if not self.reference_date:
+            frappe.throw(_("Reference Date is required"))
+    
+    def validate_amounts(self):
+        """Validate payment amounts"""
+        if flt(self.total_amount) <= 0:
+            frappe.throw(_("Total Amount must be greater than zero"))
+        
+        # Validate allocations exist
+        if not self.allocations:
+            frappe.throw(_("At least one allocation is required"))
+        
+        # Validate allocation amounts
+        total_allocated = sum(flt(allocation.allocated_amount) for allocation in self.allocations)
+        if total_allocated <= 0:
+            frappe.throw(_("Total allocated amount must be greater than zero"))
+        
+        # Overpayment prevention
+        if total_allocated > flt(self.total_amount):
+            frappe.throw(
+                _("Total allocated amount ({0}) cannot exceed total payment amount ({1})").format(
+                    total_allocated, self.total_amount
+                )
+            )
+    
+    def validate_allocations(self):
+        """Validate each allocation"""
+        for allocation in self.allocations:
+            self.validate_single_allocation(allocation)
+    
+    def validate_single_allocation(self, allocation):
+        """Validate individual allocation"""
+        if not allocation.member:
+            frappe.throw(_("Member is required for allocation {0}").format(allocation.idx))
+        
+        if not allocation.reference_doctype:
+            frappe.throw(_("Reference Type is required for allocation {0}").format(allocation.idx))
+        
+        if not allocation.reference_name:
+            frappe.throw(_("Reference Name is required for allocation {0}").format(allocation.idx))
+        
+        if flt(allocation.allocated_amount) <= 0:
+            frappe.throw(_("Allocated Amount must be greater than zero for allocation {0}").format(allocation.idx))
+        
+        # Validate outstanding amount
+        if flt(allocation.allocated_amount) > flt(allocation.outstanding_amount):
+            frappe.throw(
+                _("Allocated amount ({0}) cannot exceed outstanding amount ({1}) for {2} {3}").format(
+                    allocation.allocated_amount,
+                    allocation.outstanding_amount,
+                    allocation.reference_doctype,
+                    allocation.reference_name
+                )
+            )
+    
+    def update_totals(self):
+        """Update document totals"""
+        total_allocated = sum(flt(allocation.allocated_amount) for allocation in self.allocations)
+        total_outstanding = sum(flt(allocation.outstanding_amount) for allocation in self.allocations)
+        
+        self.total_allocated_amount = total_allocated
+        self.total_outstanding_amount = total_outstanding
+        self.unallocated_amount = flt(self.total_amount) - flt(total_allocated)
+    
+    def before_submit(self):
+        """Validate before submission"""
+        if self.processing_status not in ["Draft", "Failed"]:
+            frappe.throw(_("Only Draft or Failed bulk payments can be submitted"))
+        
+        # Ensure all required fields are populated
+        self.validate()
+    
+    def on_submit(self):
+        """Process bulk payment on submission"""
+        # Update status to processing
+        self.processing_status = "Processing"
+        self.processed_by = frappe.session.user
+        self.processed_via = "Manual"
+        self.save(ignore_permissions=True)
+        
+        # Process the payment
+        self.process_bulk_payment()
+    
+    def process_bulk_payment(self):
+        """Process the bulk payment using service layer"""
+        try:
+            from shg.shg.services.payment.bulk_payment_service import bulk_payment_service
+            
+            # Process using service layer
+            result = bulk_payment_service.process_bulk_payment(
+                self.name,
+                processed_via="Manual"
+            )
+            
+            # Update with results
+            self.processing_status = "Processed"
+            self.payment_entry = result["payment_entry"]
+            self.processed_date = now()
+            self.save(ignore_permissions=True)
+            
+            frappe.msgprint(
+                _("Bulk payment processed successfully. Payment Entry: {0}").format(result["payment_entry"]),
+                alert=True
+            )
+            
+        except Exception as e:
+            # Update status to failed
+            self.processing_status = "Failed"
+            self.remarks = f"Processing failed: {str(e)}"
+            self.save(ignore_permissions=True)
+            
+            frappe.throw(_("Bulk payment processing failed: {0}").format(str(e)))
+    
+    @frappe.whitelist()
+    def auto_allocate_by_oldest_due_date(self):
+        """Auto-allocate by oldest due date"""
+        try:
+            from shg.shg.services.payment.bulk_payment_service import bulk_payment_service
+            
+            result = bulk_payment_service.auto_allocate_by_oldest_due_date(self.name)
+            
+            # Refresh the document
+            self.reload()
+            
+            return result
+            
+        except Exception as e:
+            frappe.throw(_("Auto-allocation failed: {0}").format(str(e)))
+    
+    @frappe.whitelist()
+    def process_in_background(self):
+        """Process payment in background"""
+        try:
+            from shg.shg.jobs.bulk_payment_jobs import schedule_bulk_payment_processing
+            
+            # Schedule background processing
+            schedule_bulk_payment_processing(self.name)
+            
+            self.processing_status = "Processing"
+            self.processed_via = "Background Job"
+            self.save(ignore_permissions=True)
+            
+            frappe.msgprint(
+                _("Bulk payment scheduled for background processing"),
+                alert=True
+            )
+            
+        except Exception as e:
+            frappe.throw(_("Failed to schedule background processing: {0}").format(str(e)))
+    
+    @frappe.whitelist()
+    def get_processing_status(self):
+        """Get current processing status"""
+        try:
+            from shg.shg.jobs.bulk_payment_jobs import get_bulk_payment_processing_status
+            return get_bulk_payment_processing_status(self.name)
+        except Exception as e:
+            frappe.throw(_("Failed to get processing status: {0}").format(str(e)))
+    
+    @frappe.whitelist()
+    def validate_integrity(self):
+        """Validate document integrity"""
+        try:
+            from shg.shg.jobs.bulk_payment_jobs import validate_bulk_payment_integrity
+            return validate_bulk_payment_integrity(self.name)
+        except Exception as e:
+            frappe.throw(_("Integrity validation failed: {0}").format(str(e)))
+    
+    @frappe.whitelist()
+    def retry_processing(self):
+        """Retry failed processing"""
+        try:
+            from shg.shg.jobs.bulk_payment_jobs import retry_failed_bulk_payment
+            return retry_failed_bulk_payment(self.name)
+        except Exception as e:
+            frappe.throw(_("Retry failed: {0}").format(str(e)))

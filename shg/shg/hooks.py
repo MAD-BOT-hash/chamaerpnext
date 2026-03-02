@@ -123,7 +123,28 @@ doc_events = {
     },
     "Payment Entry": {
         "on_submit": [
-            "shg.shg.doctype.shg_payment.shg_payment.on_payment_submit"
+            "shg.shg.services.payment.payment_service.handle_payment_entry_submit"
+        ]
+    },
+    "Sales Invoice": {
+        "on_submit": [
+            "shg.shg.services.contribution.contribution_service.create_contribution_from_invoice"
+        ],
+        "on_cancel": [
+            "shg.shg.services.contribution.contribution_service.handle_invoice_cancellation"
+        ]
+    },
+    "SHG Contribution": {
+        "on_update": [
+            "shg.shg.services.member.member_service.update_member_financial_summary"
+        ],
+        "on_trash": [
+            "shg.shg.services.audit.audit_service.log_contribution_deletion"
+        ]
+    },
+    "SHG Member": {
+        "after_insert": [
+            "shg.shg.services.member.member_service.create_member_account_onboarding"
         ]
     }
 }
@@ -133,9 +154,16 @@ doc_events = {
 
 scheduler_events = {
     "daily": [
+        "shg.shg.jobs.scheduler_jobs.process_daily_overdue_contributions",
+        "shg.shg.jobs.scheduler_jobs.send_daily_payment_reminders",
         "shg.shg.loan_services.accrual.process_daily_accruals"
     ],
+    "weekly": [
+        "shg.shg.jobs.scheduler_jobs.generate_weekly_member_statements"
+    ],
     "monthly": [
+        "shg.shg.jobs.scheduler_jobs.generate_monthly_financial_reports",
+        "shg.shg.jobs.scheduler_jobs.process_month_end_cleanup",
         "shg.shg.loan_services.report.generate_monthly_report"
     ]
 }

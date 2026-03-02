@@ -1,0 +1,114 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:AUDIT-{YYYY}-{MM}-{#####}",
+ "creation": "2024-01-01 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "reference_doctype",
+  "reference_name",
+  "action",
+  "user",
+  "timestamp",
+  "details",
+  "section_break_details",
+  "details_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference Doctype",
+   "options": "DocType",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Data",
+   "label": "Reference Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "Created\nUpdated\nDeleted\nPayment Allocated\nPayment Reversed\nOverpayment Prevented\nDuplicate Contribution Blocked\nConcurrent Modification Blocked\nMember Account Created\nContribution Status Changed\nNotification Sent",
+   "reqd": 1
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "timestamp",
+   "fieldtype": "Datetime",
+   "label": "Timestamp",
+   "reqd": 1
+  },
+  {
+   "fieldname": "details",
+   "fieldtype": "Text",
+   "label": "Details",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_details",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "details_json",
+   "fieldtype": "JSON",
+   "label": "Details (JSON)",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2024-01-01 00:00:00",
+ "modified_by": "Administrator",
+ "module": "SHG",
+ "name": "SHG Audit Trail",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "SHG Manager",
+   "select": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "SHG Staff",
+   "select": 1
+  }
+ ],
+ "sort_field": "timestamp",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "action",
+ "track_changes": 1
+}

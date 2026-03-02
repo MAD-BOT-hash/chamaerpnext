@@ -1,0 +1,82 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:COMPLIANCE-{YYYY}-{MM}-{#####}",
+ "creation": "2024-01-01 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "snapshot_timestamp",
+  "total_records",
+  "snapshot_data",
+  "section_break_system",
+  "system_info"
+ ],
+ "fields": [
+  {
+   "fieldname": "snapshot_timestamp",
+   "fieldtype": "Datetime",
+   "label": "Snapshot Timestamp",
+   "reqd": 1
+  },
+  {
+   "fieldname": "total_records",
+   "fieldtype": "Int",
+   "label": "Total Records",
+   "reqd": 1
+  },
+  {
+   "fieldname": "snapshot_data",
+   "fieldtype": "Code",
+   "label": "Snapshot Data",
+   "options": "JSON",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_system",
+   "fieldtype": "Section Break",
+   "label": "System Information"
+  },
+  {
+   "fieldname": "system_info",
+   "fieldtype": "Text",
+   "label": "System Information",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2024-01-01 00:00:00",
+ "modified_by": "Administrator",
+ "module": "SHG",
+ "name": "SHG Compliance Snapshot",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "SHG Manager",
+   "select": 1
+  }
+ ],
+ "sort_field": "snapshot_timestamp",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "snapshot_timestamp",
+ "track_changes": 1
+}
