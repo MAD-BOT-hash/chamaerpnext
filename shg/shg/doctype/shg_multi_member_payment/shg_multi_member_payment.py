@@ -60,7 +60,11 @@ class SHGMultiMemberPayment(Document):
         if not self.company:
             frappe.throw(_("Company is mandatory"))
         
-        # Validate Posting Date (assuming payment_date is the posting date)
+        # Validate Member (required)
+        if not self.member:
+            frappe.throw(_("Member is mandatory"))
+        
+        # Validate Payment Date (posting date)
         if not self.payment_date:
             frappe.throw(_("Payment Date is mandatory"))
         
@@ -68,21 +72,28 @@ class SHGMultiMemberPayment(Document):
         if not self.mode_of_payment:
             frappe.throw(_("Mode of Payment is mandatory"))
         
-        # Validate that member field exists (though it's not mandatory in the JSON)
-        # If you want to make it mandatory, uncomment the next lines:
-        # if not self.member:
-        #     frappe.throw(_("Member is mandatory"))
+        # Validate that invoices table is not empty
+        if not self.invoices:
+            frappe.throw(_("Please add at least one invoice to process. Click on 'Add Row' in the Invoices table to add an invoice."))
+        
+        # Validate at least one payment amount
+        if self.total_payment_amount <= 0:
+            frappe.throw(_("At least one invoice must have a payment amount greater than zero. Please check the payment amounts in the invoices table."))
+            
     
     def validate_payment_documents_exist(self):
         """Validate that at least one invoice has payment amount > 0"""
         has_payment = False
+        if not self.invoices:
+            frappe.throw(_("Please add invoices to the payment record. The invoices table is currently empty."))
+        
         for row in self.invoices:
             if flt(row.payment_amount) > 0:
                 has_payment = True
                 break
         
         if not has_payment:
-            frappe.throw(_("At least one invoice must have a payment amount greater than zero"))
+            frappe.throw(_("At least one invoice must have a payment amount greater than zero. Please check the Payment Amount field in the Invoices table."))
     
     def validate_invoice_mandatory_fields(self):
         """Validate required fields in child table rows"""
