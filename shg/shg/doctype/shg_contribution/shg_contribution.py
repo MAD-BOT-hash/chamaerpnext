@@ -387,40 +387,92 @@ class SHGContribution(Document):
             frappe.log_error(frappe.get_traceback(), "SHG Contribution - Mpesa STK Push Failed")
             return {"success": False, "error": str(e)}
 
+# Move the function outside the class
+def update_overdue_contributions():
+    """Update overdue contributions based on due date"""
+    today_date = getdate(today())
+    
+    # Get all unpaid contributions where due date has passed
+    overdue_contributions = frappe.get_all(
+        "SHG Contribution",
+        filters={
+            "status": "Unpaid",
+            "due_date": ["<", today_date]
+        },
+        fields=["name", "due_date", "status"]
+    )
+    
+    updated = 0
+    for contrib in overdue_contributions:
+        try:
+            contrib_doc = frappe.get_doc("SHG Contribution", contrib.name)
+            contrib_doc.db_set("status", "Overdue", update_modified=False)
+            updated += 1
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), f"Failed to update overdue contribution {contrib.name}")
+    
+    frappe.msgprint(f"Updated {updated} contributions to Overdue status")
+    return updated
+
+
 @frappe.whitelist()
-def generate_contribution_invoices(invoice_date, amount, contribution_type=None, remarks=None, send_email=0, supplier_invoice_date=None):
-    active_members = frappe.get_all("SHG Member", filters={"membership_status": "Active"}, fields=["name", "member_name", "email"])
+def generate_contribution_invoices(invoice_date=None, amount=0, contribution_type=None, remarks=None, send_email=0, supplier_invoice_date=None):
+    from frappe.utils import getdate, today
+
+    active_members = frappe.get_all(
+        "SHG Member",
+        filters={"membership_status": "Active"},
+        fields=["name", "member_name", "email"]
+    )
+
     created = 0
 
+    # ---- Normalize Base Date ----
+    base_date = None
+
+    if supplier_invoice_date:
+        base_date = getdate(supplier_invoice_date)
+    elif invoice_date:
+        base_date = getdate(invoice_date)
+    else:
+        base_date = getdate(today())
+
+    # Ensure all date fields are safe
+    posting_date = base_date
+    supplier_inv_date = base_date
+    due_date = base_date
+
     for m in active_members:
-        # Use supplier_invoice_date logic for due date
-        # Use supplier_invoice_date as both posting_date and due_date to prevent ERPNext validation errors
-        # Fallback to invoice_date, then to today's date if missing
-        supplier_inv_date = None
-        if supplier_invoice_date:
-            supplier_inv_date = getdate(supplier_invoice_date)
-        elif invoice_date:
-            supplier_inv_date = getdate(invoice_date)
-        else:
-            supplier_inv_date = getdate(today())
-        
-        due_date = supplier_inv_date
-        
-        inv = frappe.get_doc({
-            "doctype": "SHG Contribution Invoice",
-            "member": m.name,
-            "member_name": m.member_name,
-            "invoice_date": supplier_inv_date,
-            "due_date": due_date,
-            "supplier_invoice_date": supplier_invoice_date or supplier_inv_date,  # Store the supplier invoice date
-            "amount": amount,
-            "contribution_type": contribution_type,
-            "status": "Unpaid",
-            "description": remarks or f"Contribution invoice for {formatdate(supplier_inv_date, 'MMMM yyyy')}"
-        })
-        inv.insert(ignore_permissions=True)
-        inv.submit()
-        created += 1
+        try:
+            # Defensive date correction
+            if due_date < posting_date:
+                due_date = posting_date
+
+            if due_date < supplier_inv_date:
+                due_date = supplier_inv_date
+
+            inv = frappe.get_doc({
+                "doctype": "SHG Contribution Invoice",
+                "member": m.name,
+                "member_name": m.member_name,
+                "invoice_date": posting_date,
+                "posting_date": posting_date,  # Explicitly set
+                "supplier_invoice_date": supplier_inv_date,
+                "due_date": due_date,
+                "amount": amount,
+                "contribution_type": contribution_type,
+                "status": "Unpaid",
+                "description": remarks or f"Contribution invoice for {posting_date.strftime('%B %Y')}"
+            })
+
+            inv.flags.ignore_permissions = True
+            inv.insert()
+            inv.submit()
+
+            created += 1
+
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), f"Failed creating invoice for member {m.name}")
 
     frappe.msgprint(_("{0} contribution invoices created successfully.").format(created))
     return created
