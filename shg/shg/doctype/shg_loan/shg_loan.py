@@ -381,6 +381,30 @@ class SHGLoan(Document):
             
         # For all other attributes, raise the default AttributeError
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+        
+    def before_validate(self):
+        """Auto-set company from SHG Settings before validation"""
+        self.set_company()
+    
+    def set_company(self):
+        """Set company from SHG Settings if not already set"""
+        if not self.company:
+            company = frappe.db.get_single_value("SHG Settings", "company")
+            if not company:
+                # Fallback to user default company
+                company = frappe.defaults.get_user_default("Company")
+            if not company:
+                # Final fallback to global default company
+                company = frappe.db.get_single_value("Global Defaults", "default_company")
+            if not company:
+                # Get first available company
+                companies = frappe.get_all("Company", limit=1)
+                if companies:
+                    company = companies[0].name
+            if company:
+                self.company = company
+            else:
+                frappe.throw("No default Company found. Please set a company in SHG Settings, Global Defaults, or create a Company.")
     
     def onload(self):
         """Populate loan_balance on document load."""

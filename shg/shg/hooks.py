@@ -103,6 +103,11 @@ app_license = "MIT"
 # Hook on document methods and events
 
 doc_events = {
+    "*": {
+        "before_validate": [
+            "shg.shg.utils.company_utils.ensure_company_field"
+        ]
+    },
     "SHG Loan": {
         "on_submit": [
             "shg.shg.loan_services.gl.post_loan_disbursement"

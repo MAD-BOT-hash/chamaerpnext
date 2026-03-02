@@ -9,6 +9,30 @@ from frappe.utils import today, getdate, now, flt
 import json
 
 class SHGMember(Document):
+    def before_validate(self):
+        """Auto-set company from SHG Settings before validation"""
+        self.set_company()
+    
+    def set_company(self):
+        """Set company from SHG Settings if not already set"""
+        if not self.company:
+            company = frappe.db.get_single_value("SHG Settings", "company")
+            if not company:
+                # Fallback to user default company
+                company = frappe.defaults.get_user_default("Company")
+            if not company:
+                # Final fallback to global default company
+                company = frappe.db.get_single_value("Global Defaults", "default_company")
+            if not company:
+                # Get first available company
+                companies = frappe.get_all("Company", limit=1)
+                if companies:
+                    company = companies[0].name
+            if company:
+                self.company = company
+            else:
+                frappe.throw("No default Company found. Please set a company in SHG Settings, Global Defaults, or create a Company.")
+
     def validate(self):
         """Run all member validations before save."""
         self.validate_required_fields()
@@ -23,6 +47,10 @@ class SHGMember(Document):
     # ----------------------------------------
     def validate_required_fields(self):
         """Ensure key fields are not empty."""
+        # Set company if not already set
+        if not self.company:
+            self.set_company()
+        
         if not self.member_name:
             frappe.throw("Member Name is required.")
         if not self.member_id:

@@ -355,15 +355,38 @@ class BulkPaymentService:
     
     def _create_consolidated_payment_entry(self, bulk_payment: Document) -> Document:
         """Create single consolidated payment entry for all allocations"""
+        # Group allocations by member to handle multiple members properly
+        allocations_by_member = {}
+        for allocation in bulk_payment.allocations:
+            member = allocation.member
+            if member not in allocations_by_member:
+                allocations_by_member[member] = []
+            allocations_by_member[member].append(allocation)
+        
+        # If there are multiple members, we'll need to handle this differently
+        # For now, create a payment entry for the primary member (first member)
+        # and include all allocations
+        first_allocation = bulk_payment.allocations[0] if bulk_payment.allocations else None
+        if not first_allocation:
+            raise BulkPaymentServiceError("No allocations found for payment entry creation")
+        
+        # Get the member and ensure it can be used as a party
+        member_name = first_allocation.member
+        
+        # Ensure the member exists as a Customer in ERPNext
+        customer_name = self._ensure_member_as_customer(member_name)
+        
         payment_entry = frappe.get_doc({
             "doctype": "Payment Entry",
             "company": bulk_payment.company,
-            "posting_date": bulk_payment.posting_date,
+            "posting_date": bulk_payment.posting_date or frappe.utils.nowdate(),
             "mode_of_payment": bulk_payment.mode_of_payment,
             "paid_amount": bulk_payment.total_amount,
             "received_amount": bulk_payment.total_amount,
             "paid_from": bulk_payment.payment_account,
             "paid_to": self._get_default_receivable_account(bulk_payment.company),
+            "party_type": "Customer",
+            "party": customer_name,
             "reference_no": bulk_payment.reference_no,
             "reference_date": bulk_payment.reference_date,
             "remarks": f"Consolidated payment for bulk payment {bulk_payment.name}"
@@ -382,6 +405,49 @@ class BulkPaymentService:
         payment_entry.submit()
         
         return payment_entry
+    
+    def _ensure_member_as_customer(self, member_name: str) -> str:
+        """Ensure the SHG member exists as a Customer in ERPNext"""
+        if not member_name:
+            raise BulkPaymentServiceError("Member name is required")
+        
+        # First, try to find if the member already exists as a Customer
+        customer_name = frappe.db.get_value("Customer", {"name": member_name})
+        if customer_name:
+            return customer_name
+        
+        # Try to find customer by customer_name field
+        customer_name = frappe.db.get_value("Customer", {"customer_name": member_name})
+        if customer_name:
+            return customer_name
+        
+        # Try to get customer from SHG Member document
+        try:
+            member_doc = frappe.get_doc("SHG Member", member_name)
+            if hasattr(member_doc, 'customer') and member_doc.customer:
+                return member_doc.customer
+        except:
+            pass  # Member might not exist or not have customer field
+        
+        # If no customer found, create one based on the member
+        # First, get member details
+        try:
+            member_doc = frappe.get_doc("SHG Member", member_name)
+            customer_full_name = getattr(member_doc, 'member_name', member_name) or member_name
+        except:
+            customer_full_name = member_name
+        
+        # Create a customer for this member
+        customer = frappe.get_doc({
+            "doctype": "Customer",
+            "customer_name": customer_full_name,
+            "customer_type": "Individual",
+            "customer_group": "SHG Members",  # Assuming this customer group exists
+            "territory": "All Territories",  # Default territory
+        })
+        
+        customer.insert(ignore_permissions=True)
+        return customer.name
     
     def _get_default_receivable_account(self, company: str) -> str:
         """Get default receivable account for the company"""
