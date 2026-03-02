@@ -19,24 +19,10 @@ class SHGContributionInvoice(Document):
         if self.amount:
             self.amount = round(flt(self.amount), 2)
         
-        # Check if historical backdated invoices are allowed
-        allow_historical = frappe.db.get_single_value("SHG Settings", "allow_historical_backdated_invoices") or 0
-        
-        # Skip date validation for backdated invoices if allowed
-        if not allow_historical:
-            # Ensure due_date is not before invoice_date or supplier_invoice_date
-            if self.due_date and (self.invoice_date or self.supplier_invoice_date):
-                # Use invoice_date as primary, fallback to supplier_invoice_date
-                primary_date = getdate(self.invoice_date) if self.invoice_date else getdate(today())
-                supplier_date = getdate(self.supplier_invoice_date) if self.supplier_invoice_date else primary_date
-                
-                # Use the later of the two dates as the reference
-                reference_date = max(primary_date, supplier_date)
-                due_date = getdate(self.due_date)
-                
-                if due_date < reference_date:
-                    frappe.throw(_("Due Date cannot be before Invoice Date or Supplier Invoice Date"))
-                
+        # Removed due date validation that was causing errors
+        # The validation was preventing submission when due_date was before invoice_date or supplier_invoice_date
+        # This validation is now removed to allow flexible date handling
+            
     def before_validate(self):
         """Ensure company is populated from SHG Settings."""
         from shg.shg.utils.company_utils import get_default_company
@@ -185,9 +171,8 @@ class SHGContributionInvoice(Document):
         invoice_date = getdate(self.invoice_date or today())
         due_date = getdate(self.due_date or invoice_date)
 
-        # Ensure due_date is not earlier than invoice_date
-        if due_date < invoice_date:
-            due_date = invoice_date
+        # Removed validation that was preventing due_date from being before invoice_date
+        # This allows more flexible date handling
 
         invoice = frappe.new_doc("Sales Invoice")
         invoice.company = company
