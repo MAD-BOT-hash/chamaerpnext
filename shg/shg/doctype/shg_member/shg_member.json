@@ -147,8 +147,7 @@
             "options": "Company",
             "reqd": 1,
             "in_list_view": 1,
-            "in_standard_filter": 1,
-            "default": "frappe.defaults.get_user_default(\"Company\")"
+            "in_standard_filter": 1
         },
         {
             "fieldname": "next_of_kin_section",
