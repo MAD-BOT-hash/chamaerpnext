@@ -13,12 +13,22 @@ class SHGMultiMemberPayment(Document):
         
         self.company = self.company or get_default_company()
         
-        # Auto-calculate total payment amount
-        total = 0.0
+        # Auto-calculate total payment amount and documents count
+        self.calculate_totals()
+    
+    def calculate_totals(self):
+        """Calculate and set total payment amount and document count"""
+        total_payment = 0.0
+        total_documents = 0
+        
         if self.invoices:
             for row in self.invoices:
-                total += flt(row.payment_amount or 0)
-        self.total_payment_amount = total
+                total_payment += flt(row.payment_amount or 0)
+                if flt(row.payment_amount or 0) > 0:
+                    total_documents += 1
+        
+        self.total_payment_amount = total_payment
+        self.total_documents_selected = total_documents
     
     def validate(self):
         """Validate bulk payment with comprehensive mandatory field checks"""
@@ -73,12 +83,23 @@ class SHGMultiMemberPayment(Document):
             frappe.throw(_("Mode of Payment is mandatory"))
         
         # Validate that invoices table is not empty
-        if not self.invoices:
+        if not self.invoices or len(self.invoices) == 0:
             frappe.throw(_("Please add at least one invoice to process. Click on 'Add Row' in the Invoices table to add an invoice."))
         
-        # Validate at least one payment amount
+        # Validate that we have calculated totals
+        self.calculate_totals()  # Ensure totals are calculated
+        
+        # Validate total payment amount
+        if not hasattr(self, 'total_payment_amount') or self.total_payment_amount is None:
+            self.total_payment_amount = 0
         if self.total_payment_amount <= 0:
-            frappe.throw(_("At least one invoice must have a payment amount greater than zero. Please check the payment amounts in the invoices table."))
+            frappe.throw(_("Total Payment Amount must be greater than zero. Please ensure at least one invoice has a payment amount greater than zero."))
+        
+        # Validate total documents selected
+        if not hasattr(self, 'total_documents_selected') or self.total_documents_selected is None:
+            self.total_documents_selected = 0
+        if self.total_documents_selected <= 0:
+            frappe.throw(_("Total Documents Selected must be greater than zero. Please ensure at least one invoice has a payment amount greater than zero."))
             
     
     def validate_payment_documents_exist(self):
@@ -97,6 +118,9 @@ class SHGMultiMemberPayment(Document):
     
     def validate_invoice_mandatory_fields(self):
         """Validate required fields in child table rows"""
+        if not self.invoices:
+            frappe.throw(_("Please add invoices to the payment record. The invoices table is currently empty."))
+            
         for row in self.invoices:
             # Validate Member
             if not row.member:
@@ -252,7 +276,8 @@ class SHGMultiMemberPayment(Document):
                 outstanding = get_outstanding(row.reference_doctype, row.reference_name)
                 total_outstanding += outstanding
                 total_payment += flt(row.payment_amount or 0)
-                total_documents += 1
+                if flt(row.payment_amount or 0) > 0:
+                    total_documents += 1
         
         self.total_outstanding_before = total_outstanding
         self.total_payment_amount = total_payment
@@ -342,24 +367,8 @@ Remaining after payment: {3}""").format(
     @frappe.whitelist()
     def recalculate_totals(self):
         """Recalculate totals"""
-        total_outstanding = 0.0
-        total_payment = 0.0
-        total_documents = 0
-        
-        from shg.shg.utils.payment_utils import get_outstanding
-        # Loop through invoices child table
-        for row in self.invoices:
-            if row.reference_doctype and row.reference_name:
-                outstanding = get_outstanding(row.reference_doctype, row.reference_name)
-                total_outstanding += outstanding
-                total_payment += flt(row.payment_amount or 0)
-                total_documents += 1
-        
-        # Update parent fields
-        self.total_outstanding_before = total_outstanding
-        self.total_payment_amount = total_payment
-        self.total_remaining_after = total_outstanding - total_payment
-        self.total_documents_selected = total_documents
+        self.calculate_totals()
+        self.validate_totals()
         
         # Save the doc
         self.save(ignore_permissions=True)
