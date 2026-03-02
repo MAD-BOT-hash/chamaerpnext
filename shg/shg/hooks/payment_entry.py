@@ -65,6 +65,10 @@ def validate(doc, method):
         
         # Map member credit account
         map_member_account(doc, method)
+        
+        # Automatically set reference fields for bank transactions if missing
+        _set_bank_transaction_reference_fields(doc)
+        
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), f"SHG Payment Entry Validation Error - {doc.name}")
         # Don't raise the exception to avoid blocking submission, just log it
@@ -141,6 +145,37 @@ def _validate_payment_entry(doc):
             if flt(reference.allocated_amount) > outstanding:
                 frappe.throw(_("Payment amount {0} exceeds outstanding amount {1} for {2}").format(
                     reference.allocated_amount, outstanding, reference.reference_name))
+
+
+def _set_bank_transaction_reference_fields(doc):
+    """
+    Automatically set reference fields for bank transactions if missing.
+    This resolves the "Reference No and Reference Date is mandatory for Bank transaction" error.
+    """
+    # Check if this is a bank transaction that requires reference fields
+    if doc.payment_type in ["Pay", "Internal Transfer"]:
+        # Check if paid_to or paid_from is a bank account
+        is_bank_transaction = False
+        
+        if doc.paid_to:
+            paid_to_account_type = frappe.get_cached_value("Account", doc.paid_to, "account_type")
+            if paid_to_account_type in ["Bank", "Cash"]:
+                is_bank_transaction = True
+        
+        if doc.paid_from:
+            paid_from_account_type = frappe.get_cached_value("Account", doc.paid_from, "account_type")
+            if paid_from_account_type in ["Bank", "Cash"]:
+                is_bank_transaction = True
+        
+        # If it's a bank transaction and reference fields are missing, auto-populate them
+        if is_bank_transaction and (not doc.reference_no or not doc.reference_date):
+            if not doc.reference_no:
+                # Use the Payment Entry name as reference number
+                doc.reference_no = doc.name
+            
+            if not doc.reference_date:
+                # Use the posting date as reference date
+                doc.reference_date = doc.posting_date
 
 
 def _get_outstanding_amount(doctype, name):
