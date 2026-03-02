@@ -218,7 +218,7 @@ class AuditService:
         recent_security_events = frappe.get_all(
             "SHG Audit Trail",
             filters=[
-                ["timestamp", ">=", frappe.utils.add_hours(frappe.utils.now_datetime(), -24)],
+                ["timestamp", ">=", frappe.utils.add_to_date(frappe.utils.now_datetime(), hours=-24)],
                 ["action", "in", ["Overpayment Prevented", "Duplicate Contribution Blocked", 
                                 "Concurrent Modification Blocked"]]
             ],

@@ -91,13 +91,14 @@ class BulkPaymentService:
             self._log_audit_action(
                 "SHG Bulk Payment",
                 bulk_payment_name,
-                "Bulk Payment Processed",
+                "Updated",
                 {
                     "total_amount": bulk_payment.total_amount,
                     "total_allocated": bulk_payment.total_allocated_amount,
                     "processing_method": processed_via,
                     "allocations_processed": len(bulk_payment.allocations),
-                    "idempotency_key": idempotency_key
+                    "idempotency_key": idempotency_key,
+                    "status": "Processed"
                 }
             )
             
@@ -108,11 +109,12 @@ class BulkPaymentService:
             self._log_audit_action(
                 "SHG Bulk Payment",
                 bulk_payment_name,
-                "Bulk Payment Processing Failed",
+                "Updated",
                 {
                     "error": str(e),
                     "processing_method": processed_via,
-                    "idempotency_key": idempotency_key
+                    "idempotency_key": idempotency_key,
+                    "status": "Failed"
                 }
             )
             raise
@@ -132,8 +134,9 @@ class BulkPaymentService:
                 filters={
                     "reference_doctype": "SHG Bulk Payment",
                     "reference_name": bulk_payment_name,
-                    "action": "Bulk Payment Processed",
-                    "timestamp": [">", frappe.utils.add_hours(now(), -24)]
+                    "action": "Updated",
+                    "timestamp": [">", frappe.utils.add_to_date(frappe.utils.now(), hours=-24)],
+                    "details": ["LIKE", "%Processed%"]
                 },
                 limit=1
             )
