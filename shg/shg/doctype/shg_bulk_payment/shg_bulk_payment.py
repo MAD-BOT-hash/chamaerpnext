@@ -126,13 +126,23 @@ class SHGBulkPayment(Document):
     
     def on_submit(self):
         """Process bulk payment on submission"""
-        # Update status to processing
-        self.processing_status = "Processing"
-        self.processed_by = frappe.session.user
-        self.processed_via = "Manual"
-        self.save(ignore_permissions=True)
+        # Update processed_by and processed_via before processing
+        frappe.db.set_value(
+            "SHG Bulk Payment", 
+            self.name, 
+            "processed_by", 
+            frappe.session.user,
+            update_modified=False
+        )
+        frappe.db.set_value(
+            "SHG Bulk Payment", 
+            self.name, 
+            "processed_via", 
+            "Manual",
+            update_modified=False
+        )
         
-        # Process the payment
+        # Process the payment (this will update the status internally)
         self.process_bulk_payment()
     
     def process_bulk_payment(self):
@@ -146,11 +156,8 @@ class SHGBulkPayment(Document):
                 processed_via="Manual"
             )
             
-            # Update with results
-            self.processing_status = "Processed"
-            self.payment_entry = result["payment_entry"]
-            self.processed_date = now()
-            self.save(ignore_permissions=True)
+            # The service layer will have updated the database directly
+            # No need to update self here as document is already submitted
             
             frappe.msgprint(
                 _("Bulk payment processed successfully. Payment Entry: {0}").format(result["payment_entry"]),
@@ -158,10 +165,21 @@ class SHGBulkPayment(Document):
             )
             
         except Exception as e:
-            # Update status to failed
-            self.processing_status = "Failed"
-            self.remarks = f"Processing failed: {str(e)}"
-            self.save(ignore_permissions=True)
+            # Update status to failed directly in database since doc is submitted
+            frappe.db.set_value(
+                "SHG Bulk Payment",
+                self.name,
+                "processing_status",
+                "Failed",
+                update_modified=False
+            )
+            frappe.db.set_value(
+                "SHG Bulk Payment",
+                self.name,
+                "remarks",
+                f"Processing failed: {str(e)}",
+                update_modified=False
+            )
             
             frappe.throw(_("Bulk payment processing failed: {0}").format(str(e)))
     

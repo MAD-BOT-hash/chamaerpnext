@@ -40,10 +40,21 @@ def process_bulk_payment_background(bulk_payment_name: str) -> Dict:
         
         # Update document status
         try:
-            bulk_payment = frappe.get_doc("SHG Bulk Payment", bulk_payment_name)
-            bulk_payment.processing_status = "Failed"
-            bulk_payment.remarks = f"Background processing failed: {str(e)}"
-            bulk_payment.save(ignore_permissions=True)
+            # Update status directly in database since document may be submitted
+            frappe.db.set_value(
+                "SHG Bulk Payment",
+                bulk_payment_name,
+                "processing_status",
+                "Failed",
+                update_modified=False
+            )
+            frappe.db.set_value(
+                "SHG Bulk Payment",
+                bulk_payment_name,
+                "remarks",
+                f"Background processing failed: {str(e)}",
+                update_modified=False
+            )
         except Exception:
             pass  # Ignore errors in error handling
         
@@ -264,31 +275,57 @@ def retry_failed_bulk_payment(bulk_payment_name: str) -> Dict:
     Retry failed bulk payment processing
     """
     try:
-        bulk_payment = frappe.get_doc("SHG Bulk Payment", bulk_payment_name)
+        # Check current status first
+        current_status = frappe.db.get_value("SHG Bulk Payment", bulk_payment_name, "processing_status")
         
         # Only allow retry if previously failed
-        if bulk_payment.processing_status != "Failed":
+        if current_status != "Failed":
             return {
                 "success": False,
                 "error": "Can only retry bulk payments with Failed status"
             }
         
-        # Reset status for retry
-        bulk_payment.processing_status = "Draft"
-        bulk_payment.payment_entry = None
-        bulk_payment.processed_date = None
-        bulk_payment.remarks = f"Retrying processing initiated by {frappe.session.user} on {now()}"
+        # Reset status for retry directly in database
+        frappe.db.set_value(
+            "SHG Bulk Payment",
+            bulk_payment_name,
+            "processing_status",
+            "Draft",
+            update_modified=False
+        )
+        frappe.db.set_value(
+            "SHG Bulk Payment",
+            bulk_payment_name,
+            "payment_entry",
+            None,
+            update_modified=False
+        )
+        frappe.db.set_value(
+            "SHG Bulk Payment",
+            bulk_payment_name,
+            "processed_date",
+            None,
+            update_modified=False
+        )
+        frappe.db.set_value(
+            "SHG Bulk Payment",
+            bulk_payment_name,
+            "remarks",
+            f"Retrying processing initiated by {frappe.session.user} on {now()}",
+            update_modified=False
+        )
         
-        # Reset allocation statuses
-        for allocation in bulk_payment.allocations:
-            if allocation.processing_status == "Failed":
-                allocation.processing_status = "Pending"
-                allocation.payment_entry = None
-                allocation.processed_date = None
-                allocation.is_processed = 0
-                allocation.remarks = ""
-        
-        bulk_payment.save(ignore_permissions=True)
+        # For allocation status reset, we need to handle it differently since doc is submitted
+        # We'll update allocation statuses in the child table directly
+        frappe.db.sql("""
+            UPDATE `tabSHG Bulk Payment Allocation`
+            SET processing_status = 'Pending',
+                payment_entry = NULL,
+                processed_date = NULL,
+                is_processed = 0,
+                remarks = ''
+            WHERE parent = %s AND processing_status = 'Failed'
+        """, bulk_payment_name)
         
         # Schedule for processing
         schedule_bulk_payment_processing(bulk_payment_name, delay_seconds=10)

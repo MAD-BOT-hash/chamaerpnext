@@ -11,21 +11,8 @@ frappe.ui.form.on('SHG Bulk Payment', {
                     return;
                 }
                 
-                frappe.call({
-                    method: "shg.shg.services.payment.bulk_payment_service.get_unpaid_invoices_for_company",
-                    args: { 
-                        company: frm.doc.company 
-                    },
-                    freeze: true,
-                    freeze_message: __("Fetching unpaid invoices..."),
-                    callback: function(r) {
-                        if (r.message && r.message.length > 0) {
-                            show_unpaid_items_dialog(frm, r.message, "Invoices");
-                        } else {
-                            frappe.msgprint(__('No unpaid invoices found for this company'));
-                        }
-                    }
-                });
+                // Fetch for entire company
+                fetch_unpaid_invoices_for_company(frm);
             }, __("Fetch Unpaid"));
             
             // Add button to fetch unpaid contributions
@@ -35,21 +22,8 @@ frappe.ui.form.on('SHG Bulk Payment', {
                     return;
                 }
                 
-                frappe.call({
-                    method: "shg.shg.services.payment.bulk_payment_service.get_unpaid_contributions_for_company",
-                    args: { 
-                        company: frm.doc.company 
-                    },
-                    freeze: true,
-                    freeze_message: __("Fetching unpaid contributions..."),
-                    callback: function(r) {
-                        if (r.message && r.message.length > 0) {
-                            show_unpaid_items_dialog(frm, r.message, "Contributions");
-                        } else {
-                            frappe.msgprint(__('No unpaid contributions found for this company'));
-                        }
-                    }
-                });
+                // Fetch for entire company
+                fetch_unpaid_contributions_for_company(frm);
             }, __("Fetch Unpaid"));
             
             // Add button to fetch all unpaid items
@@ -59,22 +33,117 @@ frappe.ui.form.on('SHG Bulk Payment', {
                     return;
                 }
                 
-                frappe.call({
-                    method: "shg.shg.services.payment.bulk_payment_service.get_all_unpaid_items_for_company",
-                    args: { 
-                        company: frm.doc.company 
-                    },
-                    freeze: true,
-                    freeze_message: __("Fetching all unpaid items..."),
-                    callback: function(r) {
-                        if (r.message && r.message.length > 0) {
-                            show_unpaid_items_dialog(frm, r.message, "All Items");
-                        } else {
-                            frappe.msgprint(__('No unpaid items found for this company'));
+                // Fetch for entire company
+                fetch_all_unpaid_items_for_company(frm);
+            }, __("Fetch Unpaid"));
+            
+            // Add button to fetch for specific member (if needed)
+            frm.add_custom_button(__('Fetch For Specific Member'), function() {
+                if (!frm.doc.company) {
+                    frappe.msgprint(__("Please select a Company first."));
+                    return;
+                }
+                
+                // Create a dialog to select member
+                const d = new frappe.ui.Dialog({
+                    title: __('Select Member'),
+                    fields: [
+                        {
+                            label: 'Member',
+                            fieldname: 'selected_member',
+                            fieldtype: 'Link',
+                            options: 'SHG Member',
+                            reqd: 1,
+                            get_query: function() {
+                                return {
+                                    filters: {
+                                        'company': frm.doc.company
+                                    }
+                                };
+                            }
                         }
+                    ],
+                    primary_action_label: __('Fetch Unpaid Items'),
+                    primary_action: function(values) {
+                        fetch_unpaid_items_for_specific_member(frm, values.selected_member);
+                        d.hide();
                     }
                 });
-            }, __("Fetch Unpaid"));
+                d.show();
+            }, __("Fetch For"));
+
+// Helper functions
+function fetch_unpaid_invoices_for_company(frm) {
+    frappe.call({
+        method: "shg.shg.services.payment.bulk_payment_service.get_unpaid_invoices_for_company",
+        args: { 
+            company: frm.doc.company 
+        },
+        freeze: true,
+        freeze_message: __("Fetching unpaid invoices..."),
+        callback: function(r) {
+            if (r.message && r.message.length > 0) {
+                show_unpaid_items_dialog(frm, r.message, "Invoices");
+            } else {
+                frappe.msgprint(__('No unpaid invoices found for this company'));
+            }
+        }
+    });
+}
+
+function fetch_unpaid_contributions_for_company(frm) {
+    frappe.call({
+        method: "shg.shg.services.payment.bulk_payment_service.get_unpaid_contributions_for_company",
+        args: { 
+            company: frm.doc.company 
+        },
+        freeze: true,
+        freeze_message: __("Fetching unpaid contributions..."),
+        callback: function(r) {
+            if (r.message && r.message.length > 0) {
+                show_unpaid_items_dialog(frm, r.message, "Contributions");
+            } else {
+                frappe.msgprint(__('No unpaid contributions found for this company'));
+            }
+        }
+    });
+}
+
+function fetch_all_unpaid_items_for_company(frm) {
+    frappe.call({
+        method: "shg.shg.services.payment.bulk_payment_service.get_all_unpaid_items_for_company",
+        args: { 
+            company: frm.doc.company 
+        },
+        freeze: true,
+        freeze_message: __("Fetching all unpaid items..."),
+        callback: function(r) {
+            if (r.message && r.message.length > 0) {
+                show_unpaid_items_dialog(frm, r.message, "All Items");
+            } else {
+                frappe.msgprint(__('No unpaid items found for this company'));
+            }
+        }
+    });
+}
+
+function fetch_unpaid_items_for_specific_member(frm, member) {
+    frappe.call({
+        method: "shg.shg.services.payment.bulk_payment_service.get_all_unpaid_items_for_member",
+        args: { 
+            member: member 
+        },
+        freeze: true,
+        freeze_message: __("Fetching unpaid items for member..."),
+        callback: function(r) {
+            if (r.message && r.message.length > 0) {
+                show_unpaid_items_dialog(frm, r.message, "Member Items");
+            } else {
+                frappe.msgprint(__('No unpaid items found for this member'));
+            }
+        }
+    });
+}
             
             // Add button to auto-allocate by oldest due date
             frm.add_custom_button(__('Auto Allocate by Due Date'), function() {
