@@ -19,9 +19,7 @@ class SHGContributionInvoice(Document):
         if self.amount:
             self.amount = round(flt(self.amount), 2)
         
-        # Removed due date validation that was causing errors
-        # The validation was preventing submission when due_date was before invoice_date or supplier_invoice_date
-        # This validation is now removed to allow flexible date handling
+        # No date validation - completely removed to prevent errors
             
     def before_validate(self):
         """Ensure company is populated from SHG Settings."""
@@ -127,9 +125,15 @@ class SHGContributionInvoice(Document):
         
         # Create Sales Invoice if enabled and not already created
         if auto_generate_sales_invoice and not self.sales_invoice:
-            self.create_sales_invoice()
+            try:
+                self.create_sales_invoice()
+            except Exception as e:
+                # Log the error but don't prevent submission
+                frappe.log_error(f"Failed to create Sales Invoice: {str(e)}", "SHG Contribution Invoice Submission")
+                frappe.msgprint(f"Warning: Could not create Sales Invoice automatically. Error: {str(e)}")
+        
         # Set status to Unpaid when submitted
-        elif not self.status or self.status == "Draft":
+        if not self.status or self.status == "Draft":
             self.db_set("status", "Unpaid")
         
         # Check if auto-creation of SHG Contribution is enabled
@@ -171,30 +175,34 @@ class SHGContributionInvoice(Document):
         invoice_date = getdate(self.invoice_date or today())
         due_date = getdate(self.due_date or invoice_date)
 
-        # Removed validation that was preventing due_date from being before invoice_date
-        # This allows more flexible date handling
+        # No date validation - allowing flexible date handling
+        
+        # Try to create the Sales Invoice with error handling
+        try:
+            invoice = frappe.new_doc("Sales Invoice")
+            invoice.company = company
+            invoice.customer = self.member_name
+            invoice.posting_date = invoice_date
+            invoice.due_date = due_date
+            invoice.debit_to = member_account
+            invoice.supplier_invoice_date = invoice_date
+            invoice.append("items", {
+                "item_name": "SHG Contribution",
+                "qty": qty,
+                "rate": rate,
+                "income_account": income_account,
+                "description": f"Contribution for {self.member}"
+            })
 
-        invoice = frappe.new_doc("Sales Invoice")
-        invoice.company = company
-        invoice.customer = self.member_name
-        invoice.posting_date = invoice_date
-        invoice.due_date = due_date
-        invoice.debit_to = member_account
-        invoice.supplier_invoice_date = invoice_date
-        invoice.append("items", {
-            "item_name": "SHG Contribution",
-            "qty": qty,
-            "rate": rate,
-            "income_account": income_account,
-            "description": f"Contribution for {self.member}"
-        })
-
-        invoice.flags.ignore_mandatory = True
-        invoice.insert(ignore_permissions=True)
-        invoice.submit()
-        frappe.msgprint(f"Sales Invoice {invoice.name} created and submitted for {self.member_name}")
-
-        return invoice
+            invoice.flags.ignore_mandatory = True
+            invoice.insert(ignore_permissions=True)
+            invoice.submit()
+            frappe.msgprint(f"Sales Invoice {invoice.name} created and submitted for {self.member_name}")
+            
+            return invoice
+        except Exception as e:
+            # Re-raise with more context
+            frappe.throw(f"Failed to create Sales Invoice: {str(e)}")
 
     def calculate_late_fee(self):
         """Calculate late payment fee based on SHG Settings"""
