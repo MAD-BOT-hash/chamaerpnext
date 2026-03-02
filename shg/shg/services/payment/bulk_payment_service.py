@@ -480,6 +480,154 @@ class BulkPaymentService:
         else:
             # Fallback logging
             self.logger.info(f"Audit: {action} {reference_doctype} {reference_name} - {json.dumps(details or {})}")
+    
+    @frappe.whitelist()
+    def get_unpaid_invoices_for_company(self, company: str) -> List[Dict]:
+        """
+        Get all unpaid contribution invoices for a company
+        """
+        try:
+            # Get unpaid contribution invoices
+            invoices = frappe.get_all(
+                "SHG Contribution Invoice",
+                filters={
+                    "docstatus": 1,
+                    "status": ["in", ["Unpaid", "Partially Paid"]]
+                },
+                fields=["name", "member", "member_name", "invoice_date", "due_date", "amount", "status", "description"]
+            )
+            
+            # Filter by company through member
+            company_members = frappe.get_all("SHG Member", filters={"company": company}, pluck="name")
+            filtered_invoices = [inv for inv in invoices if inv.member in company_members]
+            
+            # Format for bulk payment
+            result = []
+            for inv in filtered_invoices:
+                result.append({
+                    "member": inv.member,
+                    "member_name": inv.member_name,
+                    "reference_doctype": "SHG Contribution Invoice",
+                    "reference_name": inv.name,
+                    "reference_date": inv.invoice_date,
+                    "due_date": inv.due_date,
+                    "outstanding_amount": inv.amount,
+                    "status": inv.status,
+                    "description": inv.description or "Contribution Invoice"
+                })
+            
+            return result
+            
+        except Exception as e:
+            frappe.log_error(f"Bulk Payment: Error fetching unpaid invoices - {str(e)}")
+            return []
+    
+    @frappe.whitelist()
+    def get_unpaid_contributions_for_company(self, company: str) -> List[Dict]:
+        """
+        Get all unpaid contributions for a company
+        """
+        try:
+            # Get unpaid contributions
+            contributions = frappe.get_all(
+                "SHG Contribution",
+                filters={
+                    "docstatus": 1,
+                    "payment_status": ["in", ["Pending", "Partially Paid"]]
+                },
+                fields=["name", "member", "member_name", "contribution_date", "due_date", "expected_amount", "paid_amount", "payment_status", "contribution_type"]
+            )
+            
+            # Filter by company through member
+            company_members = frappe.get_all("SHG Member", filters={"company": company}, pluck="name")
+            filtered_contributions = [cont for cont in contributions if cont.member in company_members]
+            
+            # Format for bulk payment
+            result = []
+            for cont in filtered_contributions:
+                outstanding = flt(cont.expected_amount) - flt(cont.paid_amount)
+                if outstanding > 0:
+                    result.append({
+                        "member": cont.member,
+                        "member_name": cont.member_name,
+                        "reference_doctype": "SHG Contribution",
+                        "reference_name": cont.name,
+                        "reference_date": cont.contribution_date,
+                        "due_date": cont.due_date,
+                        "outstanding_amount": outstanding,
+                        "status": cont.payment_status,
+                        "description": f"Contribution - {cont.contribution_type or 'General'}"
+                    })
+            
+            return result
+            
+        except Exception as e:
+            frappe.log_error(f"Bulk Payment: Error fetching unpaid contributions - {str(e)}")
+            return []
+    
+    @frappe.whitelist()
+    def get_unpaid_meeting_fines_for_company(self, company: str) -> List[Dict]:
+        """
+        Get all unpaid meeting fines for a company
+        """
+        try:
+            # Get unpaid meeting fines
+            fines = frappe.get_all(
+                "SHG Meeting Fine",
+                filters={
+                    "docstatus": 1,
+                    "status": "Unpaid"
+                },
+                fields=["name", "member", "member_name", "fine_date", "due_date", "amount", "paid_amount", "description"]
+            )
+            
+            # Filter by company through member
+            company_members = frappe.get_all("SHG Member", filters={"company": company}, pluck="name")
+            filtered_fines = [fine for fine in fines if fine.member in company_members]
+            
+            # Format for bulk payment
+            result = []
+            for fine in filtered_fines:
+                outstanding = flt(fine.amount) - flt(fine.paid_amount)
+                if outstanding > 0:
+                    result.append({
+                        "member": fine.member,
+                        "member_name": fine.member_name,
+                        "reference_doctype": "SHG Meeting Fine",
+                        "reference_name": fine.name,
+                        "reference_date": fine.fine_date,
+                        "due_date": fine.due_date,
+                        "outstanding_amount": outstanding,
+                        "status": "Unpaid",
+                        "description": fine.description or "Meeting Fine"
+                    })
+            
+            return result
+            
+        except Exception as e:
+            frappe.log_error(f"Bulk Payment: Error fetching unpaid meeting fines - {str(e)}")
+            return []
+    
+    @frappe.whitelist()
+    def get_all_unpaid_items_for_company(self, company: str) -> List[Dict]:
+        """
+        Get all unpaid items (invoices, contributions, fines) for a company
+        """
+        try:
+            # Get all types of unpaid items
+            invoices = self.get_unpaid_invoices_for_company(company)
+            contributions = self.get_unpaid_contributions_for_company(company)
+            fines = self.get_unpaid_meeting_fines_for_company(company)
+            
+            # Combine and sort by due date (oldest first)
+            all_items = invoices + contributions + fines
+            all_items.sort(key=lambda x: getdate(x.get('due_date') or x.get('reference_date') or '1900-01-01'))
+            
+            return all_items
+            
+        except Exception as e:
+            frappe.log_error(f"Bulk Payment: Error fetching all unpaid items - {str(e)}")
+            return []
 
 
 # Global service instance
