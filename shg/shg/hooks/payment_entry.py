@@ -31,54 +31,240 @@ def set_reference_fields(pe, source_doc):
                 # Fallback to posting date
                 pe.reference_date = source_doc.posting_date or pe.posting_date
 
-def payment_entry_validate(doc, method):
+
+def validate(doc, method):
     """
     Hook function called during Payment Entry validation.
-    Automatically sets reference fields for SHG-related Payment Entries and maps member accounts.
+    Performs comprehensive validation for SHG-related Payment Entries.
     """
-    # Check if this Payment Entry is related to any SHG module
-    shg_contribution = doc.get("custom_shg_contribution")
-    shg_loan = doc.get("custom_shg_loan")
-    shg_loan_repayment = doc.get("custom_shg_loan_repayment")
-    shg_meeting_fine = doc.get("custom_shg_meeting_fine")
-    
-    source_doc = None
-    
-    # Determine the source document
-    if shg_contribution:
-        source_doc = frappe.get_doc("SHG Contribution", shg_contribution)
-    elif shg_loan:
-        source_doc = frappe.get_doc("SHG Loan", shg_loan)
-    elif shg_loan_repayment:
-        source_doc = frappe.get_doc("SHG Loan Repayment", shg_loan_repayment)
-    elif shg_meeting_fine:
-        source_doc = frappe.get_doc("SHG Meeting Fine", shg_meeting_fine)
-    
-    # If we found a source document, set the reference fields
-    if source_doc:
-        set_reference_fields(doc, source_doc)
-    
-    # Map member credit account
-    map_member_account(doc, method)
+    try:
+        # Perform basic payment entry validation
+        _validate_payment_entry(doc)
+        
+        # Check if this Payment Entry is related to any SHG module
+        shg_contribution = doc.get("custom_shg_contribution")
+        shg_loan = doc.get("custom_shg_loan")
+        shg_loan_repayment = doc.get("custom_shg_loan_repayment")
+        shg_meeting_fine = doc.get("custom_shg_meeting_fine")
+        
+        source_doc = None
+        
+        # Determine the source document
+        if shg_contribution:
+            source_doc = frappe.get_doc("SHG Contribution", shg_contribution)
+        elif shg_loan:
+            source_doc = frappe.get_doc("SHG Loan", shg_loan)
+        elif shg_loan_repayment:
+            source_doc = frappe.get_doc("SHG Loan Repayment", shg_loan_repayment)
+        elif shg_meeting_fine:
+            source_doc = frappe.get_doc("SHG Meeting Fine", shg_meeting_fine)
+        
+        # If we found a source document, set the reference fields
+        if source_doc:
+            set_reference_fields(doc, source_doc)
+        
+        # Map member credit account
+        map_member_account(doc, method)
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"SHG Payment Entry Validation Error - {doc.name}")
+        # Don't raise the exception to avoid blocking submission, just log it
 
-def payment_entry_on_submit(doc, method):
+
+def on_submit(doc, method):
     """
     Hook function called when Payment Entry is submitted.
-    Updates the status of related SHG Contribution Invoices and SHG Contributions.
+    Processes comprehensive payment updates for SHG-related documents.
     """
-    # Check if auto-apply payment is enabled in settings
-    auto_apply_payment = frappe.db.get_single_value("SHG Settings", "auto_apply_payment_on_payment_entry_submit")
-    if not auto_apply_payment:
-        return
-    
-    # Process all references in the Payment Entry
+    try:
+        # Process all references in the Payment Entry
+        for reference in doc.references:
+            if reference.reference_doctype and reference.reference_name:
+                # Process based on reference type
+                if reference.reference_doctype == "Sales Invoice":
+                    # Update the SHG Contribution Invoice status
+                    update_shg_contribution_invoice_status(reference.reference_name)
+                    
+                    # Update the related SHG Contribution status
+                    update_shg_contribution_status(reference.reference_name)
+                    
+                elif reference.reference_doctype == "SHG Contribution Invoice":
+                    # Direct contribution invoice reference
+                    update_shg_contribution_invoice_status_direct(reference.reference_name, doc.name)
+                    
+                elif reference.reference_doctype == "SHG Contribution":
+                    # Direct contribution reference
+                    update_shg_contribution_status_direct(reference.reference_name, doc.name, reference.allocated_amount)
+                    
+                elif reference.reference_doctype == "SHG Meeting Fine":
+                    # Direct meeting fine reference
+                    update_shg_meeting_fine_status_direct(reference.reference_name, doc.name)
+                    
+                elif reference.reference_doctype == "SHG Loan Repayment":
+                    # Direct loan repayment reference
+                    update_shg_loan_repayment_status_direct(reference.reference_name, doc.name)
+        
+        # Update member financial summaries for all affected members
+        _update_member_financial_summaries(doc)
+        
+        # Update related invoice statuses
+        _update_related_invoice_statuses(doc)
+        
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), f"SHG Payment Entry On Submit Error - {doc.name}")
+        # Don't raise the exception to avoid blocking submission, just log it
+
+
+def _validate_payment_entry(doc):
+    """
+    Performs comprehensive validation on the payment entry.
+    """
+    # Validate reference doctype and name
     for reference in doc.references:
-        if reference.reference_doctype == "Sales Invoice" and reference.reference_name:
-            # Update the SHG Contribution Invoice status
-            update_shg_contribution_invoice_status(reference.reference_name)
+        if reference.reference_doctype and reference.reference_name:
+            # Check reference exists
+            if not frappe.db.exists(reference.reference_doctype, reference.reference_name):
+                frappe.throw(_("Reference {0} {1} does not exist").format(
+                    reference.reference_doctype, reference.reference_name))
             
-            # Update the related SHG Contribution status
-            update_shg_contribution_status(reference.reference_name)
+            # Ensure payment amount > 0
+            if flt(reference.allocated_amount) <= 0:
+                frappe.throw(_("Allocated amount must be greater than zero for {0}").format(
+                    reference.reference_name))
+            
+            # Verify outstanding amount is valid
+            outstanding = _get_outstanding_amount(reference.reference_doctype, reference.reference_name)
+            if outstanding < 0:
+                frappe.throw(_("Outstanding amount cannot be negative for {0}").format(
+                    reference.reference_name))
+            
+            # Prevent payment amount from exceeding outstanding amount
+            if flt(reference.allocated_amount) > outstanding:
+                frappe.throw(_("Payment amount {0} exceeds outstanding amount {1} for {2}").format(
+                    reference.allocated_amount, outstanding, reference.reference_name))
+
+
+def _get_outstanding_amount(doctype, name):
+    """
+    Get outstanding amount for a document.
+    """
+    if doctype == "Sales Invoice":
+        si = frappe.get_doc("Sales Invoice", name)
+        return flt(si.outstanding_amount)
+    elif doctype == "SHG Contribution Invoice":
+        invoice = frappe.get_doc("SHG Contribution Invoice", name)
+        # For contribution invoices, the full amount is typically the outstanding
+        return flt(invoice.amount)
+    elif doctype == "SHG Contribution":
+        contrib = frappe.get_doc("SHG Contribution", name)
+        return flt(contrib.unpaid_amount or contrib.expected_amount or contrib.amount)
+    elif doctype == "SHG Meeting Fine":
+        fine = frappe.get_doc("SHG Meeting Fine", name)
+        return flt(fine.fine_amount) if fine.status != "Paid" else 0
+    elif doctype == "SHG Loan Repayment":
+        repayment = frappe.get_doc("SHG Loan Repayment", name)
+        return flt(repayment.principal_amount + repayment.interest_amount - repayment.amount_paid)
+    else:
+        # Generic fallback
+        try:
+            outstanding = frappe.db.get_value(doctype, name, "outstanding_amount")
+            return flt(outstanding) if outstanding else 0.0
+        except Exception:
+            try:
+                amount = frappe.db.get_value(doctype, name, "amount")
+                return flt(amount) if amount else 0.0
+            except Exception:
+                return 0.0
+
+
+def _update_member_financial_summaries(doc):
+    """
+    Update financial summaries for all members affected by this payment entry.
+    """
+    try:
+        members_updated = set()
+        
+        # Get members from references
+        for reference in doc.references:
+            if reference.reference_doctype and reference.reference_name:
+                member = _get_member_from_reference(reference.reference_doctype, reference.reference_name)
+                if member and member not in members_updated:
+                    try:
+                        member_doc = frappe.get_doc("SHG Member", member)
+                        member_doc.update_financial_summary()
+                        members_updated.add(member)
+                    except Exception as e:
+                        frappe.log_error(frappe.get_traceback(), 
+                                       f"Failed to update member financial summary for {member}")
+        
+        # Also get member from party if available
+        if doc.party_type == "SHG Member" and doc.party and doc.party not in members_updated:
+            try:
+                member_doc = frappe.get_doc("SHG Member", doc.party)
+                member_doc.update_financial_summary()
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), 
+                               f"Failed to update member financial summary for {doc.party}")
+                
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Member Financial Summary Update Error")
+
+
+def _get_member_from_reference(doctype, name):
+    """
+    Get member ID from a reference document.
+    """
+    try:
+        if doctype == "Sales Invoice":
+            # Get customer and try to find associated member
+            customer = frappe.db.get_value("Sales Invoice", name, "customer")
+            # Look for member linked to this customer
+            member = frappe.db.get_value("SHG Member", {"customer": customer}, "name")
+            return member
+        elif doctype == "SHG Contribution Invoice":
+            return frappe.db.get_value("SHG Contribution Invoice", name, "member")
+        elif doctype == "SHG Contribution":
+            return frappe.db.get_value("SHG Contribution", name, "member")
+        elif doctype == "SHG Meeting Fine":
+            return frappe.db.get_value("SHG Meeting Fine", name, "member")
+        elif doctype == "SHG Loan Repayment":
+            loan_name = frappe.db.get_value("SHG Loan Repayment", name, "against_loan")
+            return frappe.db.get_value("SHG Loan", loan_name, "member") if loan_name else None
+        else:
+            # Try generic lookup
+            try:
+                return frappe.db.get_value(doctype, name, "member")
+            except Exception:
+                return None
+    except Exception:
+        return None
+
+
+def _update_related_invoice_statuses(doc):
+    """
+    Update statuses of related invoices after payment submission.
+    """
+    try:
+        for reference in doc.references:
+            if reference.reference_doctype == "Sales Invoice" and reference.reference_name:
+                # Update related SHG Contribution Invoice if it exists
+                contrib_invoice_name = frappe.db.get_value("SHG Contribution Invoice", 
+                                                         {"sales_invoice": reference.reference_name})
+                if contrib_invoice_name:
+                    contrib_invoice = frappe.get_doc("SHG Contribution Invoice", contrib_invoice_name)
+                    sales_invoice = frappe.get_doc("Sales Invoice", reference.reference_name)
+                    
+                    # Update status based on outstanding amount
+                    if sales_invoice.outstanding_amount <= 0:
+                        contrib_invoice.db_set("status", "Paid")
+                    elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
+                        contrib_invoice.db_set("status", "Partially Paid")
+                    else:
+                        contrib_invoice.db_set("status", "Unpaid")
+                        
+                    contrib_invoice.db_set("payment_reference", doc.name)
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Related Invoice Status Update Error")
+
 
 def update_shg_contribution_invoice_status(sales_invoice_name):
     """
@@ -110,6 +296,32 @@ def update_shg_contribution_invoice_status(sales_invoice_name):
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "SHG Contribution Invoice Status Update Failed")
 
+
+def update_shg_contribution_invoice_status_direct(contrib_invoice_name, payment_entry_name):
+    """
+    Update SHG Contribution Invoice status directly from payment reference.
+    
+    Args:
+        contrib_invoice_name (str): Name of the SHG Contribution Invoice
+        payment_entry_name (str): Name of the Payment Entry
+    """
+    try:
+        shg_invoice = frappe.get_doc("SHG Contribution Invoice", contrib_invoice_name)
+        # For direct payment to contribution invoice, mark as paid
+        shg_invoice.db_set("status", "Paid")
+        shg_invoice.db_set("payment_reference", payment_entry_name)
+        
+        # Update related contribution if exists
+        contrib_name = frappe.db.get_value("SHG Contribution", 
+                                         {"invoice_reference": contrib_invoice_name})
+        if contrib_name:
+            update_shg_contribution_status_direct(contrib_name, payment_entry_name, shg_invoice.amount)
+                
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), 
+                        f"SHG Contribution Invoice Direct Status Update Failed for {contrib_invoice_name}")
+
+
 def update_shg_contribution_status(sales_invoice_name):
     """
     Update the SHG Contribution status based on the Sales Invoice status
@@ -118,7 +330,7 @@ def update_shg_contribution_status(sales_invoice_name):
         sales_invoice_name (str): Name of the Sales Invoice
     """
     try:
-        # Get the SHG Contribution linked to the Sales Invoice through the Contribution Invoice
+        # Get the SHG Contribution Invoice linked to the Sales Invoice
         shg_invoice_name = frappe.db.get_value("SHG Contribution Invoice", 
                                               {"sales_invoice": sales_invoice_name})
         
@@ -157,3 +369,87 @@ def update_shg_contribution_status(sales_invoice_name):
                 
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), f"SHG Contribution Status Update Failed for Sales Invoice {sales_invoice_name}")
+
+
+def update_shg_contribution_status_direct(contrib_name, payment_entry_name, paid_amount=None):
+    """
+    Update SHG Contribution status directly from payment reference.
+    
+    Args:
+        contrib_name (str): Name of the SHG Contribution
+        payment_entry_name (str): Name of the Payment Entry
+        paid_amount (float): Amount paid (optional)
+    """
+    try:
+        shg_contribution = frappe.get_doc("SHG Contribution", contrib_name)
+        
+        if paid_amount:
+            # Calculate new amounts based on payment
+            current_paid = flt(shg_contribution.amount_paid or 0)
+            new_paid = current_paid + flt(paid_amount)
+            expected_amount = flt(shg_contribution.expected_amount or shg_contribution.amount)
+            new_unpaid = max(0, expected_amount - new_paid)
+            
+            shg_contribution.db_set("amount_paid", new_paid)
+            shg_contribution.db_set("unpaid_amount", new_unpaid)
+            
+            # Update status based on payment
+            if new_unpaid <= 0:
+                shg_contribution.db_set("status", "Paid")
+            elif new_paid > 0:
+                shg_contribution.db_set("status", "Partially Paid")
+            else:
+                shg_contribution.db_set("status", "Unpaid")
+        else:
+            # Just mark as paid without recalculating amounts
+            shg_contribution.db_set("status", "Paid")
+        
+        # Record payment reference
+        shg_contribution.db_set("payment_entry", payment_entry_name)
+        
+        # Save the contribution to trigger any necessary updates
+        shg_contribution.flags.ignore_permissions = True
+        shg_contribution.save()
+                
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), 
+                        f"SHG Contribution Direct Status Update Failed for {contrib_name}")
+
+
+def update_shg_meeting_fine_status_direct(fine_name, payment_entry_name):
+    """
+    Update SHG Meeting Fine status directly from payment reference.
+    
+    Args:
+        fine_name (str): Name of the SHG Meeting Fine
+        payment_entry_name (str): Name of the Payment Entry
+    """
+    try:
+        fine = frappe.get_doc("SHG Meeting Fine", fine_name)
+        fine.db_set("status", "Paid")
+        fine.db_set("payment_entry", payment_entry_name)
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), 
+                        f"SHG Meeting Fine Direct Status Update Failed for {fine_name}")
+
+
+def update_shg_loan_repayment_status_direct(repayment_name, payment_entry_name):
+    """
+    Update SHG Loan Repayment status directly from payment reference.
+    
+    Args:
+        repayment_name (str): Name of the SHG Loan Repayment
+        payment_entry_name (str): Name of the Payment Entry
+    """
+    try:
+        repayment = frappe.get_doc("SHG Loan Repayment", repayment_name)
+        
+        # Update payment status
+        principal_paid = repayment.principal_amount
+        interest_paid = repayment.interest_amount
+        repayment.db_set("amount_paid", principal_paid + interest_paid)
+        repayment.db_set("status", "Paid")
+        repayment.db_set("payment_entry", payment_entry_name)
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), 
+                        f"SHG Loan Repayment Direct Status Update Failed for {repayment_name}")
