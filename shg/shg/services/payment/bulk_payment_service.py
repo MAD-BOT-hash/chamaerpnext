@@ -492,7 +492,9 @@ class BulkPaymentService:
     def _update_contribution_invoice_payment(self, invoice_doc: Document, allocated_amount: float):
         """Update contribution invoice payment status"""
         invoice_doc.paid_amount = flt(invoice_doc.paid_amount) + flt(allocated_amount)
-        invoice_doc.outstanding_amount = flt(invoice_doc.total_amount) - flt(invoice_doc.paid_amount)
+        # Use 'amount' field for SHG Contribution Invoice (not 'total_amount')
+        total_amount = flt(getattr(invoice_doc, 'total_amount', None) or getattr(invoice_doc, 'amount', 0))
+        invoice_doc.outstanding_amount = total_amount - flt(invoice_doc.paid_amount)
         
         if invoice_doc.outstanding_amount <= 0:
             invoice_doc.status = "Paid"
