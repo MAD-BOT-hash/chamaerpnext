@@ -381,6 +381,9 @@ frappe.ui.form.on('SHG Bulk Payment Allocation', {
                             frappe.model.set_value(cdt, cdn, 'due_date', doc.due_date || doc.fine_date);
                             frappe.model.set_value(cdt, cdn, 'outstanding_amount', doc.amount - (doc.paid_amount || 0));
                         }
+                        
+                        // Auto-set allocated amount to outstanding amount
+                        frappe.model.set_value(cdt, cdn, 'allocated_amount', flt(doc.amount || doc.expected_amount || doc.amount));
                     }
                 }
             });

@@ -88,7 +88,6 @@
    "fieldname": "total_amount",
    "fieldtype": "Currency",
    "label": "Total Payment Amount",
-   "read_only": 1,
    "reqd": 1
   },
   {

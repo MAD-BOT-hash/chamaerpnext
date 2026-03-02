@@ -10,6 +10,24 @@ class SHGBulkPayment(Document):
     Enterprise-grade bulk payment processing with full safety guarantees
     """
     
+    def before_validate(self):
+        """Auto-calculate totals before validation"""
+        self.calculate_totals()
+    
+    def calculate_totals(self):
+        """Calculate and set total amounts based on allocations"""
+        total_allocated = 0.0
+        total_outstanding = 0.0
+        
+        if self.allocations:
+            for row in self.allocations:
+                total_allocated += flt(row.allocated_amount or 0)
+                total_outstanding += flt(row.outstanding_amount or 0)
+        
+        self.total_allocated_amount = total_allocated
+        self.total_outstanding_amount = total_outstanding
+        self.unallocated_amount = flt(self.total_amount) - flt(total_allocated)
+    
     def validate(self):
         """Validate bulk payment document"""
         self.validate_required_fields()
