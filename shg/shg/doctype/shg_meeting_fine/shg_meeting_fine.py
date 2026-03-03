@@ -30,7 +30,10 @@ class SHGMeetingFine(Document):
     
     @property
     def posting_date(self):
-        """ERPNext compatibility - returns fine_date or meeting_date."""
+        """ERPNext compatibility - returns posting_date field or falls back to fine_date."""
+        pd = getattr(self, '_posting_date', None) or self.get('posting_date')
+        if pd:
+            return pd
         return getattr(self, 'fine_date', None) or getattr(self, 'meeting_date', None) or today()
     
     @property

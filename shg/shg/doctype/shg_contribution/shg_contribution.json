@@ -77,6 +77,13 @@
             "default": "Today"
         },
         {
+            "fieldname": "posting_date",
+            "fieldtype": "Date",
+            "label": "Posting Date",
+            "default": "Today",
+            "description": "ERPNext Payment Entry compatibility field"
+        },
+        {
             "fieldname": "column_break_4",
             "fieldtype": "Column Break"
         },

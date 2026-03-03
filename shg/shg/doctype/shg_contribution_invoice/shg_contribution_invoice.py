@@ -49,7 +49,12 @@ class SHGContributionInvoice(Document):
     
     @property
     def posting_date(self):
-        """ERPNext compatibility - returns invoice_date as posting_date."""
+        """ERPNext compatibility - returns posting_date field or falls back to invoice_date."""
+        # First try the actual posting_date field
+        pd = getattr(self, '_posting_date', None) or self.get('posting_date')
+        if pd:
+            return pd
+        # Fallback to invoice_date
         return self.invoice_date
     
     @property

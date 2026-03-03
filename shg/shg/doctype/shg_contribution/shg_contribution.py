@@ -33,7 +33,10 @@ class SHGContribution(Document):
     
     @property
     def posting_date(self):
-        """ERPNext compatibility - returns contribution_date."""
+        """ERPNext compatibility - returns posting_date field or falls back to contribution_date."""
+        pd = getattr(self, '_posting_date', None) or self.get('posting_date')
+        if pd:
+            return pd
         return getattr(self, 'contribution_date', None) or getattr(self, 'date', None) or nowdate()
     
     @property

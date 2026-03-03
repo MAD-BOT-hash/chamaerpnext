@@ -71,6 +71,13 @@
             "default": "Today"
         },
         {
+            "fieldname": "posting_date",
+            "fieldtype": "Date",
+            "label": "Posting Date",
+            "default": "Today",
+            "description": "ERPNext Payment Entry compatibility field"
+        },
+        {
             "fieldname": "fine_reason",
             "fieldtype": "Select",
             "label": "Fine Reason",
