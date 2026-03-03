@@ -94,19 +94,22 @@
    "fieldname": "total_allocated_amount",
    "fieldtype": "Currency",
    "label": "Total Allocated Amount",
-   "read_only": 1
+   "read_only": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "total_outstanding_amount",
    "fieldtype": "Currency",
    "label": "Total Outstanding Amount",
-   "read_only": 1
+   "read_only": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "unallocated_amount",
    "fieldtype": "Currency",
    "label": "Unallocated Amount",
-   "read_only": 1
+   "read_only": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "section_break_processing",
@@ -120,20 +123,23 @@
    "options": "Draft\nProcessing\nProcessed\nPartially Processed\nFailed",
    "read_only": 1,
    "reqd": 1,
-   "default": "Draft"
+   "default": "Draft",
+   "allow_on_submit": 1
   },
   {
    "fieldname": "payment_entry",
    "fieldtype": "Link",
    "label": "Payment Entry",
    "options": "Payment Entry",
-   "read_only": 1
+   "read_only": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "processed_date",
    "fieldtype": "Datetime",
    "label": "Processed Date",
-   "read_only": 1
+   "read_only": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "section_break_allocations",
@@ -157,19 +163,22 @@
    "fieldtype": "Link",
    "label": "Processed By",
    "options": "User",
-   "read_only": 1
+   "read_only": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "processed_via",
    "fieldtype": "Select",
    "label": "Processed Via",
    "options": "Manual\nBackground Job\nAuto Allocation",
-   "read_only": 1
+   "read_only": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "remarks",
    "fieldtype": "Text",
-   "label": "Remarks"
+   "label": "Remarks",
+   "allow_on_submit": 1
   }
  ],
  "is_submittable": 1,
