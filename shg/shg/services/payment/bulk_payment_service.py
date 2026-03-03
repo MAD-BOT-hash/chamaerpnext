@@ -1,6 +1,11 @@
 """
 Bulk Payment Service Layer
 Enterprise-grade bulk payment processing with idempotency and concurrency safety
+
+ALL PAYMENT ALLOCATION LOGIC DELEGATED TO:
+shg.shg.services.payment.allocation_engine.AllocationEngine
+
+NO SEPARATE IMPLEMENTATIONS - SINGLE SOURCE OF TRUTH
 """
 import frappe
 from frappe import _
@@ -12,10 +17,20 @@ from frappe.model.document import Document
 import hashlib
 from datetime import datetime
 
-# Import SHG-native services
-from shg.shg.services.contribution.contribution_service import (
-    ContributionService, 
+# Import centralized allocation engine (SINGLE SOURCE OF TRUTH)
+from shg.shg.services.payment.allocation_engine import (
+    AllocationEngine,
     get_shg_document_total,
+    get_outstanding_amount,
+    get_paid_amount,
+    AllocationError,
+    OverpaymentError as AllocOverpaymentError,
+    DocumentNotFoundError,
+)
+
+# Import contribution service for backward compatibility
+from shg.shg.services.contribution.contribution_service import (
+    ContributionService,
     ContributionServiceError
 )
 
@@ -524,87 +539,97 @@ class BulkPaymentService:
         return company_doc.default_receivable_account or "Debtors - " + frappe.get_value("Company", company, "abbr")
     
     def _process_single_allocation(self, allocation: Document, payment_entry_name: str, company: str) -> Dict:
-        """Process individual allocation"""
-        # Update reference document payment status
-        reference_doc = frappe.get_doc(allocation.reference_doctype, allocation.reference_name)
+        """
+        Process individual allocation using centralized AllocationEngine.
         
-        # Handle different reference types
-        if allocation.reference_doctype == "SHG Contribution Invoice":
-            self._update_contribution_invoice_payment(reference_doc, allocation.allocated_amount)
-        elif allocation.reference_doctype == "SHG Contribution":
-            self._update_contribution_payment(reference_doc, allocation.allocated_amount, payment_entry_name)
-        elif allocation.reference_doctype == "SHG Meeting Fine":
-            self._update_meeting_fine_payment(reference_doc, allocation.allocated_amount)
+        ALL allocation logic delegated to AllocationEngine - NO SEPARATE IMPLEMENTATIONS.
+        """
+        # Use centralized allocation engine
+        allocation_engine = AllocationEngine()
         
-        # Log audit trail
-        self._log_audit_action(
-            allocation.reference_doctype,
-            allocation.reference_name,
-            "Payment Allocated",
-            {
-                "bulk_payment_allocation": allocation.name,
-                "payment_entry": payment_entry_name,
+        try:
+            result = allocation_engine.allocate_payment(
+                doctype=allocation.reference_doctype,
+                docname=allocation.reference_name,
+                amount=flt(allocation.allocated_amount),
+                payment_entry_name=payment_entry_name,
+                allow_overpayment=False,
+                auto_save=True
+            )
+            
+            # Log audit trail
+            self._log_audit_action(
+                allocation.reference_doctype,
+                allocation.reference_name,
+                "Payment Allocated",
+                {
+                    "bulk_payment_allocation": allocation.name,
+                    "payment_entry": payment_entry_name,
+                    "allocated_amount": allocation.allocated_amount,
+                    "member": allocation.member,
+                    "total_amount": result.get("total_amount"),
+                    "paid_after": result.get("paid_after"),
+                    "outstanding_after": result.get("outstanding_after"),
+                    "status": result.get("status")
+                }
+            )
+            
+            return {
+                "allocation_name": allocation.name,
+                "reference_doctype": allocation.reference_doctype,
+                "reference_name": allocation.reference_name,
                 "allocated_amount": allocation.allocated_amount,
-                "member": allocation.member
+                "member": allocation.member,
+                "status": "Processed",
+                "document_status": result.get("status"),
+                "outstanding_after": result.get("outstanding_after")
             }
-        )
-        
-        return {
-            "allocation_name": allocation.name,
-            "reference_doctype": allocation.reference_doctype,
-            "reference_name": allocation.reference_name,
-            "allocated_amount": allocation.allocated_amount,
-            "member": allocation.member,
-            "status": "Processed"
-        }
+            
+        except AllocationError as e:
+            frappe.log_error(
+                f"Allocation failed: {str(e)}\n{frappe.get_traceback()}",
+                f"Bulk Payment: Allocation Failed: {allocation.reference_name}"
+            )
+            raise BulkPaymentServiceError(str(e)) from e
+    
+    # =========================================================================
+    # DEPRECATED: These methods are kept for backward compatibility only
+    # ALL NEW CODE MUST USE AllocationEngine
+    # =========================================================================
     
     def _update_contribution_invoice_payment(self, invoice_doc: Document, allocated_amount: float):
-        """Update contribution invoice payment status"""
-        invoice_doc.paid_amount = flt(invoice_doc.paid_amount) + flt(allocated_amount)
-        total_amount = get_invoice_total(invoice_doc)
-        invoice_doc.outstanding_amount = total_amount - flt(invoice_doc.paid_amount)
-        
-        if invoice_doc.outstanding_amount <= 0:
-            invoice_doc.status = "Paid"
-        elif invoice_doc.paid_amount > 0:
-            invoice_doc.status = "Partially Paid"
-        
-        invoice_doc.save(ignore_permissions=True)
+        """DEPRECATED: Use AllocationEngine.allocate_payment() instead."""
+        # Delegate to AllocationEngine
+        engine = AllocationEngine()
+        engine.allocate_payment(
+            doctype=invoice_doc.doctype,
+            docname=invoice_doc.name,
+            amount=allocated_amount,
+            auto_save=True
+        )
     
     def _update_contribution_payment(self, contribution_doc: Document, allocated_amount: float, payment_entry_name: str):
-        """
-        Update contribution payment status using ContributionService.
-        Delegates to clean architecture service layer.
-        """
-        try:
-            contribution_service = ContributionService()
-            contribution_service.allocate_payment(
-                contribution_name=contribution_doc.name,
-                allocated_amount=allocated_amount,
-                payment_entry_name=payment_entry_name
-            )
-        except ContributionServiceError:
-            raise
-        except Exception as e:
-            frappe.log_error(
-                frappe.get_traceback(),
-                f"Bulk Payment: Contribution Update Failed: {contribution_doc.name}"
-            )
-            raise BulkPaymentServiceError(
-                f"Failed to update contribution {contribution_doc.name}: {str(e)}"
-            ) from e
+        """DEPRECATED: Use AllocationEngine.allocate_payment() instead."""
+        # Delegate to AllocationEngine
+        engine = AllocationEngine()
+        engine.allocate_payment(
+            doctype=contribution_doc.doctype,
+            docname=contribution_doc.name,
+            amount=allocated_amount,
+            payment_entry_name=payment_entry_name,
+            auto_save=True
+        )
     
     def _update_meeting_fine_payment(self, fine_doc: Document, allocated_amount: float):
-        """Update meeting fine payment status"""
-        fine_doc.paid_amount = flt(fine_doc.paid_amount) + flt(allocated_amount)
-        fine_doc.outstanding_amount = flt(fine_doc.amount) - flt(fine_doc.paid_amount)
-        
-        if fine_doc.outstanding_amount <= 0:
-            fine_doc.status = "Paid"
-        elif fine_doc.paid_amount > 0:
-            fine_doc.status = "Partially Paid"
-        
-        fine_doc.save(ignore_permissions=True)
+        """DEPRECATED: Use AllocationEngine.allocate_payment() instead."""
+        # Delegate to AllocationEngine
+        engine = AllocationEngine()
+        engine.allocate_payment(
+            doctype=fine_doc.doctype,
+            docname=fine_doc.name,
+            amount=allocated_amount,
+            auto_save=True
+        )
     
     def _update_bulk_payment_totals(self, bulk_payment: Document):
         """Update bulk payment summary totals"""
