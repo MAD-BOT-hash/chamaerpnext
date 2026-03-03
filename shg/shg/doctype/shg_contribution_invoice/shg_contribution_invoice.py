@@ -27,29 +27,64 @@ class SHGContributionInvoice(Document):
     Provides ERPNext-compatible properties for Payment Entry integration.
     """
     
+    # ========================================================================
+    # ERPNext Payment Entry Compatibility Properties
+    # These properties make SHGContributionInvoice work as a Payment Entry reference
+    # ========================================================================
+    
     @property
     def grand_total(self):
-        """
-        ERPNext Payment Entry compatibility property.
-        Returns the amount field as grand_total for Payment Entry references.
-        """
+        """ERPNext compatibility - returns amount as grand_total."""
         return flt(self.amount or 0)
     
     @property
     def base_grand_total(self):
-        """
-        ERPNext Payment Entry compatibility property.
-        Returns the amount field as base_grand_total for Payment Entry references.
-        """
+        """ERPNext compatibility - returns amount as base_grand_total."""
         return flt(self.amount or 0)
     
     @property
     def rounded_total(self):
-        """
-        ERPNext Payment Entry compatibility property.
-        Returns the amount field as rounded_total for Payment Entry references.
-        """
+        """ERPNext compatibility - returns amount as rounded_total."""
         return flt(self.amount or 0)
+    
+    @property
+    def posting_date(self):
+        """ERPNext compatibility - returns invoice_date as posting_date."""
+        return self.invoice_date
+    
+    @property
+    def outstanding_amount(self):
+        """ERPNext compatibility - calculates outstanding from amount and paid."""
+        paid = flt(getattr(self, 'paid_amount', 0) or 0)
+        return flt(self.amount or 0) - paid
+    
+    @property
+    def currency(self):
+        """ERPNext compatibility - returns company currency."""
+        if hasattr(self, 'company') and self.company:
+            return frappe.db.get_value("Company", self.company, "default_currency") or "KES"
+        return "KES"
+    
+    @property
+    def conversion_rate(self):
+        """ERPNext compatibility - returns 1.0 for same currency."""
+        return 1.0
+    
+    @property
+    def customer(self):
+        """ERPNext compatibility - returns member's linked customer or member name."""
+        if hasattr(self, 'member') and self.member:
+            # Try to get customer from SHG Member
+            customer = frappe.db.get_value("SHG Member", self.member, "customer")
+            if customer:
+                return customer
+            # Fallback to member name
+            return self.member
+        return None
+    
+    # ========================================================================
+    # End of ERPNext Compatibility Properties
+    # ========================================================================
     
     def validate(self):
         self.validate_qty()

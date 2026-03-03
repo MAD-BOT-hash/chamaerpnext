@@ -1,14 +1,63 @@
 import frappe
 from frappe.model.document import Document
 from frappe import _
-from frappe.utils import flt, now
+from frappe.utils import flt, now, nowdate
 
 
 class SHGBulkPayment(Document):
     """
     SHG Bulk Payment Document
     Enterprise-grade bulk payment processing with full safety guarantees
+    Provides ERPNext-compatible properties for Payment Entry integration.
     """
+    
+    # ========================================================================
+    # ERPNext Payment Entry Compatibility Properties
+    # ========================================================================
+    
+    @property
+    def grand_total(self):
+        """ERPNext compatibility - returns total_amount."""
+        return flt(self.total_amount or 0)
+    
+    @property
+    def base_grand_total(self):
+        """ERPNext compatibility - returns total_amount."""
+        return flt(self.total_amount or 0)
+    
+    @property
+    def rounded_total(self):
+        """ERPNext compatibility - returns total_amount."""
+        return flt(self.total_amount or 0)
+    
+    @property
+    def outstanding_amount(self):
+        """ERPNext compatibility - returns unallocated_amount."""
+        return flt(getattr(self, 'unallocated_amount', 0) or 0)
+    
+    @property
+    def currency(self):
+        """ERPNext compatibility - returns company currency."""
+        if hasattr(self, 'company') and self.company:
+            return frappe.db.get_value("Company", self.company, "default_currency") or "KES"
+        return "KES"
+    
+    @property
+    def conversion_rate(self):
+        """ERPNext compatibility - returns 1.0."""
+        return 1.0
+    
+    @property
+    def customer(self):
+        """ERPNext compatibility - returns member's customer."""
+        if hasattr(self, 'member') and self.member:
+            customer = frappe.db.get_value("SHG Member", self.member, "customer")
+            return customer or self.member
+        return None
+    
+    # ========================================================================
+    # End ERPNext Compatibility Properties
+    # ========================================================================
     
     def before_validate(self):
         """Auto-calculate totals and set company before validation"""

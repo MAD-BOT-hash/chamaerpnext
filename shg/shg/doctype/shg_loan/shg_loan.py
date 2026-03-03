@@ -344,6 +344,39 @@ def recalculate_loan_summary(loan_name):
 class SHGLoan(Document):
     """SHG Loan controller with automatic ledger and repayment schedule posting."""
     
+    # ========================================================================
+    # ERPNext Payment Entry Compatibility Properties
+    # ========================================================================
+    
+    @property
+    def posting_date(self):
+        """ERPNext compatibility - returns loan_date or disbursement_date."""
+        return getattr(self, 'loan_date', None) or getattr(self, 'disbursement_date', None) or nowdate()
+    
+    @property
+    def currency(self):
+        """ERPNext compatibility - returns company currency."""
+        if hasattr(self, 'company') and self.company:
+            return frappe.db.get_value("Company", self.company, "default_currency") or "KES"
+        return "KES"
+    
+    @property
+    def conversion_rate(self):
+        """ERPNext compatibility - returns 1.0."""
+        return 1.0
+    
+    @property
+    def customer(self):
+        """ERPNext compatibility - returns member's customer."""
+        if hasattr(self, 'member') and self.member:
+            customer = frappe.db.get_value("SHG Member", self.member, "customer")
+            return customer or self.member
+        return None
+    
+    # ========================================================================
+    # End ERPNext Compatibility Properties
+    # ========================================================================
+    
     def __getattr__(self, name):
         """Handle access to non-existent attributes gracefully."""
         # Common ERPNext financial document attributes that might be accessed

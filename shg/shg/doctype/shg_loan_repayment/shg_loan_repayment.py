@@ -8,6 +8,70 @@ from shg.shg.utils.account_helpers import get_or_create_member_receivable
 
 
 class SHGLoanRepayment(Document):
+    """
+    SHG Loan Repayment DocType.
+    Provides ERPNext-compatible properties for Payment Entry integration.
+    """
+    
+    # ========================================================================
+    # ERPNext Payment Entry Compatibility Properties
+    # ========================================================================
+    
+    @property
+    def grand_total(self):
+        """ERPNext compatibility - returns total_paid."""
+        return flt(self.total_paid or 0)
+    
+    @property
+    def base_grand_total(self):
+        """ERPNext compatibility - returns total_paid."""
+        return flt(self.total_paid or 0)
+    
+    @property
+    def rounded_total(self):
+        """ERPNext compatibility - returns total_paid."""
+        return flt(self.total_paid or 0)
+    
+    @property
+    def posting_date(self):
+        """ERPNext compatibility - returns repayment_date."""
+        return getattr(self, 'repayment_date', None) or getattr(self, 'date', None) or nowdate()
+    
+    @property
+    def outstanding_amount(self):
+        """ERPNext compatibility - returns 0 for repayments (not invoices)."""
+        return 0.0
+    
+    @property
+    def currency(self):
+        """ERPNext compatibility - returns company currency."""
+        company = getattr(self, 'company', None)
+        if not company and hasattr(self, 'loan') and self.loan:
+            company = frappe.db.get_value("SHG Loan", self.loan, "company")
+        if company:
+            return frappe.db.get_value("Company", company, "default_currency") or "KES"
+        return "KES"
+    
+    @property
+    def conversion_rate(self):
+        """ERPNext compatibility - returns 1.0."""
+        return 1.0
+    
+    @property
+    def customer(self):
+        """ERPNext compatibility - returns member's customer."""
+        member = getattr(self, 'member', None)
+        if not member and hasattr(self, 'loan') and self.loan:
+            member = frappe.db.get_value("SHG Loan", self.loan, "member")
+        if member:
+            customer = frappe.db.get_value("SHG Member", member, "customer")
+            return customer or member
+        return None
+    
+    # ========================================================================
+    # End ERPNext Compatibility Properties
+    # ========================================================================
+    
     # --------------------------
     # CORE LIFECYCLE
     # --------------------------
