@@ -56,6 +56,16 @@ class SHGContribution(Document):
         return 1.0
     
     @property
+    def advance_paid(self):
+        """ERPNext compatibility - returns 0."""
+        return 0.0
+    
+    @property
+    def is_return(self):
+        """ERPNext compatibility - returns False."""
+        return False
+    
+    @property
     def customer(self):
         """ERPNext compatibility - returns member's customer."""
         if hasattr(self, 'member') and self.member:
@@ -66,6 +76,26 @@ class SHGContribution(Document):
     # ========================================================================
     # End ERPNext Compatibility Properties
     # ========================================================================
+    
+    def __getattr__(self, name):
+        """Fallback for ERPNext attributes not explicitly defined."""
+        common_financial_attrs = {
+            "total_advance": 0.0, "base_total": 0.0, "net_total": 0.0,
+            "base_net_total": 0.0, "total_taxes_and_charges": 0.0,
+            "base_total_taxes_and_charges": 0.0, "discount_amount": 0.0,
+            "base_discount_amount": 0.0, "write_off_amount": 0.0,
+            "base_write_off_amount": 0.0, "rounding_adjustment": 0.0,
+            "base_rounding_adjustment": 0.0, "paid_amount": 0.0,
+            "base_paid_amount": 0.0, "change_amount": 0.0,
+            "base_change_amount": 0.0, "loyalty_amount": 0.0,
+            "in_words": "", "base_in_words": "", "total_qty": 1.0,
+            "is_internal_customer": 0, "is_internal_supplier": 0,
+            "group_same_items": 0, "disable_rounded_total": 0,
+            "apply_discount_on": "", "additional_discount_percentage": 0.0,
+        }
+        if name in common_financial_attrs:
+            return common_financial_attrs[name]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

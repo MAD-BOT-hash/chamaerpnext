@@ -366,6 +366,16 @@ class SHGLoan(Document):
         return 1.0
     
     @property
+    def advance_paid(self):
+        """ERPNext compatibility - returns 0."""
+        return 0.0
+    
+    @property
+    def is_return(self):
+        """ERPNext compatibility - returns False."""
+        return False
+    
+    @property
     def customer(self):
         """ERPNext compatibility - returns member's customer."""
         if hasattr(self, 'member') and self.member:
