@@ -18,6 +18,28 @@ class BulkPaymentServiceError(Exception):
     pass
 
 
+def get_invoice_total(invoice) -> float:
+    """
+    Production-safe helper to get the total amount from any invoice document.
+    Handles SHG Contribution Invoice (amount), Sales Invoice (grand_total),
+    and any other doctype that may be referenced.
+    """
+    if hasattr(invoice, 'grand_total') and invoice.grand_total:
+        return flt(invoice.grand_total)
+    elif hasattr(invoice, 'expected_amount') and invoice.expected_amount:
+        return flt(invoice.expected_amount)
+    elif hasattr(invoice, 'total_amount') and invoice.total_amount:
+        return flt(invoice.total_amount)
+    elif hasattr(invoice, 'amount') and invoice.amount:
+        return flt(invoice.amount)
+    else:
+        frappe.throw(
+            f"Cannot determine total amount for {getattr(invoice, 'doctype', 'unknown')} "
+            f"{getattr(invoice, 'name', '')}. "
+            f"No recognized total field (grand_total, expected_amount, total_amount, amount) found."
+        )
+
+
 class OverpaymentError(BulkPaymentServiceError):
     """Raised when total allocation exceeds payment amount"""
     pass
@@ -492,8 +514,7 @@ class BulkPaymentService:
     def _update_contribution_invoice_payment(self, invoice_doc: Document, allocated_amount: float):
         """Update contribution invoice payment status"""
         invoice_doc.paid_amount = flt(invoice_doc.paid_amount) + flt(allocated_amount)
-        # Use 'amount' field for SHG Contribution Invoice (not 'total_amount')
-        total_amount = flt(getattr(invoice_doc, 'total_amount', None) or getattr(invoice_doc, 'amount', 0))
+        total_amount = get_invoice_total(invoice_doc)
         invoice_doc.outstanding_amount = total_amount - flt(invoice_doc.paid_amount)
         
         if invoice_doc.outstanding_amount <= 0:

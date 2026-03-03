@@ -1,5 +1,28 @@
 import frappe
 from frappe import _
+from frappe.utils import flt
+
+
+def get_invoice_total(invoice) -> float:
+    """
+    Production-safe helper to get the total amount from any invoice document.
+    Handles SHG Contribution Invoice (amount), Sales Invoice (grand_total), etc.
+    """
+    if hasattr(invoice, 'grand_total') and invoice.grand_total:
+        return flt(invoice.grand_total)
+    elif hasattr(invoice, 'expected_amount') and invoice.expected_amount:
+        return flt(invoice.expected_amount)
+    elif hasattr(invoice, 'total_amount') and invoice.total_amount:
+        return flt(invoice.total_amount)
+    elif hasattr(invoice, 'amount') and invoice.amount:
+        return flt(invoice.amount)
+    else:
+        frappe.log_error(
+            f"No total field found for {getattr(invoice, 'doctype', 'unknown')} "
+            f"{getattr(invoice, 'name', '')}",
+            "Invoice Total Field Missing"
+        )
+        return 0.0
 
 def get_unpaid_invoices_for_member(member):
     """
@@ -72,7 +95,7 @@ def update_invoice_status(invoice_name, paid_amount):
                     invoice.db_set("is_closed", 1)
                 # Mark linked contribution as paid
                 invoice.mark_linked_contribution_as_paid()
-            elif new_outstanding < sales_invoice.grand_total:
+            elif new_outstanding < get_invoice_total(sales_invoice):
                 invoice.db_set("status", "Partially Paid")
                 # Also update the Sales Invoice status
                 sales_invoice.db_set("status", "Partially Paid")
@@ -157,7 +180,7 @@ def create_payment_entry_for_invoice(invoice_name, paid_amount, payment_date, me
         payment_entry.append("references", {
             "reference_doctype": "Sales Invoice",
             "reference_name": sales_invoice.name,
-            "total_amount": sales_invoice.grand_total,
+            "total_amount": get_invoice_total(sales_invoice),
             "outstanding_amount": sales_invoice.outstanding_amount,
             "allocated_amount": paid_amount,
         })
