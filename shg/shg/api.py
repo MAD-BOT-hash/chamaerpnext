@@ -5,6 +5,29 @@ import frappe
 from frappe import _
 from frappe.utils import flt, today
 
+
+def get_invoice_total(invoice) -> float:
+    """
+    Production-safe helper to get the total amount from any invoice document.
+    Handles SHG Contribution Invoice (amount), Sales Invoice (grand_total), etc.
+    """
+    if hasattr(invoice, 'grand_total') and invoice.grand_total:
+        return flt(invoice.grand_total)
+    elif hasattr(invoice, 'expected_amount') and invoice.expected_amount:
+        return flt(invoice.expected_amount)
+    elif hasattr(invoice, 'total_amount') and invoice.total_amount:
+        return flt(invoice.total_amount)
+    elif hasattr(invoice, 'amount') and invoice.amount:
+        return flt(invoice.amount)
+    else:
+        frappe.log_error(
+            f"No total field found for {getattr(invoice, 'doctype', 'unknown')} "
+            f"{getattr(invoice, 'name', '')}",
+            "Invoice Total Field Missing"
+        )
+        return 0.0
+
+
 @frappe.whitelist()
 def get_unpaid_contribution_invoices(member):
     """Fetch unpaid or partially paid invoices for a given member"""
@@ -159,7 +182,7 @@ def process_multi_member_payment(invoices, mode_of_payment, posting_date=None):
             "references": [{
                 "reference_doctype": "Sales Invoice",
                 "reference_name": inv_name,
-                "total_amount": invoice.grand_total,
+                "total_amount": get_invoice_total(invoice),
                 "outstanding_amount": invoice.outstanding_amount,
                 "allocated_amount": invoice.outstanding_amount,
             }],

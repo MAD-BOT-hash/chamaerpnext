@@ -122,7 +122,7 @@ function render_invoice_table(d, invoices) {
                 <td>${inv.member_name}</td>
                 <td>${inv.name}</td>
                 <td>${inv.posting_date}</td>
-                <td>${format_currency(inv.grand_total, "KES")}</td>
+                <td>${format_currency(inv.grand_total || inv.amount || inv.total_amount || 0, "KES")}</td>
                 <td>${format_currency(inv.outstanding_amount, "KES")}</td>
             </tr>
         `;

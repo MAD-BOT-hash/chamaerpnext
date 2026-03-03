@@ -1,5 +1,28 @@
 import frappe
 from frappe import _
+from frappe.utils import flt
+
+
+def get_invoice_total(invoice) -> float:
+    """
+    Production-safe helper to get the total amount from any invoice document.
+    Handles SHG Contribution Invoice (amount), Sales Invoice (grand_total), etc.
+    """
+    if hasattr(invoice, 'grand_total') and invoice.grand_total:
+        return flt(invoice.grand_total)
+    elif hasattr(invoice, 'expected_amount') and invoice.expected_amount:
+        return flt(invoice.expected_amount)
+    elif hasattr(invoice, 'total_amount') and invoice.total_amount:
+        return flt(invoice.total_amount)
+    elif hasattr(invoice, 'amount') and invoice.amount:
+        return flt(invoice.amount)
+    else:
+        frappe.log_error(
+            f"No total field found for {getattr(invoice, 'doctype', 'unknown')} "
+            f"{getattr(invoice, 'name', '')}",
+            "Invoice Total Field Missing"
+        )
+        return 0.0
 
 @frappe.whitelist()
 def create_payment_entry_from_invoice(invoice_name, paid_amount=None):
@@ -70,7 +93,7 @@ def create_payment_entry_from_invoice(invoice_name, paid_amount=None):
         payment_entry.append("references", {
             "reference_doctype": "Sales Invoice",
             "reference_name": invoice.name,
-            "total_amount": invoice.grand_total,
+            "total_amount": get_invoice_total(invoice),
             "outstanding_amount": invoice.outstanding_amount,
             "allocated_amount": amount_to_pay,
         })
@@ -117,24 +140,21 @@ def update_shg_contribution_invoice_status(sales_invoice_name):
             shg_invoice = frappe.get_doc("SHG Contribution Invoice", shg_invoice_name)
             sales_invoice = frappe.get_doc("Sales Invoice", sales_invoice_name)
             
-            # Update status based on outstanding amount
+            sales_total = get_invoice_total(sales_invoice)
             if sales_invoice.outstanding_amount <= 0:
                 shg_invoice.db_set("status", "Paid")
-                # Also update the Sales Invoice status
                 sales_invoice.db_set("status", "Paid")
-            elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
+            elif flt(sales_invoice.outstanding_amount) < sales_total:
                 shg_invoice.db_set("status", "Partially Paid")
-                # Also update the Sales Invoice status
                 sales_invoice.db_set("status", "Partially Paid")
             else:
                 shg_invoice.db_set("status", "Unpaid")
-                # Also update the Sales Invoice status
                 sales_invoice.db_set("status", "Unpaid")
                 
             # Also update the member's unpaid contributions
             member = frappe.get_doc("SHG Member", shg_invoice.member)
-            total_invoice_amount = sales_invoice.grand_total
-            paid_amount = total_invoice_amount - sales_invoice.outstanding_amount
+            total_invoice_amount = sales_total
+            paid_amount = total_invoice_amount - flt(sales_invoice.outstanding_amount)
             
             # Update member's total unpaid contributions
             current_unpaid = member.total_unpaid_contributions or 0
