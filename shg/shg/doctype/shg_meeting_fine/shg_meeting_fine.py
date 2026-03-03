@@ -1,9 +1,29 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import today, getdate
+from frappe.utils import today, getdate, flt
 
 class SHGMeetingFine(Document):
+    """
+    SHG Meeting Fine DocType.
+    Provides ERPNext-compatible properties for Payment Entry integration.
+    """
+    
+    @property
+    def grand_total(self):
+        """ERPNext Payment Entry compatibility - returns fine_amount or amount."""
+        return flt(self.fine_amount or self.amount or 0)
+    
+    @property
+    def base_grand_total(self):
+        """ERPNext Payment Entry compatibility - returns fine_amount or amount."""
+        return flt(self.fine_amount or self.amount or 0)
+    
+    @property
+    def rounded_total(self):
+        """ERPNext Payment Entry compatibility - returns fine_amount or amount."""
+        return flt(self.fine_amount or self.amount or 0)
+    
     def validate(self):
         self.validate_fine_reason()
         self.validate_amount()

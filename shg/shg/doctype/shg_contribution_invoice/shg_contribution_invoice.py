@@ -22,6 +22,35 @@ except ImportError:
         frappe.throw(f"No valid total field found in {doc.doctype} {doc.name}")
 
 class SHGContributionInvoice(Document):
+    """
+    SHG Contribution Invoice DocType.
+    Provides ERPNext-compatible properties for Payment Entry integration.
+    """
+    
+    @property
+    def grand_total(self):
+        """
+        ERPNext Payment Entry compatibility property.
+        Returns the amount field as grand_total for Payment Entry references.
+        """
+        return flt(self.amount or 0)
+    
+    @property
+    def base_grand_total(self):
+        """
+        ERPNext Payment Entry compatibility property.
+        Returns the amount field as base_grand_total for Payment Entry references.
+        """
+        return flt(self.amount or 0)
+    
+    @property
+    def rounded_total(self):
+        """
+        ERPNext Payment Entry compatibility property.
+        Returns the amount field as rounded_total for Payment Entry references.
+        """
+        return flt(self.amount or 0)
+    
     def validate(self):
         self.validate_qty()
         self.validate_rate()

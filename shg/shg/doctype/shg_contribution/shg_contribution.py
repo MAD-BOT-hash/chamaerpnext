@@ -9,7 +9,23 @@ class SHGContribution(Document):
     """
     Refactored SHG Contribution with enterprise-grade architecture
     All business logic delegated to service layer
+    Provides ERPNext-compatible properties for Payment Entry integration.
     """
+    
+    @property
+    def grand_total(self):
+        """ERPNext Payment Entry compatibility - returns expected_amount or amount."""
+        return flt(self.expected_amount or self.amount or 0)
+    
+    @property
+    def base_grand_total(self):
+        """ERPNext Payment Entry compatibility - returns expected_amount or amount."""
+        return flt(self.expected_amount or self.amount or 0)
+    
+    @property
+    def rounded_total(self):
+        """ERPNext Payment Entry compatibility - returns expected_amount or amount."""
+        return flt(self.expected_amount or self.amount or 0)
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
