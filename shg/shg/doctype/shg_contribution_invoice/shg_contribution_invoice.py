@@ -6,6 +6,28 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import getdate, formatdate, today, nowdate, add_days, flt
 
+
+def get_invoice_total(invoice) -> float:
+    """
+    Production-safe helper to get the total amount from any invoice document.
+    Handles SHG Contribution Invoice (amount), Sales Invoice (grand_total), etc.
+    """
+    if hasattr(invoice, 'grand_total') and invoice.grand_total:
+        return flt(invoice.grand_total)
+    elif hasattr(invoice, 'expected_amount') and invoice.expected_amount:
+        return flt(invoice.expected_amount)
+    elif hasattr(invoice, 'total_amount') and invoice.total_amount:
+        return flt(invoice.total_amount)
+    elif hasattr(invoice, 'amount') and invoice.amount:
+        return flt(invoice.amount)
+    else:
+        frappe.log_error(
+            f"No total field found for {getattr(invoice, 'doctype', 'unknown')} "
+            f"{getattr(invoice, 'name', '')}",
+            "Invoice Total Field Missing"
+        )
+        return 0.0
+
 class SHGContributionInvoice(Document):
     def validate(self):
         self.validate_qty()
@@ -575,11 +597,12 @@ def update_status_based_on_sales_invoice(self):
     """Update status based on linked Sales Invoice outstanding amount"""
     if self.sales_invoice:
         sales_invoice = frappe.get_doc("Sales Invoice", self.sales_invoice)
+        sales_total = get_invoice_total(sales_invoice)
         
         # Update status based on outstanding amount
-        if sales_invoice.outstanding_amount <= 0:
+        if flt(sales_invoice.outstanding_amount) <= 0:
             self.db_set("status", "Paid")
-        elif sales_invoice.outstanding_amount < sales_invoice.grand_total:
+        elif flt(sales_invoice.outstanding_amount) < sales_total:
             self.db_set("status", "Partially Paid")
         else:
             self.db_set("status", "Unpaid")
