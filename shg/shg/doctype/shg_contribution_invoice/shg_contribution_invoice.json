@@ -66,13 +66,6 @@
    "default": "Today"
   },
   {
-   "fieldname": "posting_date",
-   "fieldtype": "Date",
-   "label": "Posting Date",
-   "default": "Today",
-   "description": "ERPNext Payment Entry compatibility field"
-  },
-  {
    "fieldname": "supplier_invoice_date",
    "fieldtype": "Date",
    "label": "Supplier Invoice Date",

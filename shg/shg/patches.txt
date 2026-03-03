@@ -14,4 +14,3 @@ shg.shg.patches.custom.add_company_to_shg_contribution_invoice
 shg.shg.patches.remove_invalid_company_default.execute
 shg.shg.patches.sync_defensive_invoice_total_fixes.execute
 shg.shg.doctype.shg_payment.shg_payment
-shg.shg.patches.add_posting_date_field_to_shg_doctypes.execute

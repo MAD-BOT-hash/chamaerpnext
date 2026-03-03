@@ -405,7 +405,18 @@ class BulkPaymentService:
             ) from e
     
     def _create_consolidated_payment_entry(self, bulk_payment: Document) -> Document:
-        """Create single consolidated payment entry for all allocations"""
+        """
+        Create single consolidated payment entry for all allocations.
+        
+        NOTE: ERPNext Payment Entry only accepts specific reference doctypes:
+        'Sales Order', 'Sales Invoice', 'Journal Entry', 'Dunning'
+        
+        SHG doctypes (SHG Contribution Invoice, SHG Contribution, SHG Meeting Fine)
+        CANNOT be added as Payment Entry references. Instead, we:
+        1. Create Payment Entry WITHOUT references
+        2. Link the payment_entry to SHG documents separately
+        3. Track allocations in remarks field
+        """
         # Group allocations by member to handle multiple members properly
         allocations_by_member = {}
         for allocation in bulk_payment.allocations:
@@ -414,9 +425,7 @@ class BulkPaymentService:
                 allocations_by_member[member] = []
             allocations_by_member[member].append(allocation)
         
-        # If there are multiple members, we'll need to handle this differently
-        # For now, create a payment entry for the primary member (first member)
-        # and include all allocations
+        # Get the first allocation to determine primary member
         first_allocation = bulk_payment.allocations[0] if bulk_payment.allocations else None
         if not first_allocation:
             raise BulkPaymentServiceError("No allocations found for payment entry creation")
@@ -427,30 +436,39 @@ class BulkPaymentService:
         # Ensure the member exists as a Customer in ERPNext
         customer_name = self._ensure_member_as_customer(member_name)
         
+        # Build detailed remarks for tracking
+        allocation_details = []
+        for allocation in bulk_payment.allocations:
+            if allocation.allocated_amount > 0:
+                allocation_details.append(
+                    f"{allocation.reference_doctype}: {allocation.reference_name} = {allocation.allocated_amount}"
+                )
+        
+        remarks = f"Bulk payment {bulk_payment.name}\n"
+        remarks += f"Total allocations: {len(allocation_details)}\n"
+        remarks += "\n".join(allocation_details[:20])  # Limit to first 20 for readability
+        if len(allocation_details) > 20:
+            remarks += f"\n... and {len(allocation_details) - 20} more"
+        
         payment_entry = frappe.get_doc({
             "doctype": "Payment Entry",
+            "payment_type": "Receive",
             "company": bulk_payment.company,
             "posting_date": bulk_payment.posting_date or frappe.utils.nowdate(),
             "mode_of_payment": bulk_payment.mode_of_payment,
             "paid_amount": bulk_payment.total_amount,
             "received_amount": bulk_payment.total_amount,
-            "paid_from": bulk_payment.payment_account,
-            "paid_to": self._get_default_receivable_account(bulk_payment.company),
+            "paid_from": self._get_default_receivable_account(bulk_payment.company),
+            "paid_to": bulk_payment.payment_account,
             "party_type": "Customer",
             "party": customer_name,
             "reference_no": bulk_payment.reference_no,
             "reference_date": bulk_payment.reference_date,
-            "remarks": f"Consolidated payment for bulk payment {bulk_payment.name}"
+            "remarks": remarks
         })
         
-        # Add references for each allocation
-        for allocation in bulk_payment.allocations:
-            if allocation.allocated_amount > 0:
-                payment_entry.append("references", {
-                    "reference_doctype": allocation.reference_doctype,
-                    "reference_name": allocation.reference_name,
-                    "allocated_amount": allocation.allocated_amount
-                })
+        # DO NOT add references - ERPNext only accepts Sales Invoice, Sales Order, Journal Entry, Dunning
+        # SHG doctypes are tracked separately via payment_entry links in each SHG document
         
         payment_entry.insert(ignore_permissions=True)
         payment_entry.submit()
