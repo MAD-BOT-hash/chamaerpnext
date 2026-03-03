@@ -2,27 +2,20 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-
-def get_invoice_total(invoice) -> float:
-    """
-    Production-safe helper to get the total amount from any invoice document.
-    Handles SHG Contribution Invoice (amount), Sales Invoice (grand_total), etc.
-    """
-    if hasattr(invoice, 'grand_total') and invoice.grand_total:
-        return flt(invoice.grand_total)
-    elif hasattr(invoice, 'expected_amount') and invoice.expected_amount:
-        return flt(invoice.expected_amount)
-    elif hasattr(invoice, 'total_amount') and invoice.total_amount:
-        return flt(invoice.total_amount)
-    elif hasattr(invoice, 'amount') and invoice.amount:
-        return flt(invoice.amount)
-    else:
-        frappe.log_error(
-            f"No total field found for {getattr(invoice, 'doctype', 'unknown')} "
-            f"{getattr(invoice, 'name', '')}",
-            "Invoice Total Field Missing"
-        )
-        return 0.0
+# Import SHG-native document total resolver
+try:
+    from shg.shg.services.contribution.contribution_service import get_shg_document_total
+except ImportError:
+    # Fallback definition if import fails
+    def get_shg_document_total(doc) -> float:
+        """SHG-native document total resolver with field priority."""
+        field_priority = ['expected_amount', 'amount', 'total_amount', 'grand_total']
+        for field in field_priority:
+            if hasattr(doc, field):
+                value = getattr(doc, field)
+                if value is not None and flt(value) > 0:
+                    return flt(value)
+        frappe.throw(f"No valid total field found in {doc.doctype} {doc.name}")
 
 @frappe.whitelist()
 def create_payment_entry_from_invoice(invoice_name, paid_amount=None):

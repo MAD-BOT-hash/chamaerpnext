@@ -12,32 +12,21 @@ from frappe.model.document import Document
 import hashlib
 from datetime import datetime
 
+# Import SHG-native services
+from shg.shg.services.contribution.contribution_service import (
+    ContributionService, 
+    get_shg_document_total,
+    ContributionServiceError
+)
+
 
 class BulkPaymentServiceError(Exception):
     """Base exception for bulk payment service errors"""
     pass
 
 
-def get_invoice_total(invoice) -> float:
-    """
-    Production-safe helper to get the total amount from any invoice document.
-    Handles SHG Contribution Invoice (amount), Sales Invoice (grand_total),
-    and any other doctype that may be referenced.
-    """
-    if hasattr(invoice, 'grand_total') and invoice.grand_total:
-        return flt(invoice.grand_total)
-    elif hasattr(invoice, 'expected_amount') and invoice.expected_amount:
-        return flt(invoice.expected_amount)
-    elif hasattr(invoice, 'total_amount') and invoice.total_amount:
-        return flt(invoice.total_amount)
-    elif hasattr(invoice, 'amount') and invoice.amount:
-        return flt(invoice.amount)
-    else:
-        frappe.throw(
-            f"Cannot determine total amount for {getattr(invoice, 'doctype', 'unknown')} "
-            f"{getattr(invoice, 'name', '')}. "
-            f"No recognized total field (grand_total, expected_amount, total_amount, amount) found."
-        )
+# Re-export for backward compatibility
+get_invoice_total = get_shg_document_total
 
 
 class OverpaymentError(BulkPaymentServiceError):
@@ -334,8 +323,8 @@ class BulkPaymentService:
                 update_modified=False
             )
             
-            # Commit transaction only if all operations succeed
-            frappe.db.commit()
+            # Transaction will be committed automatically by Frappe at request end
+            # Do NOT call frappe.db.commit() manually - let Frappe handle transaction lifecycle
             
             return {
                 "success": True,
@@ -349,31 +338,71 @@ class BulkPaymentService:
             }
             
         except Exception as e:
-            # Rollback on any error
-            frappe.db.rollback()
-            # Update status to failed directly in database
-            frappe.db.set_value(
-                "SHG Bulk Payment", 
-                bulk_payment.name, 
-                "processing_status", 
-                "Failed",
-                update_modified=False
+            # Log detailed error for debugging
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"Bulk Payment Processing Failed: {bulk_payment.name}"
             )
-            frappe.db.set_value(
-                "SHG Bulk Payment", 
-                bulk_payment.name, 
-                "remarks", 
-                f"Processing failed: {str(e)}",
-                update_modified=False
-            )
-            raise
+            
+            # Rollback on any error - Frappe will handle this automatically
+            # but we explicitly rollback to ensure clean state
+            try:
+                frappe.db.rollback()
+            except:
+                pass  # Ignore rollback errors
+            
+            # Update status to failed directly in database (outside transaction)
+            try:
+                frappe.db.set_value(
+                    "SHG Bulk Payment", 
+                    bulk_payment.name, 
+                    "processing_status", 
+                    "Failed",
+                    update_modified=False
+                )
+                frappe.db.set_value(
+                    "SHG Bulk Payment", 
+                    bulk_payment.name, 
+                    "remarks", 
+                    f"Processing failed: {str(e)}",
+                    update_modified=False
+                )
+            except Exception as update_error:
+                frappe.log_error(
+                    f"Failed to update error status: {update_error}",
+                    "Bulk Payment Error Handling Failed"
+                )
+            
+            # Re-raise with clear message
+            raise BulkPaymentServiceError(
+                f"Bulk payment processing failed for {bulk_payment.name}: {str(e)}"
+            ) from e
     
     def _lock_reference_document(self, doctype: str, docname: str):
-        """Lock reference document to prevent concurrent modifications"""
-        frappe.db.sql("""
-            SELECT name FROM `tab{0}` 
-            WHERE name = %s FOR UPDATE
-        """.format(doctype), docname)
+        """
+        Lock reference document to prevent concurrent modifications.
+        Uses SELECT FOR UPDATE for row-level locking.
+        """
+        try:
+            # Use parameterized query to prevent SQL injection
+            result = frappe.db.sql(
+                f"SELECT name FROM `tab{doctype}` WHERE name = %s FOR UPDATE",
+                (docname,),
+                as_dict=True
+            )
+            if not result:
+                raise BulkPaymentServiceError(
+                    f"Document {doctype} {docname} not found or could not be locked"
+                )
+        except Exception as e:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"Row Lock Failed: {doctype} {docname}"
+            )
+            raise ConcurrencyError(
+                f"Could not lock {doctype} {docname} for processing. "
+                f"Another process may be modifying this document."
+            ) from e
     
     def _create_consolidated_payment_entry(self, bulk_payment: Document) -> Document:
         """Create single consolidated payment entry for all allocations"""
@@ -525,20 +554,27 @@ class BulkPaymentService:
         invoice_doc.save(ignore_permissions=True)
     
     def _update_contribution_payment(self, contribution_doc: Document, allocated_amount: float, payment_entry_name: str):
-        """Update contribution payment status"""
-        contribution_doc.paid_amount = flt(contribution_doc.paid_amount) + flt(allocated_amount)
-        contribution_doc.outstanding_amount = flt(contribution_doc.expected_amount) - flt(contribution_doc.paid_amount)
-        
-        if contribution_doc.outstanding_amount <= 0:
-            contribution_doc.payment_status = "Paid"
-        elif contribution_doc.paid_amount > 0:
-            contribution_doc.payment_status = "Partially Paid"
-        
-        # Link to payment entry
-        if not contribution_doc.payment_entry:
-            contribution_doc.payment_entry = payment_entry_name
-        
-        contribution_doc.save(ignore_permissions=True)
+        """
+        Update contribution payment status using ContributionService.
+        Delegates to clean architecture service layer.
+        """
+        try:
+            contribution_service = ContributionService()
+            contribution_service.allocate_payment(
+                contribution_name=contribution_doc.name,
+                allocated_amount=allocated_amount,
+                payment_entry_name=payment_entry_name
+            )
+        except ContributionServiceError:
+            raise
+        except Exception as e:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"Bulk Payment: Contribution Update Failed: {contribution_doc.name}"
+            )
+            raise BulkPaymentServiceError(
+                f"Failed to update contribution {contribution_doc.name}: {str(e)}"
+            ) from e
     
     def _update_meeting_fine_payment(self, fine_doc: Document, allocated_amount: float):
         """Update meeting fine payment status"""
