@@ -24,123 +24,12 @@ except ImportError:
 class SHGContributionInvoice(Document):
     """
     SHG Contribution Invoice DocType.
-    Provides ERPNext-compatible properties for Payment Entry integration.
+    
+    NOTE: This is an SHG Business Layer document.
+    It should NEVER be added as a Payment Entry reference.
+    Payment Entry = Accounting Layer (ERPNext standard)
+    SHGContributionInvoice = Business Layer (SHG custom)
     """
-    
-    # ========================================================================
-    # ERPNext Payment Entry Compatibility Properties
-    # These properties make SHGContributionInvoice work as a Payment Entry reference
-    # ========================================================================
-    
-    @property
-    def grand_total(self):
-        """ERPNext compatibility - returns amount as grand_total."""
-        return flt(self.amount or 0)
-    
-    @property
-    def base_grand_total(self):
-        """ERPNext compatibility - returns amount as base_grand_total."""
-        return flt(self.amount or 0)
-    
-    @property
-    def rounded_total(self):
-        """ERPNext compatibility - returns amount as rounded_total."""
-        return flt(self.amount or 0)
-    
-    @property
-    def posting_date(self):
-        """ERPNext compatibility - returns posting_date field or falls back to invoice_date."""
-        # First try the actual posting_date field
-        pd = getattr(self, '_posting_date', None) or self.get('posting_date')
-        if pd:
-            return pd
-        # Fallback to invoice_date
-        return self.invoice_date
-    
-    @property
-    def outstanding_amount(self):
-        """ERPNext compatibility - calculates outstanding from amount and paid."""
-        paid = flt(getattr(self, 'paid_amount', 0) or 0)
-        return flt(self.amount or 0) - paid
-    
-    @property
-    def currency(self):
-        """ERPNext compatibility - returns company currency."""
-        if hasattr(self, 'company') and self.company:
-            return frappe.db.get_value("Company", self.company, "default_currency") or "KES"
-        return "KES"
-    
-    @property
-    def conversion_rate(self):
-        """ERPNext compatibility - returns 1.0 for same currency."""
-        return 1.0
-    
-    @property
-    def advance_paid(self):
-        """ERPNext compatibility - returns 0 (no advances for SHG invoices)."""
-        return 0.0
-    
-    @property
-    def is_return(self):
-        """ERPNext compatibility - returns False (not a return document)."""
-        return False
-    
-    @property
-    def customer(self):
-        """ERPNext compatibility - returns member's linked customer or member name."""
-        if hasattr(self, 'member') and self.member:
-            # Try to get customer from SHG Member
-            customer = frappe.db.get_value("SHG Member", self.member, "customer")
-            if customer:
-                return customer
-            # Fallback to member name
-            return self.member
-        return None
-    
-    # ========================================================================
-    # End of ERPNext Compatibility Properties
-    # ========================================================================
-    
-    def __getattr__(self, name):
-        """
-        Fallback for any ERPNext attributes not explicitly defined.
-        Prevents AttributeError for common financial document fields.
-        """
-        # Common ERPNext financial document attributes with safe defaults
-        common_financial_attrs = {
-            "total_advance": 0.0,
-            "base_total": 0.0,
-            "net_total": 0.0,
-            "base_net_total": 0.0,
-            "total_taxes_and_charges": 0.0,
-            "base_total_taxes_and_charges": 0.0,
-            "discount_amount": 0.0,
-            "base_discount_amount": 0.0,
-            "write_off_amount": 0.0,
-            "base_write_off_amount": 0.0,
-            "rounding_adjustment": 0.0,
-            "base_rounding_adjustment": 0.0,
-            "paid_amount": 0.0,
-            "base_paid_amount": 0.0,
-            "change_amount": 0.0,
-            "base_change_amount": 0.0,
-            "loyalty_amount": 0.0,
-            "in_words": "",
-            "base_in_words": "",
-            "total_qty": 1.0,
-            "is_internal_customer": 0,
-            "is_internal_supplier": 0,
-            "group_same_items": 0,
-            "disable_rounded_total": 0,
-            "apply_discount_on": "",
-            "additional_discount_percentage": 0.0,
-        }
-        
-        if name in common_financial_attrs:
-            return common_financial_attrs[name]
-        
-        # For any other attribute, raise standard AttributeError
-        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
     
     def validate(self):
         self.validate_qty()

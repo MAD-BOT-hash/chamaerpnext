@@ -126,11 +126,6 @@ doc_events = {
             "shg.shg.loan_services.gl.create_repayment_gl_entries"
         ]
     },
-    "Payment Entry": {
-        "on_submit": [
-            "shg.shg.services.payment.payment_service.handle_payment_entry_submit"
-        ]
-    },
     "Sales Invoice": {
         "on_submit": [
             "shg.shg.services.contribution.contribution_service.create_contribution_from_invoice"
