@@ -20,6 +20,9 @@
   "amount",
   "payment_method",
   "status",
+  "paid_amount",
+  "outstanding_amount",
+  "payment_entry",
   "description",
   "accounting_section",
   "sales_invoice",
@@ -119,9 +122,34 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Draft\nUnpaid\nPaid\nOverdue\nCancelled",
+   "options": "Draft\nUnpaid\nPaid\nPartially Paid\nOverdue\nCancelled",
    "default": "Unpaid",
-   "reqd": 1
+   "reqd": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "paid_amount",
+   "fieldtype": "Currency",
+   "label": "Paid Amount",
+   "read_only": 1,
+   "default": "0",
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "outstanding_amount",
+   "fieldtype": "Currency",
+   "label": "Outstanding Amount",
+   "read_only": 1,
+   "default": "0",
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "payment_entry",
+   "fieldtype": "Link",
+   "label": "Payment Entry",
+   "options": "Payment Entry",
+   "read_only": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "description",

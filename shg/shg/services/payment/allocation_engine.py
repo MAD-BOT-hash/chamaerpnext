@@ -47,6 +47,99 @@ class DocumentLockedError(AllocationError):
     pass
 
 
+class AlreadyPaidError(AllocationError):
+    """Raised when document is already fully paid"""
+    pass
+
+
+# =============================================================================
+# STATUS CONSTANTS (SINGLE SOURCE OF TRUTH)
+# =============================================================================
+
+# Canonical status values for all SHG doctypes
+STATUS_UNPAID = "Unpaid"
+STATUS_PENDING = "Pending"  # Used by Meeting Fine
+STATUS_PARTIALLY_PAID = "Partially Paid"
+STATUS_PAID = "Paid"
+STATUS_WAIVED = "Waived"
+STATUS_CANCELLED = "Cancelled"
+STATUS_OVERDUE = "Overdue"
+
+# Status values that indicate document can receive payment
+PAYABLE_STATUSES = [STATUS_UNPAID, STATUS_PENDING, STATUS_PARTIALLY_PAID, STATUS_OVERDUE]
+
+# Status values that indicate document is fully settled
+SETTLED_STATUSES = [STATUS_PAID, STATUS_WAIVED, STATUS_CANCELLED]
+
+
+def get_status_field_name(doc: Document) -> str:
+    """
+    Get the correct status field name for a document.
+    All SHG doctypes now use 'status' field consistently.
+    
+    Args:
+        doc: SHG document
+        
+    Returns:
+        str: Field name for status (always 'status')
+    """
+    return 'status'
+
+
+def get_document_status(doc: Document) -> str:
+    """
+    Get current payment status from any SHG document.
+    
+    Args:
+        doc: SHG document
+        
+    Returns:
+        str: Current status
+    """
+    return getattr(doc, 'status', STATUS_UNPAID) or STATUS_UNPAID
+
+
+def set_document_status(doc: Document, status: str):
+    """
+    Set payment status on any SHG document.
+    
+    Args:
+        doc: SHG document
+        status: New status value
+    """
+    # All SHG doctypes use 'status' field
+    if hasattr(doc, 'status'):
+        doc.status = status
+
+
+def is_document_payable(doc: Document) -> bool:
+    """
+    Check if document can receive payments.
+    
+    Args:
+        doc: SHG document
+        
+    Returns:
+        bool: True if document can receive payment
+    """
+    current_status = get_document_status(doc)
+    return current_status in PAYABLE_STATUSES
+
+
+def is_document_settled(doc: Document) -> bool:
+    """
+    Check if document is fully settled (paid/waived/cancelled).
+    
+    Args:
+        doc: SHG document
+        
+    Returns:
+        bool: True if document is settled
+    """
+    current_status = get_document_status(doc)
+    return current_status in SETTLED_STATUSES
+
+
 # =============================================================================
 # TOTAL AMOUNT RESOLVER (SINGLE SOURCE OF TRUTH)
 # =============================================================================
@@ -106,7 +199,7 @@ def get_outstanding_amount(doc: Document) -> float:
         float: Outstanding amount (never negative)
     """
     total = get_shg_document_total(doc)
-    paid = flt(getattr(doc, 'paid_amount', 0) or 0)
+    paid = get_paid_amount(doc)
     outstanding = flt(total - paid)
     return max(0, outstanding)  # Never return negative
 
@@ -114,6 +207,7 @@ def get_outstanding_amount(doc: Document) -> float:
 def get_paid_amount(doc: Document) -> float:
     """
     Get paid amount from any SHG document.
+    Handles different field names across doctypes.
     
     Args:
         doc: SHG document
@@ -121,7 +215,13 @@ def get_paid_amount(doc: Document) -> float:
     Returns:
         float: Paid amount
     """
-    return flt(getattr(doc, 'paid_amount', 0) or 0)
+    # Check different field names used across SHG doctypes
+    for field in ['paid_amount', 'amount_paid']:
+        if hasattr(doc, field):
+            value = getattr(doc, field, 0)
+            if value is not None:
+                return flt(value)
+    return 0.0
 
 
 # =============================================================================
@@ -178,6 +278,7 @@ class AllocationEngine:
         Raises:
             DocumentNotFoundError: Document doesn't exist
             OverpaymentError: Amount exceeds outstanding (if not allowed)
+            AlreadyPaidError: Document is already fully paid
         """
         if doctype not in self.SUPPORTED_DOCTYPES:
             raise AllocationError(f"Unsupported doctype: {doctype}")
@@ -191,10 +292,25 @@ class AllocationEngine:
         except frappe.DoesNotExistError:
             raise DocumentNotFoundError(f"{doctype} {docname} not found")
         
+        # DUPLICATE PREVENTION: Check if document is already fully paid
+        current_status = get_document_status(doc)
+        if is_document_settled(doc):
+            raise AlreadyPaidError(
+                f"{doctype} {docname} is already settled with status '{current_status}'. "
+                f"Cannot apply additional payment."
+            )
+        
         # Calculate amounts BEFORE allocation
         total = get_shg_document_total(doc)
         paid_before = get_paid_amount(doc)
         outstanding_before = get_outstanding_amount(doc)
+        
+        # DUPLICATE PREVENTION: Check if there's any outstanding amount
+        if outstanding_before <= 0:
+            raise AlreadyPaidError(
+                f"{doctype} {docname} has no outstanding balance. "
+                f"Total: {total}, Already Paid: {paid_before}, Outstanding: {outstanding_before}"
+            )
         
         # Validate allocation amount
         allocation_amount = flt(amount)
@@ -213,18 +329,33 @@ class AllocationEngine:
         paid_after = paid_before + allocation_amount
         outstanding_after = max(0, total - paid_after)
         
-        # Update document fields
-        doc.paid_amount = flt(paid_after, 2)
+        # Update document fields - handle different field names
+        # SHG Contribution uses 'amount_paid', others use 'paid_amount'
+        if hasattr(doc, 'amount_paid'):
+            doc.amount_paid = flt(paid_after, 2)
+        elif hasattr(doc, 'paid_amount'):
+            doc.paid_amount = flt(paid_after, 2)
+        else:
+            # Create paid_amount field if neither exists
+            doc.paid_amount = flt(paid_after, 2)
         
         # Update outstanding_amount if field exists
         if hasattr(doc, 'outstanding_amount'):
             doc.outstanding_amount = flt(outstanding_after, 2)
         
-        # Update status
+        # Update unpaid_amount for SHG Contribution
+        if hasattr(doc, 'unpaid_amount'):
+            doc.unpaid_amount = flt(outstanding_after, 2)
+        
+        # Update status using centralized function
         if outstanding_after <= 0:
-            doc.status = "Paid"
+            new_status = STATUS_PAID
         elif paid_after > 0:
-            doc.status = "Partially Paid"
+            new_status = STATUS_PARTIALLY_PAID
+        else:
+            new_status = current_status  # Keep current status
+        
+        set_document_status(doc, new_status)
         
         # Link payment entry if provided
         if payment_entry_name:
@@ -247,7 +378,8 @@ class AllocationEngine:
             "paid_after": paid_after,
             "outstanding_before": outstanding_before,
             "outstanding_after": outstanding_after,
-            "status": doc.status,
+            "status_before": current_status,
+            "status": new_status,
             "payment_entry": payment_entry_name,
             "success": True
         }

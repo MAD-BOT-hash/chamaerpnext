@@ -112,7 +112,8 @@
             "label": "Amount Paid (KES)",
             "precision": 2,
             "read_only": 1,
-            "description": "Actual amount paid for this contribution"
+            "description": "Actual amount paid for this contribution",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "unpaid_amount",
@@ -120,15 +121,17 @@
             "label": "Unpaid Amount (KES)",
             "precision": 2,
             "read_only": 1,
-            "description": "Calculated as Expected Amount - Amount Paid"
+            "description": "Calculated as Expected Amount - Amount Paid",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "status",
             "fieldtype": "Select",
             "label": "Status",
-            "options": "Paid\nPartially Paid\nUnpaid",
+            "options": "Pending\nUnpaid\nPartially Paid\nPaid\nOverdue",
             "read_only": 1,
-            "default": "Unpaid"
+            "default": "Unpaid",
+            "allow_on_submit": 1
         },
         {
             "fieldname": "payment_method",
@@ -183,7 +186,8 @@
             "fieldtype": "Link",
             "label": "Payment Entry",
             "options": "Payment Entry",
-            "read_only": 1
+            "read_only": 1,
+            "allow_on_submit": 1
         },
         {
             "fieldname": "posted_to_gl",

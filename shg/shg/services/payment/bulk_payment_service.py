@@ -26,6 +26,14 @@ from shg.shg.services.payment.allocation_engine import (
     AllocationError,
     OverpaymentError as AllocOverpaymentError,
     DocumentNotFoundError,
+    AlreadyPaidError,
+    # Status constants
+    STATUS_UNPAID,
+    STATUS_PENDING,
+    STATUS_PARTIALLY_PAID,
+    STATUS_PAID,
+    PAYABLE_STATUSES,
+    SETTLED_STATUSES,
 )
 
 # Import contribution service for backward compatibility
@@ -233,6 +241,30 @@ class BulkPaymentService:
             raise OverpaymentError(
                 f"Allocated amount ({allocation.allocated_amount}) exceeds outstanding amount ({allocation.outstanding_amount}) "
                 f"for {allocation.reference_doctype} {allocation.reference_name}"
+            )
+        
+        # DUPLICATE PREVENTION: Check if reference document is already fully paid
+        try:
+            ref_doc = frappe.get_doc(allocation.reference_doctype, allocation.reference_name)
+            current_status = ref_doc.status if hasattr(ref_doc, 'status') else None
+            
+            if current_status in SETTLED_STATUSES:
+                raise BulkPaymentServiceError(
+                    f"Document {allocation.reference_doctype} {allocation.reference_name} "
+                    f"is already settled with status '{current_status}'. Cannot apply payment."
+                )
+            
+            # Also check outstanding amount directly
+            actual_outstanding = get_outstanding_amount(ref_doc)
+            if actual_outstanding <= 0:
+                raise BulkPaymentServiceError(
+                    f"Document {allocation.reference_doctype} {allocation.reference_name} "
+                    f"has no outstanding balance (Outstanding: {actual_outstanding}). Already fully paid."
+                )
+                
+        except frappe.DoesNotExistError:
+            raise BulkPaymentServiceError(
+                f"Reference document {allocation.reference_doctype} {allocation.reference_name} not found"
             )
     
     def _process_allocations_transaction(self, bulk_payment: Document, processed_via: str, idempotency_key: str) -> Dict:
@@ -585,6 +617,17 @@ class BulkPaymentService:
                 "outstanding_after": result.get("outstanding_after")
             }
             
+        except AlreadyPaidError as e:
+            # Document already paid - log as warning, not error
+            frappe.log_error(
+                f"Duplicate payment prevented: {str(e)}",
+                f"Bulk Payment: Already Paid: {allocation.reference_name}"
+            )
+            raise BulkPaymentServiceError(
+                f"Document {allocation.reference_doctype} {allocation.reference_name} "
+                f"is already fully paid. Cannot apply duplicate payment."
+            ) from e
+            
         except AllocationError as e:
             frappe.log_error(
                 f"Allocation failed: {str(e)}\n{frappe.get_traceback()}",
@@ -713,9 +756,9 @@ def get_unpaid_invoices_for_company(company: str) -> List[Dict]:
             "SHG Contribution Invoice",
             filters={
                 "docstatus": 1,
-                "status": ["in", ["Unpaid", "Partially Paid"]]
+                "status": ["in", PAYABLE_STATUSES]  # Use canonical payable statuses
             },
-            fields=["name", "member", "member_name", "invoice_date", "due_date", "amount", "status", "description"]
+            fields=["name", "member", "member_name", "invoice_date", "due_date", "amount", "paid_amount", "status", "description"]
         )
         
         # Filter by company through member
@@ -725,17 +768,19 @@ def get_unpaid_invoices_for_company(company: str) -> List[Dict]:
         # Format for bulk payment
         result = []
         for inv in filtered_invoices:
-            result.append({
-                "member": inv.member,
-                "member_name": inv.member_name,
-                "reference_doctype": "SHG Contribution Invoice",
-                "reference_name": inv.name,
-                "reference_date": inv.invoice_date,
-                "due_date": inv.due_date,
-                "outstanding_amount": inv.amount,
-                "status": inv.status,
-                "description": inv.description or "Contribution Invoice"
-            })
+            outstanding = flt(inv.amount) - flt(inv.paid_amount or 0)
+            if outstanding > 0:
+                result.append({
+                    "member": inv.member,
+                    "member_name": inv.member_name,
+                    "reference_doctype": "SHG Contribution Invoice",
+                    "reference_name": inv.name,
+                    "reference_date": inv.invoice_date,
+                    "due_date": inv.due_date,
+                    "outstanding_amount": outstanding,
+                    "status": inv.status,
+                    "description": inv.description or "Contribution Invoice"
+                })
         
         return result
         
@@ -749,14 +794,14 @@ def get_unpaid_contributions_for_company(company: str) -> List[Dict]:
     Get all unpaid contributions for a company
     """
     try:
-        # Get unpaid contributions
+        # Get unpaid contributions - use status field with PAYABLE_STATUSES
         contributions = frappe.get_all(
             "SHG Contribution",
             filters={
                 "docstatus": 1,
-                "payment_status": ["in", ["Pending", "Partially Paid"]]
+                "status": ["in", PAYABLE_STATUSES]  # Use canonical payable statuses
             },
-            fields=["name", "member", "member_name", "contribution_date", "due_date", "expected_amount", "paid_amount", "payment_status", "contribution_type"]
+            fields=["name", "member", "member_name", "contribution_date", "due_date", "expected_amount", "amount_paid", "status", "contribution_type"]
         )
         
         # Filter by company through member
@@ -766,7 +811,7 @@ def get_unpaid_contributions_for_company(company: str) -> List[Dict]:
         # Format for bulk payment
         result = []
         for cont in filtered_contributions:
-            outstanding = flt(cont.expected_amount) - flt(cont.paid_amount)
+            outstanding = flt(cont.expected_amount) - flt(cont.amount_paid or 0)
             if outstanding > 0:
                 result.append({
                     "member": cont.member,
@@ -776,7 +821,7 @@ def get_unpaid_contributions_for_company(company: str) -> List[Dict]:
                     "reference_date": cont.contribution_date,
                     "due_date": cont.due_date,
                     "outstanding_amount": outstanding,
-                    "status": cont.payment_status,
+                    "status": cont.status,
                     "description": f"Contribution - {cont.contribution_type or 'General'}"
                 })
         
@@ -792,14 +837,14 @@ def get_unpaid_meeting_fines_for_company(company: str) -> List[Dict]:
     Get all unpaid meeting fines for a company
     """
     try:
-        # Get unpaid meeting fines
+        # Get unpaid meeting fines - status can be "Pending" or "Partially Paid"
         fines = frappe.get_all(
             "SHG Meeting Fine",
             filters={
                 "docstatus": 1,
-                "status": "Unpaid"
+                "status": ["in", PAYABLE_STATUSES]  # Use canonical payable statuses
             },
-            fields=["name", "member", "member_name", "fine_date", "due_date", "amount", "paid_amount", "description"]
+            fields=["name", "member", "member_name", "fine_date", "due_date", "fine_amount", "paid_amount", "fine_description", "status"]
         )
         
         # Filter by company through member
@@ -809,7 +854,7 @@ def get_unpaid_meeting_fines_for_company(company: str) -> List[Dict]:
         # Format for bulk payment
         result = []
         for fine in filtered_fines:
-            outstanding = flt(fine.amount) - flt(fine.paid_amount)
+            outstanding = flt(fine.fine_amount) - flt(fine.paid_amount)
             if outstanding > 0:
                 result.append({
                     "member": fine.member,
@@ -819,8 +864,8 @@ def get_unpaid_meeting_fines_for_company(company: str) -> List[Dict]:
                     "reference_date": fine.fine_date,
                     "due_date": fine.due_date,
                     "outstanding_amount": outstanding,
-                    "status": "Unpaid",
-                    "description": fine.description or "Meeting Fine"
+                    "status": fine.status,
+                    "description": fine.fine_description or "Meeting Fine"
                 })
         
         return result
@@ -863,25 +908,27 @@ def get_unpaid_invoices_for_member(member: str) -> List[Dict]:
             filters={
                 "member": member,
                 "docstatus": 1,
-                "status": ["in", ["Unpaid", "Partially Paid"]]
+                "status": ["in", PAYABLE_STATUSES]  # Use canonical payable statuses
             },
-            fields=["name", "member", "member_name", "invoice_date", "due_date", "amount", "status", "description"]
+            fields=["name", "member", "member_name", "invoice_date", "due_date", "amount", "paid_amount", "status", "description"]
         )
         
         # Format for bulk payment
         result = []
         for inv in invoices:
-            result.append({
-                "member": inv.member,
-                "member_name": inv.member_name,
-                "reference_doctype": "SHG Contribution Invoice",
-                "reference_name": inv.name,
-                "reference_date": inv.invoice_date,
-                "due_date": inv.due_date,
-                "outstanding_amount": inv.amount,
-                "status": inv.status,
-                "description": inv.description or "Contribution Invoice"
-            })
+            outstanding = flt(inv.amount) - flt(inv.paid_amount or 0)
+            if outstanding > 0:
+                result.append({
+                    "member": inv.member,
+                    "member_name": inv.member_name,
+                    "reference_doctype": "SHG Contribution Invoice",
+                    "reference_name": inv.name,
+                    "reference_date": inv.invoice_date,
+                    "due_date": inv.due_date,
+                    "outstanding_amount": outstanding,
+                    "status": inv.status,
+                    "description": inv.description or "Contribution Invoice"
+                })
         
         return result
         
@@ -902,15 +949,15 @@ def get_unpaid_contributions_for_member(member: str) -> List[Dict]:
             filters={
                 "member": member,
                 "docstatus": 1,
-                "payment_status": ["in", ["Pending", "Partially Paid"]]
+                "status": ["in", PAYABLE_STATUSES]  # Use canonical payable statuses
             },
-            fields=["name", "member", "member_name", "contribution_date", "due_date", "expected_amount", "paid_amount", "payment_status", "contribution_type"]
+            fields=["name", "member", "member_name", "contribution_date", "due_date", "expected_amount", "amount_paid", "status", "contribution_type"]
         )
         
         # Format for bulk payment
         result = []
         for cont in contributions:
-            outstanding = flt(cont.expected_amount) - flt(cont.paid_amount)
+            outstanding = flt(cont.expected_amount) - flt(cont.amount_paid or 0)
             if outstanding > 0:
                 result.append({
                     "member": cont.member,
@@ -920,7 +967,7 @@ def get_unpaid_contributions_for_member(member: str) -> List[Dict]:
                     "reference_date": cont.contribution_date,
                     "due_date": cont.due_date,
                     "outstanding_amount": outstanding,
-                    "status": cont.payment_status,
+                    "status": cont.status,
                     "description": f"Contribution - {cont.contribution_type or 'General'}"
                 })
         
@@ -943,15 +990,15 @@ def get_unpaid_meeting_fines_for_member(member: str) -> List[Dict]:
             filters={
                 "member": member,
                 "docstatus": 1,
-                "status": "Unpaid"
+                "status": ["in", PAYABLE_STATUSES]  # Use canonical payable statuses
             },
-            fields=["name", "member", "member_name", "fine_date", "due_date", "amount", "paid_amount", "description"]
+            fields=["name", "member", "member_name", "fine_date", "due_date", "fine_amount", "paid_amount", "fine_description", "status"]
         )
         
         # Format for bulk payment
         result = []
         for fine in fines:
-            outstanding = flt(fine.amount) - flt(fine.paid_amount)
+            outstanding = flt(fine.fine_amount) - flt(fine.paid_amount)
             if outstanding > 0:
                 result.append({
                     "member": fine.member,
@@ -961,8 +1008,8 @@ def get_unpaid_meeting_fines_for_member(member: str) -> List[Dict]:
                     "reference_date": fine.fine_date,
                     "due_date": fine.due_date,
                     "outstanding_amount": outstanding,
-                    "status": "Unpaid",
-                    "description": fine.description or "Meeting Fine"
+                    "status": fine.status,
+                    "description": fine.fine_description or "Meeting Fine"
                 })
         
         return result
