@@ -149,11 +149,13 @@ def get_shg_document_total(doc: Document) -> float:
     SHG-native document total resolver.
     
     FIELD PRIORITY (SHG fields first, ERPNext fields last):
-    1. expected_amount - SHG Contribution
-    2. amount - SHG Contribution Invoice, SHG Meeting Fine
-    3. fine_amount - SHG Meeting Fine (alternative)
-    4. total_amount - Generic fallback
-    5. grand_total - ERPNext Sales Invoice (LAST RESORT)
+    1. total_payment - SHG Loan Repayment Schedule (installment total)
+    2. total_due - SHG Loan Repayment Schedule (alternative)
+    3. expected_amount - SHG Contribution
+    4. amount - SHG Contribution Invoice, SHG Meeting Fine
+    5. fine_amount - SHG Meeting Fine (alternative)
+    6. total_amount - Generic fallback
+    7. grand_total - ERPNext Sales Invoice (LAST RESORT)
     
     Args:
         doc: Any SHG or ERPNext document with amount fields
@@ -165,6 +167,8 @@ def get_shg_document_total(doc: Document) -> float:
         AllocationError: If no valid total field found
     """
     field_priority = [
+        'total_payment',    # SHG Loan Repayment Schedule
+        'total_due',        # SHG Loan Repayment Schedule (alternative)
         'expected_amount',  # SHG Contribution
         'amount',           # SHG Contribution Invoice, SHG Meeting Fine
         'fine_amount',      # SHG Meeting Fine (alternative name)
@@ -247,10 +251,12 @@ class AllocationEngine:
         "SHG Contribution Invoice",
         "SHG Contribution",
         "SHG Meeting Fine",
+        "SHG Loan Repayment Schedule",  # Loan installment payments
     ]
     
     def __init__(self):
         self.audit_log = []
+        self._member_updates = set()  # Track members to update statements
     
     def allocate_payment(
         self,
@@ -347,6 +353,10 @@ class AllocationEngine:
         if hasattr(doc, 'unpaid_amount'):
             doc.unpaid_amount = flt(outstanding_after, 2)
         
+        # Update unpaid_balance for SHG Loan Repayment Schedule
+        if hasattr(doc, 'unpaid_balance'):
+            doc.unpaid_balance = flt(outstanding_after, 2)
+        
         # Update status using centralized function
         if outstanding_after <= 0:
             new_status = STATUS_PAID
@@ -368,6 +378,15 @@ class AllocationEngine:
         if auto_save:
             doc.save(ignore_permissions=True)
         
+        # Track member for statement update
+        member = self._get_member_from_document(doc, doctype)
+        if member:
+            self._member_updates.add(member)
+        
+        # Handle loan-specific updates
+        if doctype == "SHG Loan Repayment Schedule":
+            self._update_parent_loan(doc)
+        
         # Build result
         result = {
             "doctype": doctype,
@@ -381,6 +400,7 @@ class AllocationEngine:
             "status_before": current_status,
             "status": new_status,
             "payment_entry": payment_entry_name,
+            "member": member,
             "success": True
         }
         
@@ -512,6 +532,104 @@ class AllocationEngine:
             "timestamp": nowdate(),
             **result
         })
+    
+    def _get_member_from_document(self, doc: Document, doctype: str) -> Optional[str]:
+        """
+        Extract member ID from any SHG document.
+        
+        Args:
+            doc: SHG document
+            doctype: Document type
+            
+        Returns:
+            str: Member ID or None
+        """
+        # Direct member field
+        if hasattr(doc, 'member') and doc.member:
+            return doc.member
+        
+        # For loan repayment schedule, get from parent loan
+        if doctype == "SHG Loan Repayment Schedule":
+            if hasattr(doc, 'parent') and doc.parent:
+                try:
+                    return frappe.db.get_value("SHG Loan", doc.parent, "member")
+                except:
+                    pass
+        
+        return None
+    
+    def _update_parent_loan(self, schedule_row: Document):
+        """
+        Update parent loan summary after repayment schedule payment.
+        
+        Args:
+            schedule_row: SHG Loan Repayment Schedule row
+        """
+        if not hasattr(schedule_row, 'parent') or not schedule_row.parent:
+            return
+        
+        try:
+            # Import loan utils to update loan summary
+            from shg.shg.loan_utils import update_loan_summary
+            update_loan_summary(schedule_row.parent)
+        except ImportError:
+            # Fallback: update directly
+            try:
+                loan = frappe.get_doc("SHG Loan", schedule_row.parent)
+                if hasattr(loan, 'update_loan_summary'):
+                    loan.update_loan_summary()
+            except Exception as e:
+                frappe.log_error(
+                    f"Failed to update loan summary for {schedule_row.parent}: {str(e)}",
+                    "AllocationEngine: Loan Update Failed"
+                )
+    
+    def update_member_statements(self):
+        """
+        Update financial statements for all members affected by allocations.
+        Call this after bulk allocations are complete.
+        """
+        updated_members = []
+        
+        for member in self._member_updates:
+            try:
+                self._update_single_member_statement(member)
+                updated_members.append(member)
+            except Exception as e:
+                frappe.log_error(
+                    f"Failed to update member statement for {member}: {str(e)}",
+                    "AllocationEngine: Member Statement Update Failed"
+                )
+        
+        # Clear the update set
+        self._member_updates.clear()
+        
+        return updated_members
+    
+    def _update_single_member_statement(self, member: str):
+        """
+        Update financial statement for a single member.
+        
+        Args:
+            member: Member ID
+        """
+        try:
+            # Try using the member statement utility
+            from shg.shg.utils.member_statement_utils import populate_member_statement
+            populate_member_statement(member)
+        except ImportError:
+            # Fallback: update member document directly
+            try:
+                member_doc = frappe.get_doc("SHG Member", member)
+                if hasattr(member_doc, 'update_financial_summary'):
+                    member_doc.update_financial_summary()
+                elif hasattr(member_doc, 'update_member_statement'):
+                    member_doc.update_member_statement()
+            except Exception as e:
+                frappe.log_error(
+                    f"Fallback member update failed for {member}: {str(e)}",
+                    "AllocationEngine: Member Update Fallback Failed"
+                )
 
 
 # =============================================================================

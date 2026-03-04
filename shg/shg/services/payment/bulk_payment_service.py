@@ -370,6 +370,9 @@ class BulkPaymentService:
                 update_modified=False
             )
             
+            # Update member statements for all affected members
+            affected_members = self._update_affected_member_statements(allocation_results)
+            
             # Transaction will be committed automatically by Frappe at request end
             # Do NOT call frappe.db.commit() manually - let Frappe handle transaction lifecycle
             
@@ -381,6 +384,7 @@ class BulkPaymentService:
                 "successful_allocations": successful_allocations,
                 "failed_allocations": failed_allocations,
                 "allocation_results": allocation_results,
+                "members_updated": affected_members,
                 "idempotency_key": idempotency_key
             }
             
@@ -684,6 +688,61 @@ class BulkPaymentService:
         bulk_payment.unallocated_amount = flt(bulk_payment.total_amount) - flt(total_allocated)
         
         bulk_payment.save(ignore_permissions=True)
+    
+    def _update_affected_member_statements(self, allocation_results: List[Dict]) -> List[str]:
+        """
+        Update financial statements for all members affected by allocations.
+        
+        Args:
+            allocation_results: List of allocation result dictionaries
+            
+        Returns:
+            List of member IDs that were updated
+        """
+        # Collect unique members from allocations
+        members = set()
+        for result in allocation_results:
+            if result.get("status") == "Processed" and result.get("member"):
+                members.add(result["member"])
+        
+        updated_members = []
+        for member in members:
+            try:
+                self._update_single_member_statement(member)
+                updated_members.append(member)
+            except Exception as e:
+                self.logger.error(f"Failed to update member statement for {member}: {str(e)}")
+                frappe.log_error(
+                    f"Failed to update member statement for {member}: {str(e)}",
+                    "Bulk Payment: Member Statement Update Failed"
+                )
+        
+        return updated_members
+    
+    def _update_single_member_statement(self, member: str):
+        """
+        Update financial statement for a single member.
+        
+        Args:
+            member: Member ID
+        """
+        try:
+            # Try using the member statement utility
+            from shg.shg.utils.member_statement_utils import populate_member_statement
+            populate_member_statement(member)
+        except ImportError:
+            # Fallback: update member document directly
+            try:
+                member_doc = frappe.get_doc("SHG Member", member)
+                if hasattr(member_doc, 'update_financial_summary'):
+                    member_doc.update_financial_summary()
+                elif hasattr(member_doc, 'update_member_statement'):
+                    member_doc.update_member_statement()
+            except Exception as e:
+                frappe.log_error(
+                    f"Fallback member update failed for {member}: {str(e)}",
+                    "Bulk Payment: Member Update Fallback Failed"
+                )
     
     def auto_allocate_by_oldest_due_date(self, bulk_payment_name: str) -> Dict:
         """
@@ -1020,24 +1079,166 @@ def get_unpaid_meeting_fines_for_member(member: str) -> List[Dict]:
 
 
 @frappe.whitelist()
+def get_unpaid_loan_installments_for_company(company: str) -> List[Dict]:
+    """
+    Get all unpaid loan installments for a company
+    """
+    try:
+        # Get company members
+        company_members = frappe.get_all("SHG Member", filters={"company": company}, pluck="name")
+        if not company_members:
+            return []
+        
+        # Get active loans for company members
+        loans = frappe.get_all(
+            "SHG Loan",
+            filters={
+                "member": ["in", company_members],
+                "docstatus": 1,
+                "status": ["in", ["Disbursed", "Partially Paid", "Active"]]
+            },
+            fields=["name", "member", "member_name"]
+        )
+        
+        result = []
+        for loan in loans:
+            # Get unpaid installments for this loan
+            installments = frappe.get_all(
+                "SHG Loan Repayment Schedule",
+                filters={
+                    "parent": loan.name,
+                    "parenttype": "SHG Loan",
+                    "status": ["in", PAYABLE_STATUSES]
+                },
+                fields=["name", "installment_no", "due_date", "total_payment", "amount_paid", "unpaid_balance", "status"]
+            )
+            
+            for inst in installments:
+                outstanding = flt(inst.unpaid_balance) or (flt(inst.total_payment) - flt(inst.amount_paid or 0))
+                if outstanding > 0:
+                    result.append({
+                        "member": loan.member,
+                        "member_name": loan.member_name,
+                        "reference_doctype": "SHG Loan Repayment Schedule",
+                        "reference_name": inst.name,
+                        "reference_date": inst.due_date,
+                        "due_date": inst.due_date,
+                        "outstanding_amount": outstanding,
+                        "status": inst.status,
+                        "description": f"Loan Installment #{inst.installment_no} ({loan.name})",
+                        "loan": loan.name
+                    })
+        
+        # Sort by due date
+        result.sort(key=lambda x: getdate(x.get('due_date') or '1900-01-01'))
+        return result
+        
+    except Exception as e:
+        frappe.log_error(f"Bulk Payment: Error fetching unpaid loan installments - {str(e)}")
+        return []
+
+
+@frappe.whitelist()
+def get_unpaid_loan_installments_for_member(member: str) -> List[Dict]:
+    """
+    Get all unpaid loan installments for a specific member
+    """
+    try:
+        # Get member name
+        member_name = frappe.db.get_value("SHG Member", member, "member_name") or member
+        
+        # Get active loans for member
+        loans = frappe.get_all(
+            "SHG Loan",
+            filters={
+                "member": member,
+                "docstatus": 1,
+                "status": ["in", ["Disbursed", "Partially Paid", "Active"]]
+            },
+            fields=["name"]
+        )
+        
+        result = []
+        for loan in loans:
+            # Get unpaid installments for this loan
+            installments = frappe.get_all(
+                "SHG Loan Repayment Schedule",
+                filters={
+                    "parent": loan.name,
+                    "parenttype": "SHG Loan",
+                    "status": ["in", PAYABLE_STATUSES]
+                },
+                fields=["name", "installment_no", "due_date", "total_payment", "amount_paid", "unpaid_balance", "status"]
+            )
+            
+            for inst in installments:
+                outstanding = flt(inst.unpaid_balance) or (flt(inst.total_payment) - flt(inst.amount_paid or 0))
+                if outstanding > 0:
+                    result.append({
+                        "member": member,
+                        "member_name": member_name,
+                        "reference_doctype": "SHG Loan Repayment Schedule",
+                        "reference_name": inst.name,
+                        "reference_date": inst.due_date,
+                        "due_date": inst.due_date,
+                        "outstanding_amount": outstanding,
+                        "status": inst.status,
+                        "description": f"Loan Installment #{inst.installment_no} ({loan.name})",
+                        "loan": loan.name
+                    })
+        
+        # Sort by due date
+        result.sort(key=lambda x: getdate(x.get('due_date') or '1900-01-01'))
+        return result
+        
+    except Exception as e:
+        frappe.log_error(f"Bulk Payment: Error fetching unpaid loan installments for member - {str(e)}")
+        return []
+
+
+@frappe.whitelist()
 def get_all_unpaid_items_for_company(company: str) -> List[Dict]:
     """
-    Get all unpaid items (invoices, contributions, fines) for a company
+    Get all unpaid items (invoices, contributions, fines, loan installments) for a company
     """
     try:
         # Get all types of unpaid items
         invoices = get_unpaid_invoices_for_company(company)
         contributions = get_unpaid_contributions_for_company(company)
         fines = get_unpaid_meeting_fines_for_company(company)
+        loan_installments = get_unpaid_loan_installments_for_company(company)
         
         # Combine and sort by due date (oldest first)
-        all_items = invoices + contributions + fines
+        all_items = invoices + contributions + fines + loan_installments
         all_items.sort(key=lambda x: getdate(x.get('due_date') or x.get('reference_date') or '1900-01-01'))
         
         return all_items
         
     except Exception as e:
         frappe.log_error(f"Bulk Payment: Error fetching all unpaid items - {str(e)}")
+        return []
+
+
+@frappe.whitelist()
+def get_all_unpaid_items_for_member(member: str) -> List[Dict]:
+    """
+    Get all unpaid items (invoices, contributions, fines, loan installments) for a specific member
+    """
+    try:
+        # Get all types of unpaid items for the specific member
+        invoices = get_unpaid_invoices_for_member(member)
+        contributions = get_unpaid_contributions_for_member(member)
+        fines = get_unpaid_meeting_fines_for_member(member)
+        loan_installments = get_unpaid_loan_installments_for_member(member)
+        
+        # Combine and sort by due date (oldest first)
+        all_items = invoices + contributions + fines + loan_installments
+        all_items.sort(key=lambda x: getdate(x.get('due_date') or x.get('reference_date') or '1900-01-01'))
+        
+        return all_items
+        
+    except Exception as e:
+        frappe.log_error(f"Bulk Payment: Error fetching all unpaid items for member - {str(e)}")
         return []
 
 
