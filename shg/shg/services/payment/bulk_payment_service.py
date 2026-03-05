@@ -160,25 +160,21 @@ class BulkPaymentService:
         return hashlib.sha256(data.encode()).hexdigest()
     
     def _is_already_processed(self, bulk_payment_name: str, idempotency_key: str) -> bool:
-        """Check if this bulk payment has already been processed"""
-        # Check audit trail for duplicate processing
-        if self.audit_service:
-            recent_logs = frappe.get_all(
-                "SHG Audit Trail",
-                filters={
-                    "reference_doctype": "SHG Bulk Payment",
-                    "reference_name": bulk_payment_name,
-                    "action": "Updated",
-                    "timestamp": [">", frappe.utils.add_to_date(frappe.utils.now(), hours=-24)],
-                    "details": ["LIKE", "%Processed%"]
-                },
-                limit=1
-            )
-            return len(recent_logs) > 0
+        """
+        Check if this bulk payment has already been successfully processed.
         
-        # Fallback: check document status
+        Returns True only if the payment was fully processed successfully.
+        Failed, Cancelled, or Draft payments can be reprocessed.
+        """
+        # Fallback: check document status - only block if fully processed
         bulk_payment = frappe.get_doc("SHG Bulk Payment", bulk_payment_name)
-        return bulk_payment.processing_status in ["Processed", "Partially Processed"]
+        
+        # Only block if status is "Processed" (fully successful)
+        # Allow reprocessing of: Draft, Failed, Cancelled, Partially Processed
+        if bulk_payment.processing_status == "Processed":
+            return True
+        
+        return False
     
     def _lock_bulk_payment(self, bulk_payment_name: str) -> Document:
         """Lock bulk payment document with row-level locking"""
@@ -195,9 +191,11 @@ class BulkPaymentService:
     
     def _validate_bulk_payment(self, bulk_payment: Document):
         """Validate bulk payment before processing"""
-        # Check if already processed
-        if bulk_payment.processing_status in ["Processed", "Partially Processed"]:
-            raise BulkPaymentServiceError(f"Bulk payment already processed with status: {bulk_payment.processing_status}")
+        # Check if already fully processed - only block fully processed payments
+        if bulk_payment.processing_status == "Processed":
+            raise BulkPaymentServiceError(
+                f"Bulk payment already fully processed. Cancel and create new if reprocessing is needed."
+            )
         
         # Validate total amount
         if not bulk_payment.total_amount or bulk_payment.total_amount <= 0:
