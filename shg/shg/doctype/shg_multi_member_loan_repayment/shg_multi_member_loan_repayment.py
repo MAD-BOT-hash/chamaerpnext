@@ -13,12 +13,51 @@ class SHGMultiMemberLoanRepayment(Document):
         
         self.company = self.company or get_default_company()
         
+        # Auto-populate loan_balance for rows that have loan but no balance
+        self._auto_populate_loan_balances()
+        
         # Auto-calculate total repayment amount
         total = 0.0
         if self.loans:
             for row in self.loans:
                 total += flt(row.repayment_amount or 0)
         self.total_repayment_amount = total
+    
+    def _auto_populate_loan_balances(self):
+        """Auto-populate loan_balance and member_name for rows if missing"""
+        from shg.shg.doctype.shg_loan.shg_loan import get_loan_balance
+        
+        for row in self.loans:
+            # Auto-populate loan_balance if loan is set but balance is missing
+            if row.loan and not row.loan_balance:
+                try:
+                    balance = get_loan_balance(row.loan)
+                    row.loan_balance = flt(balance, 2)
+                except Exception:
+                    pass
+            
+            # Auto-populate member_name if member is set but name is missing
+            if row.member and not row.member_name:
+                try:
+                    row.member_name = frappe.db.get_value("SHG Member", row.member, "member_name")
+                except Exception:
+                    pass
+            
+            # Auto-populate loan_type if loan is set but type is missing
+            if row.loan and not row.loan_type:
+                try:
+                    row.loan_type = frappe.db.get_value("SHG Loan", row.loan, "loan_type")
+                except Exception:
+                    pass
+            
+            # Auto-populate member from loan if missing
+            if row.loan and not row.member:
+                try:
+                    row.member = frappe.db.get_value("SHG Loan", row.loan, "member")
+                    if row.member and not row.member_name:
+                        row.member_name = frappe.db.get_value("SHG Member", row.member, "member_name")
+                except Exception:
+                    pass
 
     def validate(self):
         """Validate bulk loan repayment with comprehensive mandatory field checks"""

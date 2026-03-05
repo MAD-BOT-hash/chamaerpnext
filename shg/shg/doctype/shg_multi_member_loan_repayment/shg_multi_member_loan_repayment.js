@@ -135,12 +135,12 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment Item', {
     loan: function(frm, cdt, cdn) {
         var row = frappe.get_doc(cdt, cdn);
         if (row.loan) {
-            // Auto-fetch loan details
+            // First, get basic loan details (non-computed fields)
             frappe.call({
                 method: "frappe.client.get_value",
                 args: {
                     doctype: "SHG Loan",
-                    fieldname: ["loan_type", "loan_balance", "repayment_start_date", "member"],
+                    fieldname: ["loan_type", "repayment_start_date", "member"],
                     filters: { name: row.loan }
                 },
                 callback: function(r) {
@@ -148,14 +148,6 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment Item', {
                         // Set loan type
                         if (r.message.loan_type) {
                             frappe.model.set_value(cdt, cdn, 'loan_type', r.message.loan_type);
-                        }
-                        
-                        // Set loan balance
-                        if (r.message.loan_balance !== undefined) {
-                            frappe.model.set_value(cdt, cdn, 'loan_balance', r.message.loan_balance);
-                            
-                            // Set repayment amount to loan balance by default
-                            frappe.model.set_value(cdt, cdn, 'repayment_amount', r.message.loan_balance);
                         }
                         
                         // Set installment due date
@@ -182,6 +174,36 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment Item', {
                                 }
                             });
                         }
+                    }
+                }
+            });
+            
+            // Get computed loan balance using the server-side function
+            frappe.call({
+                method: "shg.shg.doctype.shg_loan.shg_loan.get_loan_balance",
+                args: {
+                    loan_name: row.loan
+                },
+                callback: function(r) {
+                    if (r.message !== undefined && r.message !== null) {
+                        var balance = flt(r.message);
+                        frappe.model.set_value(cdt, cdn, 'loan_balance', balance);
+                        
+                        // Set repayment amount to loan balance by default
+                        frappe.model.set_value(cdt, cdn, 'repayment_amount', balance);
+                    } else {
+                        // Fallback: try to calculate from outstanding amounts
+                        frappe.call({
+                            method: "shg.loan_repayment_api.get_outstanding_amount",
+                            args: { loan: row.loan },
+                            callback: function(out_r) {
+                                if (out_r.message && out_r.message.success) {
+                                    var balance = flt(out_r.message.data);
+                                    frappe.model.set_value(cdt, cdn, 'loan_balance', balance);
+                                    frappe.model.set_value(cdt, cdn, 'repayment_amount', balance);
+                                }
+                            }
+                        });
                     }
                 }
             });
