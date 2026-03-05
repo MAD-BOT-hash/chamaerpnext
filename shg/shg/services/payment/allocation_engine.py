@@ -72,31 +72,101 @@ PAYABLE_STATUSES = [STATUS_UNPAID, STATUS_PENDING, STATUS_PARTIALLY_PAID, STATUS
 SETTLED_STATUSES = [STATUS_PAID, STATUS_WAIVED, STATUS_CANCELLED]
 
 
-def get_status_field_name(doc: Document) -> str:
+# =============================================================================
+# FIELD MAPPING (SINGLE SOURCE OF TRUTH FOR ALL DOCTYPES)
+# =============================================================================
+
+# Defines field names for each doctype to handle inconsistencies
+DOCTYPE_FIELD_MAP = {
+    "SHG Contribution Invoice": {
+        "total_field": "amount",           # Total amount due
+        "paid_field": "paid_amount",       # Amount paid so far
+        "outstanding_field": "outstanding_amount",  # Outstanding balance
+        "date_field": "due_date",          # Due date field
+        "reference_date_field": "invoice_date",  # Reference date
+        "member_field": "member",          # Member link field
+        "payment_entry_field": "payment_entry",  # Payment entry link
+        "status_field": "status",          # Status field
+    },
+    "SHG Contribution": {
+        "total_field": "expected_amount",  # Total amount due (NOT 'amount')
+        "paid_field": "amount_paid",       # Amount paid so far
+        "outstanding_field": "unpaid_amount",  # Outstanding balance
+        "date_field": "contribution_date", # Reference date (NO due_date!)
+        "reference_date_field": "contribution_date",
+        "member_field": "member",
+        "payment_entry_field": "payment_entry",
+        "status_field": "status",
+    },
+    "SHG Meeting Fine": {
+        "total_field": "fine_amount",      # Total fine amount
+        "paid_field": "paid_amount",       # Amount paid so far
+        "outstanding_field": "outstanding_amount",  # Outstanding balance
+        "date_field": "fine_date",         # Fine date (NO due_date!)
+        "reference_date_field": "fine_date",
+        "member_field": "member",
+        "payment_entry_field": "payment_entry",
+        "status_field": "status",
+    },
+    "SHG Loan Repayment Schedule": {
+        "total_field": "total_payment",    # Total installment amount
+        "paid_field": "amount_paid",       # Amount paid so far (NOT actual_amount_paid)
+        "outstanding_field": "unpaid_balance",  # Outstanding balance (NOT outstanding_amount)
+        "date_field": "due_date",          # Due date
+        "reference_date_field": "due_date",
+        "member_field": None,              # Member from parent loan
+        "payment_entry_field": "payment_entry",
+        "status_field": "status",
+    },
+}
+
+
+def get_field_name(doctype: str, field_type: str) -> Optional[str]:
     """
-    Get the correct status field name for a document.
-    All SHG doctypes now use 'status' field consistently.
+    Get the correct field name for a doctype.
     
     Args:
-        doc: SHG document
+        doctype: Document type name
+        field_type: Type of field (total_field, paid_field, etc.)
         
     Returns:
-        str: Field name for status (always 'status')
+        Field name or None if not mapped
     """
-    return 'status'
+    mapping = DOCTYPE_FIELD_MAP.get(doctype, {})
+    return mapping.get(field_type)
+
+
+def safe_get_field(doc: Document, field_type: str, default: Any = None) -> Any:
+    """
+    Safely get a field value from a document using the field mapping.
+    
+    Args:
+        doc: Document object
+        field_type: Type of field to get
+        default: Default value if field not found
+        
+    Returns:
+        Field value or default
+    """
+    field_name = get_field_name(doc.doctype, field_type)
+    if field_name and hasattr(doc, field_name):
+        return getattr(doc, field_name, default)
+    return default
+
+
+# =============================================================================
+# STATUS HELPERS
+# =============================================================================
+
+def get_status_field_name(doc: Document) -> str:
+    """Get the correct status field name for a document."""
+    return get_field_name(doc.doctype, "status_field") or "status"
 
 
 def get_document_status(doc: Document) -> str:
-    """
-    Get current payment status from any SHG document.
-    
-    Args:
-        doc: SHG document
-        
-    Returns:
-        str: Current status
-    """
-    return getattr(doc, 'status', STATUS_UNPAID) or STATUS_UNPAID
+    """Get current payment status from any SHG document."""
+    status_field = get_status_field_name(doc)
+    return getattr(doc, status_field, STATUS_UNPAID) or STATUS_UNPAID
 
 
 def set_document_status(doc: Document, status: str):
@@ -146,19 +216,10 @@ def is_document_settled(doc: Document) -> bool:
 
 def get_shg_document_total(doc: Document) -> float:
     """
-    SHG-native document total resolver.
-    
-    FIELD PRIORITY (SHG fields first, ERPNext fields last):
-    1. total_payment - SHG Loan Repayment Schedule (installment total)
-    2. total_due - SHG Loan Repayment Schedule (alternative)
-    3. expected_amount - SHG Contribution
-    4. amount - SHG Contribution Invoice, SHG Meeting Fine
-    5. fine_amount - SHG Meeting Fine (alternative)
-    6. total_amount - Generic fallback
-    7. grand_total - ERPNext Sales Invoice (LAST RESORT)
+    Get total amount from any SHG document using field mapping.
     
     Args:
-        doc: Any SHG or ERPNext document with amount fields
+        doc: Any SHG document with amount fields
         
     Returns:
         float: The total amount (never negative)
@@ -166,26 +227,33 @@ def get_shg_document_total(doc: Document) -> float:
     Raises:
         AllocationError: If no valid total field found
     """
-    field_priority = [
+    # First try using the field mapping
+    total_field = get_field_name(doc.doctype, "total_field")
+    if total_field and hasattr(doc, total_field):
+        value = getattr(doc, total_field)
+        if value is not None and flt(value) > 0:
+            return flt(value)
+    
+    # Fallback: check common field names
+    fallback_fields = [
         'total_payment',    # SHG Loan Repayment Schedule
-        'total_due',        # SHG Loan Repayment Schedule (alternative)
+        'total_due',        # Alternative
         'expected_amount',  # SHG Contribution
-        'amount',           # SHG Contribution Invoice, SHG Meeting Fine
-        'fine_amount',      # SHG Meeting Fine (alternative name)
-        'total_amount',     # Generic fallback
-        'grand_total',      # ERPNext Sales Invoice (last resort)
+        'amount',           # SHG Contribution Invoice
+        'fine_amount',      # SHG Meeting Fine
+        'total_amount',     # Generic
+        'grand_total',      # ERPNext
     ]
     
-    for field in field_priority:
+    for field in fallback_fields:
         if hasattr(doc, field):
             value = getattr(doc, field)
             if value is not None and flt(value) > 0:
                 return flt(value)
     
-    # Detailed error for debugging
     raise AllocationError(
         f"Cannot determine total amount for {doc.doctype} {doc.name}. "
-        f"No valid total field found. Checked: {', '.join(field_priority)}"
+        f"Expected field: {total_field}"
     )
 
 
@@ -193,11 +261,10 @@ def get_outstanding_amount(doc: Document) -> float:
     """
     Calculate outstanding amount for any SHG document.
     
-    SINGLE FORMULA (no duplication):
-    outstanding = total - paid
+    SINGLE FORMULA: outstanding = total - paid
     
     Args:
-        doc: SHG document (Contribution Invoice, Contribution, Meeting Fine)
+        doc: SHG document
         
     Returns:
         float: Outstanding amount (never negative)
@@ -205,13 +272,12 @@ def get_outstanding_amount(doc: Document) -> float:
     total = get_shg_document_total(doc)
     paid = get_paid_amount(doc)
     outstanding = flt(total - paid)
-    return max(0, outstanding)  # Never return negative
+    return max(0, outstanding)
 
 
 def get_paid_amount(doc: Document) -> float:
     """
-    Get paid amount from any SHG document.
-    Handles different field names across doctypes.
+    Get paid amount from any SHG document using field mapping.
     
     Args:
         doc: SHG document
@@ -219,13 +285,46 @@ def get_paid_amount(doc: Document) -> float:
     Returns:
         float: Paid amount
     """
-    # Check different field names used across SHG doctypes
-    for field in ['paid_amount', 'amount_paid']:
+    # First try using the field mapping
+    paid_field = get_field_name(doc.doctype, "paid_field")
+    if paid_field and hasattr(doc, paid_field):
+        value = getattr(doc, paid_field, 0)
+        if value is not None:
+            return flt(value)
+    
+    # Fallback: check common field names
+    for field in ['paid_amount', 'amount_paid', 'actual_amount_paid']:
         if hasattr(doc, field):
             value = getattr(doc, field, 0)
             if value is not None:
                 return flt(value)
+    
     return 0.0
+
+
+def get_member_from_doctype(doc: Document) -> Optional[str]:
+    """
+    Get member ID from any SHG document.
+    
+    Args:
+        doc: SHG document
+        
+    Returns:
+        Member ID or None
+    """
+    # Use field mapping
+    member_field = get_field_name(doc.doctype, "member_field")
+    if member_field and hasattr(doc, member_field):
+        return getattr(doc, member_field)
+    
+    # For loan repayment schedule, get member from parent loan
+    if doc.doctype == "SHG Loan Repayment Schedule" and hasattr(doc, 'parent'):
+        try:
+            return frappe.db.get_value("SHG Loan", doc.parent, "member")
+        except:
+            pass
+    
+    return None
 
 
 # =============================================================================
@@ -343,24 +442,25 @@ class AllocationEngine:
         else:
             new_status = current_status  # Keep current status
         
-        # Build update values dict for db_set
+        # Build update values dict for db_set using field mapping
         update_values = {"status": new_status}
         
-        # Determine paid field name based on doctype
-        if doctype == "SHG Contribution":
-            update_values["amount_paid"] = flt(paid_after, 2)
-            update_values["unpaid_amount"] = flt(outstanding_after, 2)
-        elif doctype == "SHG Loan Repayment Schedule":
-            update_values["actual_amount_paid"] = flt(paid_after, 2)
-            update_values["outstanding_amount"] = flt(outstanding_after, 2)
-        else:
-            # SHG Contribution Invoice, SHG Meeting Fine
-            update_values["paid_amount"] = flt(paid_after, 2)
-            update_values["outstanding_amount"] = flt(outstanding_after, 2)
+        # Get field names from mapping
+        paid_field = get_field_name(doctype, "paid_field")
+        outstanding_field = get_field_name(doctype, "outstanding_field")
+        payment_entry_field = get_field_name(doctype, "payment_entry_field")
+        
+        # Set paid amount using correct field name
+        if paid_field:
+            update_values[paid_field] = flt(paid_after, 2)
+        
+        # Set outstanding amount using correct field name  
+        if outstanding_field:
+            update_values[outstanding_field] = flt(outstanding_after, 2)
         
         # Link payment entry if provided
-        if payment_entry_name:
-            update_values["payment_entry"] = payment_entry_name
+        if payment_entry_name and payment_entry_field:
+            update_values[payment_entry_field] = payment_entry_name
         
         # Use db_set for submitted documents (ERPNext compliant)
         if auto_save:
@@ -612,9 +712,14 @@ class AllocationEngine:
             # Get the linked contribution document
             contribution = frappe.get_doc("SHG Contribution", linked_contribution)
             
-            # Get current values from contribution
-            total_amount = flt(contribution.total_amount or 0)
-            current_paid = flt(getattr(contribution, 'amount_paid', 0) or 0)
+            # Use field mapping to get correct field names for SHG Contribution
+            total_field = get_field_name("SHG Contribution", "total_field")  # expected_amount
+            paid_field = get_field_name("SHG Contribution", "paid_field")     # amount_paid
+            outstanding_field = get_field_name("SHG Contribution", "outstanding_field")  # unpaid_amount
+            
+            # Get current values using correct field names
+            total_amount = flt(getattr(contribution, total_field, 0) or 0)
+            current_paid = flt(getattr(contribution, paid_field, 0) or 0)
             
             # Calculate new values
             new_paid = min(current_paid + allocated_amount, total_amount)
@@ -630,14 +735,15 @@ class AllocationEngine:
             
             # Update the contribution document using db_set (ERPNext compliant)
             update_values = {
-                "amount_paid": flt(new_paid, 2),
-                "unpaid_amount": flt(new_unpaid, 2),
+                paid_field: flt(new_paid, 2),
+                outstanding_field: flt(new_unpaid, 2),
                 "status": new_status
             }
             
             # Link payment entry if provided
-            if payment_entry_name:
-                update_values["payment_entry"] = payment_entry_name
+            payment_entry_field = get_field_name("SHG Contribution", "payment_entry_field")
+            if payment_entry_name and payment_entry_field:
+                update_values[payment_entry_field] = payment_entry_name
             
             frappe.db.set_value(
                 "SHG Contribution",
@@ -647,8 +753,11 @@ class AllocationEngine:
             )
             
             # Track member for statement update
-            if hasattr(contribution, 'member') and contribution.member:
-                self._member_updates.add(contribution.member)
+            member_field = get_field_name("SHG Contribution", "member_field")
+            if member_field and hasattr(contribution, member_field):
+                member = getattr(contribution, member_field)
+                if member:
+                    self._member_updates.add(member)
                 
         except Exception as e:
             frappe.log_error(

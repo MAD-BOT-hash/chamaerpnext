@@ -23,6 +23,8 @@ from shg.shg.services.payment.allocation_engine import (
     get_shg_document_total,
     get_outstanding_amount,
     get_paid_amount,
+    get_field_name,  # For field validation
+    DOCTYPE_FIELD_MAP,  # Field mappings for validation
     AllocationError,
     OverpaymentError as AllocOverpaymentError,
     DocumentNotFoundError,
@@ -60,6 +62,64 @@ class OverpaymentError(BulkPaymentServiceError):
 class ConcurrencyError(BulkPaymentServiceError):
     """Raised when concurrent access conflict occurs"""
     pass
+
+
+def validate_doctype_fields(doctype: str, fields: List[str]) -> List[str]:
+    """
+    Validate that requested fields exist in the DocType schema.
+    Returns only valid fields to prevent SQL errors.
+    
+    Args:
+        doctype: DocType name
+        fields: List of fields to validate
+        
+    Returns:
+        List of valid fields that exist in the DocType
+    """
+    try:
+        # Get meta for doctype
+        meta = frappe.get_meta(doctype)
+        valid_field_names = {f.fieldname for f in meta.fields}
+        valid_field_names.add("name")  # name is always valid
+        
+        valid_fields = [f for f in fields if f in valid_field_names]
+        
+        # Log warning for invalid fields (debugging)
+        invalid_fields = set(fields) - set(valid_fields)
+        if invalid_fields:
+            frappe.log_error(
+                title="Field Validation",
+                message=f"DocType '{doctype}' missing fields: {invalid_fields}. Query adjusted."
+            )
+        
+        return valid_fields
+    except Exception:
+        # If validation fails, return original list (let SQL error bubble up)
+        return fields
+
+
+def safe_get_doctype_fields(doctype: str) -> Dict[str, str]:
+    """
+    Get field names for a doctype from the centralized mapping.
+    Falls back to reasonable defaults if not found.
+    
+    Args:
+        doctype: DocType name
+        
+    Returns:
+        Dict with field names for total, paid, outstanding, date, etc.
+    """
+    mapping = DOCTYPE_FIELD_MAP.get(doctype, {})
+    
+    # Return with defaults for missing mappings
+    return {
+        "total_field": mapping.get("total_field", "amount"),
+        "paid_field": mapping.get("paid_field", "paid_amount"),
+        "outstanding_field": mapping.get("outstanding_field", "outstanding_amount"),
+        "date_field": mapping.get("date_field"),
+        "member_field": mapping.get("member_field", "member"),
+        "status_field": mapping.get("status_field", "status"),
+    }
 
 
 class DuplicateProcessingError(BulkPaymentServiceError):
@@ -707,8 +767,10 @@ class BulkPaymentService:
         # Collect unique members from allocations
         members = set()
         for result in allocation_results:
-            if result.get("status") == "Processed" and result.get("member"):
-                members.add(result["member"])
+            # Check for member in result
+            member = result.get("member")
+            if member:
+                members.add(member)
         
         updated_members = []
         for member in members:
@@ -718,8 +780,8 @@ class BulkPaymentService:
             except Exception as e:
                 self.logger.error(f"Failed to update member statement for {member}: {str(e)}")
                 frappe.log_error(
-                    f"Failed to update member statement for {member}: {str(e)}",
-                    "Bulk Payment: Member Statement Update Failed"
+                    title="Member Statement",
+                    message=f"Update failed for {member}: {str(e)}"
                 )
         
         return updated_members
@@ -859,13 +921,14 @@ def get_unpaid_contributions_for_company(company: str) -> List[Dict]:
     """
     try:
         # Get unpaid contributions - use status field with PAYABLE_STATUSES
+        # Note: SHG Contribution uses contribution_date (no due_date field)
         contributions = frappe.get_all(
             "SHG Contribution",
             filters={
                 "docstatus": 1,
                 "status": ["in", PAYABLE_STATUSES]  # Use canonical payable statuses
             },
-            fields=["name", "member", "member_name", "contribution_date", "due_date", "expected_amount", "amount_paid", "status", "contribution_type"]
+            fields=["name", "member", "member_name", "contribution_date", "expected_amount", "amount_paid", "status", "contribution_type"]
         )
         
         # Filter by company through member
@@ -883,7 +946,7 @@ def get_unpaid_contributions_for_company(company: str) -> List[Dict]:
                     "reference_doctype": "SHG Contribution",
                     "reference_name": cont.name,
                     "reference_date": cont.contribution_date,
-                    "due_date": cont.due_date,
+                    "due_date": cont.contribution_date,  # Use contribution_date as due_date
                     "outstanding_amount": outstanding,
                     "status": cont.status,
                     "description": f"Contribution - {cont.contribution_type or 'General'}"
@@ -892,7 +955,10 @@ def get_unpaid_contributions_for_company(company: str) -> List[Dict]:
         return result
         
     except Exception as e:
-        frappe.log_error(f"Bulk Payment: Error fetching unpaid contributions - {str(e)}")
+        frappe.log_error(
+            title="Fetch Contributions",
+            message=f"Error fetching unpaid contributions: {str(e)}"
+        )
         return []
 
 @frappe.whitelist()
@@ -902,13 +968,14 @@ def get_unpaid_meeting_fines_for_company(company: str) -> List[Dict]:
     """
     try:
         # Get unpaid meeting fines - status can be "Pending" or "Partially Paid"
+        # Note: SHG Meeting Fine uses fine_date (no due_date field)
         fines = frappe.get_all(
             "SHG Meeting Fine",
             filters={
                 "docstatus": 1,
                 "status": ["in", PAYABLE_STATUSES]  # Use canonical payable statuses
             },
-            fields=["name", "member", "member_name", "fine_date", "due_date", "fine_amount", "paid_amount", "fine_description", "status"]
+            fields=["name", "member", "member_name", "fine_date", "fine_amount", "paid_amount", "fine_description", "status"]
         )
         
         # Filter by company through member
@@ -926,7 +993,7 @@ def get_unpaid_meeting_fines_for_company(company: str) -> List[Dict]:
                     "reference_doctype": "SHG Meeting Fine",
                     "reference_name": fine.name,
                     "reference_date": fine.fine_date,
-                    "due_date": fine.due_date,
+                    "due_date": fine.fine_date,  # Use fine_date as due_date
                     "outstanding_amount": outstanding,
                     "status": fine.status,
                     "description": fine.fine_description or "Meeting Fine"
@@ -935,7 +1002,10 @@ def get_unpaid_meeting_fines_for_company(company: str) -> List[Dict]:
         return result
         
     except Exception as e:
-        frappe.log_error(f"Bulk Payment: Error fetching unpaid meeting fines - {str(e)}")
+        frappe.log_error(
+            title="Fetch Fines",
+            message=f"Error fetching unpaid meeting fines: {str(e)}"
+        )
         return []
 
 @frappe.whitelist()
@@ -1008,6 +1078,7 @@ def get_unpaid_contributions_for_member(member: str) -> List[Dict]:
     """
     try:
         # Get unpaid contributions for the specific member
+        # Note: SHG Contribution uses contribution_date (no due_date field)
         contributions = frappe.get_all(
             "SHG Contribution",
             filters={
@@ -1015,7 +1086,7 @@ def get_unpaid_contributions_for_member(member: str) -> List[Dict]:
                 "docstatus": 1,
                 "status": ["in", PAYABLE_STATUSES]  # Use canonical payable statuses
             },
-            fields=["name", "member", "member_name", "contribution_date", "due_date", "expected_amount", "amount_paid", "status", "contribution_type"]
+            fields=["name", "member", "member_name", "contribution_date", "expected_amount", "amount_paid", "status", "contribution_type"]
         )
         
         # Format for bulk payment
@@ -1029,7 +1100,7 @@ def get_unpaid_contributions_for_member(member: str) -> List[Dict]:
                     "reference_doctype": "SHG Contribution",
                     "reference_name": cont.name,
                     "reference_date": cont.contribution_date,
-                    "due_date": cont.due_date,
+                    "due_date": cont.contribution_date,  # Use contribution_date as due_date
                     "outstanding_amount": outstanding,
                     "status": cont.status,
                     "description": f"Contribution - {cont.contribution_type or 'General'}"
@@ -1038,7 +1109,10 @@ def get_unpaid_contributions_for_member(member: str) -> List[Dict]:
         return result
         
     except Exception as e:
-        frappe.log_error(f"Bulk Payment: Error fetching unpaid contributions for member - {str(e)}")
+        frappe.log_error(
+            title="Fetch Contributions",
+            message=f"Error fetching unpaid contributions for member {member}: {str(e)}"
+        )
         return []
 
 
@@ -1049,6 +1123,7 @@ def get_unpaid_meeting_fines_for_member(member: str) -> List[Dict]:
     """
     try:
         # Get unpaid meeting fines for the specific member
+        # Note: SHG Meeting Fine uses fine_date (no due_date field)
         fines = frappe.get_all(
             "SHG Meeting Fine",
             filters={
@@ -1056,7 +1131,7 @@ def get_unpaid_meeting_fines_for_member(member: str) -> List[Dict]:
                 "docstatus": 1,
                 "status": ["in", PAYABLE_STATUSES]  # Use canonical payable statuses
             },
-            fields=["name", "member", "member_name", "fine_date", "due_date", "fine_amount", "paid_amount", "fine_description", "status"]
+            fields=["name", "member", "member_name", "fine_date", "fine_amount", "paid_amount", "fine_description", "status"]
         )
         
         # Format for bulk payment
@@ -1070,7 +1145,7 @@ def get_unpaid_meeting_fines_for_member(member: str) -> List[Dict]:
                     "reference_doctype": "SHG Meeting Fine",
                     "reference_name": fine.name,
                     "reference_date": fine.fine_date,
-                    "due_date": fine.due_date,
+                    "due_date": fine.fine_date,  # Use fine_date as due_date
                     "outstanding_amount": outstanding,
                     "status": fine.status,
                     "description": fine.fine_description or "Meeting Fine"
@@ -1079,7 +1154,10 @@ def get_unpaid_meeting_fines_for_member(member: str) -> List[Dict]:
         return result
         
     except Exception as e:
-        frappe.log_error(f"Bulk Payment: Error fetching unpaid meeting fines for member - {str(e)}")
+        frappe.log_error(
+            title="Fetch Fines",
+            message=f"Error fetching unpaid meeting fines for member {member}: {str(e)}"
+        )
         return []
 
 

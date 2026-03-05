@@ -67,27 +67,24 @@ def populate_member_statement(member_id):
     """
     Populate member statement with calculated values.
     Uses db_set for ERPNext compliance - does not call .save() on documents.
+    
+    Updates SHG Member fields:
+    - total_contributions: Sum of all paid contributions
+    - total_unpaid_contributions: Sum of all unpaid/partially paid contributions
+    - total_unpaid_loans: Sum of all unpaid loan installments
+    - current_loan_balance: Current outstanding loan balance
     """
     try:
         # Calculate the statement values using SQL (read-only)
         statement_data = calculate_member_statement(member_id)
         
-        # Calculate net balance
-        net_balance = (
-            flt(statement_data.get('unpaid_contributions', 0)) + 
-            flt(statement_data.get('unpaid_fines', 0)) + 
-            flt(statement_data.get('unpaid_loans', 0)) - 
-            flt(statement_data.get('total_contributions', 0))
-        )
-        
         # Use db_set to update member document (ERPNext compliant - no .save())
+        # Map calculation results to actual SHG Member field names
         update_values = {
             "total_contributions": flt(statement_data.get('total_contributions', 0), 2),
-            "unpaid_contributions": flt(statement_data.get('unpaid_contributions', 0), 2),
-            "unpaid_fines": flt(statement_data.get('unpaid_fines', 0), 2),
+            "total_unpaid_contributions": flt(statement_data.get('unpaid_contributions', 0), 2),
+            "total_unpaid_loans": flt(statement_data.get('unpaid_loans', 0), 2),
             "current_loan_balance": flt(statement_data.get('unpaid_loans', 0), 2),
-            "net_balance": flt(net_balance, 2),
-            "statement_updated_on": now()
         }
         
         frappe.db.set_value("SHG Member", member_id, update_values, update_modified=False)
@@ -113,16 +110,16 @@ def populate_member_statement(member_id):
 def calculate_total_contributions(member_id):
     """Calculate total paid contributions for a member"""
     try:
-        # Sum of all paid contributions
+        # Sum of all paid contributions from invoices
         total_paid = frappe.db.sql("""
             SELECT SUM(paid_amount) as total
             FROM `tabSHG Contribution Invoice`
             WHERE member = %s AND docstatus = 1 AND status = 'Paid'
         """, (member_id,), as_dict=True)[0].total or 0.0
         
-        # Also check SHG Contribution records
+        # Also check SHG Contribution records (using amount_paid, not total_amount)
         contribution_paid = frappe.db.sql("""
-            SELECT SUM(total_amount) as total
+            SELECT SUM(amount_paid) as total
             FROM `tabSHG Contribution`
             WHERE member = %s AND docstatus = 1 AND status = 'Paid'
         """, (member_id,), as_dict=True)[0].total or 0.0
@@ -138,16 +135,16 @@ def calculate_unpaid_contributions(member_id):
         PAYABLE_STATUSES = ('Unpaid', 'Pending', 'Partially Paid', 'Overdue')
         status_placeholders = ', '.join(['%s'] * len(PAYABLE_STATUSES))
         
-        # Sum of all unpaid contributions from invoices
+        # Sum of all unpaid contributions from invoices (using amount, outstanding_amount)
         total_unpaid = frappe.db.sql(f"""
-            SELECT SUM(COALESCE(outstanding_amount, total_amount)) as total
+            SELECT SUM(COALESCE(outstanding_amount, amount)) as total
             FROM `tabSHG Contribution Invoice`
             WHERE member = %s AND docstatus = 1 AND status IN ({status_placeholders})
         """, (member_id,) + PAYABLE_STATUSES, as_dict=True)[0].total or 0.0
         
-        # Also check SHG Contribution records
+        # Also check SHG Contribution records (using expected_amount, unpaid_amount)
         contribution_unpaid = frappe.db.sql(f"""
-            SELECT SUM(COALESCE(unpaid_amount, total_amount)) as total
+            SELECT SUM(COALESCE(unpaid_amount, expected_amount)) as total
             FROM `tabSHG Contribution`
             WHERE member = %s AND docstatus = 1 AND status IN ({status_placeholders})
         """, (member_id,) + PAYABLE_STATUSES, as_dict=True)[0].total or 0.0
@@ -187,8 +184,9 @@ def calculate_unpaid_loans(member_id):
         # If no loan balance, check outstanding installments
         if not total_loans:
             # Get sum of unpaid installments from loan repayment schedules
+            # SHG Loan Repayment Schedule uses: total_payment, unpaid_balance
             installment_balance = frappe.db.sql("""
-                SELECT SUM(COALESCE(rs.outstanding_amount, rs.total_amount)) as total
+                SELECT SUM(COALESCE(rs.unpaid_balance, rs.total_payment)) as total
                 FROM `tabSHG Loan Repayment Schedule` rs
                 JOIN `tabSHG Loan` l ON rs.parent = l.name
                 WHERE l.member = %s 
@@ -199,7 +197,11 @@ def calculate_unpaid_loans(member_id):
             return flt(installment_balance)
         
         return flt(total_loans)
-    except Exception:
+    except Exception as e:
+        frappe.log_error(
+            title="Loan Calc Error",
+            message=f"Error calculating loans for {member_id}: {str(e)}"
+        )
         return 0.0
 
 def generate_member_statement_html(member_data):
