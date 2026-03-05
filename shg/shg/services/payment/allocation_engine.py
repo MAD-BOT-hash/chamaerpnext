@@ -335,29 +335,7 @@ class AllocationEngine:
         paid_after = paid_before + allocation_amount
         outstanding_after = max(0, total - paid_after)
         
-        # Update document fields - handle different field names
-        # SHG Contribution uses 'amount_paid', others use 'paid_amount'
-        if hasattr(doc, 'amount_paid'):
-            doc.amount_paid = flt(paid_after, 2)
-        elif hasattr(doc, 'paid_amount'):
-            doc.paid_amount = flt(paid_after, 2)
-        else:
-            # Create paid_amount field if neither exists
-            doc.paid_amount = flt(paid_after, 2)
-        
-        # Update outstanding_amount if field exists
-        if hasattr(doc, 'outstanding_amount'):
-            doc.outstanding_amount = flt(outstanding_after, 2)
-        
-        # Update unpaid_amount for SHG Contribution
-        if hasattr(doc, 'unpaid_amount'):
-            doc.unpaid_amount = flt(outstanding_after, 2)
-        
-        # Update unpaid_balance for SHG Loan Repayment Schedule
-        if hasattr(doc, 'unpaid_balance'):
-            doc.unpaid_balance = flt(outstanding_after, 2)
-        
-        # Update status using centralized function
+        # Determine new status
         if outstanding_after <= 0:
             new_status = STATUS_PAID
         elif paid_after > 0:
@@ -365,18 +343,36 @@ class AllocationEngine:
         else:
             new_status = current_status  # Keep current status
         
-        set_document_status(doc, new_status)
+        # Build update values dict for db_set
+        update_values = {"status": new_status}
+        
+        # Determine paid field name based on doctype
+        if doctype == "SHG Contribution":
+            update_values["amount_paid"] = flt(paid_after, 2)
+            update_values["unpaid_amount"] = flt(outstanding_after, 2)
+        elif doctype == "SHG Loan Repayment Schedule":
+            update_values["actual_amount_paid"] = flt(paid_after, 2)
+            update_values["outstanding_amount"] = flt(outstanding_after, 2)
+        else:
+            # SHG Contribution Invoice, SHG Meeting Fine
+            update_values["paid_amount"] = flt(paid_after, 2)
+            update_values["outstanding_amount"] = flt(outstanding_after, 2)
         
         # Link payment entry if provided
         if payment_entry_name:
-            if hasattr(doc, 'payment_entry'):
-                doc.payment_entry = payment_entry_name
-            if hasattr(doc, 'payment_reference'):
-                doc.payment_reference = payment_entry_name
+            update_values["payment_entry"] = payment_entry_name
         
-        # Save document
+        # Use db_set for submitted documents (ERPNext compliant)
         if auto_save:
-            doc.save(ignore_permissions=True)
+            if doc.docstatus == 1:
+                # Submitted document - use db_set (no .save())
+                frappe.db.set_value(doctype, docname, update_values, update_modified=False)
+            else:
+                # Draft document - can use save
+                for key, value in update_values.items():
+                    if hasattr(doc, key):
+                        setattr(doc, key, value)
+                doc.save(ignore_permissions=True)
         
         # Track member for statement update
         member = self._get_member_from_document(doc, doctype)
@@ -584,8 +580,8 @@ class AllocationEngine:
                     loan.update_loan_summary()
             except Exception as e:
                 frappe.log_error(
-                    f"Failed to update loan summary for {schedule_row.parent}: {str(e)}",
-                    "AllocationEngine: Loan Update Failed"
+                    title="Loan Summary Update",
+                    message=f"Failed to update loan {schedule_row.parent}: {str(e)}"
                 )
     
     def _sync_linked_contribution(
@@ -632,7 +628,7 @@ class AllocationEngine:
             else:
                 new_status = getattr(contribution, 'status', STATUS_UNPAID)
             
-            # Update the contribution document
+            # Update the contribution document using db_set (ERPNext compliant)
             update_values = {
                 "amount_paid": flt(new_paid, 2),
                 "unpaid_amount": flt(new_unpaid, 2),
@@ -650,22 +646,14 @@ class AllocationEngine:
                 update_modified=False
             )
             
-            # Log the sync
-            frappe.log_error(
-                f"Synced Contribution Invoice {invoice_doc.name} → Contribution {linked_contribution}: "
-                f"Paid {allocated_amount}, New Status: {new_status}",
-                "AllocationEngine: Contribution Sync Success"
-            )
-            
             # Track member for statement update
             if hasattr(contribution, 'member') and contribution.member:
                 self._member_updates.add(contribution.member)
                 
         except Exception as e:
             frappe.log_error(
-                f"Failed to sync linked contribution {linked_contribution} "
-                f"for invoice {invoice_doc.name}: {str(e)}",
-                "AllocationEngine: Contribution Sync Failed"
+                title="Contribution Sync",
+                message=f"Failed to sync contribution {linked_contribution} for invoice {invoice_doc.name}: {str(e)}"
             )
     
     def update_member_statements(self):
@@ -681,8 +669,8 @@ class AllocationEngine:
                 updated_members.append(member)
             except Exception as e:
                 frappe.log_error(
-                    f"Failed to update member statement for {member}: {str(e)}",
-                    "AllocationEngine: Member Statement Update Failed"
+                    title="Member Statement",
+                    message=f"Failed to update statement for {member}: {str(e)}"
                 )
         
         # Clear the update set
@@ -711,8 +699,8 @@ class AllocationEngine:
                     member_doc.update_member_statement()
             except Exception as e:
                 frappe.log_error(
-                    f"Fallback member update failed for {member}: {str(e)}",
-                    "AllocationEngine: Member Update Fallback Failed"
+                    title="Member Update",
+                    message=f"Fallback update failed for {member}: {str(e)}"
                 )
 
 

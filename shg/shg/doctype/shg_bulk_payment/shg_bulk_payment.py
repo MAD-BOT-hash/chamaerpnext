@@ -286,8 +286,8 @@ class SHGBulkPayment(Document):
             except Exception as e:
                 errors.append(f"{allocation.reference_name}: {str(e)}")
                 frappe.log_error(
-                    f"Failed to reverse allocation {allocation.reference_name}: {str(e)}",
-                    "Bulk Payment: Reverse Allocation Failed"
+                    title="Reverse Allocation",
+                    message=f"Failed: {allocation.reference_name}: {str(e)}"
                 )
         
         if errors:
@@ -431,8 +431,8 @@ class SHGBulkPayment(Document):
             
         except Exception as e:
             frappe.log_error(
-                f"Failed to reverse linked contribution {linked_contribution}: {str(e)}",
-                "Bulk Payment Cancel: Linked Contribution Reversal Failed"
+                title="Contribution Reversal",
+                message=f"Failed to reverse {linked_contribution}: {str(e)}"
             )
     
     def _reverse_loan_installment(self, schedule_row, allocated_amount):
@@ -508,8 +508,8 @@ class SHGBulkPayment(Document):
             )
         except Exception as e:
             frappe.log_error(
-                f"Failed to update parent loan {schedule_row.parent}: {str(e)}",
-                "Bulk Payment: Parent Loan Update Failed"
+                title="Parent Loan Update",
+                message=f"Failed: {schedule_row.parent}: {str(e)}"
             )
     
     def _update_member_statements_on_cancel(self):
@@ -529,8 +529,8 @@ class SHGBulkPayment(Document):
                 updated_count += 1
             except Exception as e:
                 frappe.log_error(
-                    f"Failed to update member statement for {member} on cancel: {str(e)}",
-                    "Bulk Payment Cancel: Member Statement Update Failed"
+                    title="Member Statement",
+                    message=f"Cancel update failed for {member}: {str(e)}"
                 )
         
         if updated_count > 0:
@@ -599,8 +599,8 @@ class SHGBulkPayment(Document):
                 updated_count += 1
             except Exception as e:
                 frappe.log_error(
-                    f"Failed to update member statement for {member}: {str(e)}",
-                    "Bulk Payment: Member Statement Update Failed"
+                    title="Member Statement",
+                    message=f"Update failed for {member}: {str(e)}"
                 )
         
         if updated_count > 0:
@@ -631,8 +631,8 @@ class SHGBulkPayment(Document):
                     member_doc.update_member_statement()
             except Exception as e:
                 frappe.log_error(
-                    f"Fallback member update failed for {member}: {str(e)}",
-                    "Bulk Payment: Member Update Fallback Failed"
+                    title="Member Update",
+                    message=f"Fallback failed for {member}: {str(e)}"
                 )
     
     @frappe.whitelist()

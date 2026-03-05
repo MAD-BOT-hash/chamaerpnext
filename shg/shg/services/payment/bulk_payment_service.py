@@ -677,15 +677,22 @@ class BulkPaymentService:
         )
     
     def _update_bulk_payment_totals(self, bulk_payment: Document):
-        """Update bulk payment summary totals"""
+        """Update bulk payment summary totals using db_set (ERPNext compliant)"""
         total_allocated = sum(flt(allocation.allocated_amount) for allocation in bulk_payment.allocations)
         total_outstanding = sum(flt(allocation.outstanding_amount) for allocation in bulk_payment.allocations)
+        unallocated = flt(bulk_payment.total_amount) - flt(total_allocated)
         
-        bulk_payment.total_allocated_amount = total_allocated
-        bulk_payment.total_outstanding_amount = total_outstanding
-        bulk_payment.unallocated_amount = flt(bulk_payment.total_amount) - flt(total_allocated)
-        
-        bulk_payment.save(ignore_permissions=True)
+        # Use db_set for submitted documents (ERPNext compliant - no .save())
+        frappe.db.set_value(
+            "SHG Bulk Payment",
+            bulk_payment.name,
+            {
+                "total_allocated_amount": flt(total_allocated, 2),
+                "total_outstanding_amount": flt(total_outstanding, 2),
+                "unallocated_amount": flt(unallocated, 2)
+            },
+            update_modified=False
+        )
     
     def _update_affected_member_statements(self, allocation_results: List[Dict]) -> List[str]:
         """
@@ -738,8 +745,8 @@ class BulkPaymentService:
                     member_doc.update_member_statement()
             except Exception as e:
                 frappe.log_error(
-                    f"Fallback member update failed for {member}: {str(e)}",
-                    "Bulk Payment: Member Update Fallback Failed"
+                    title="Member Update Failed",
+                    message=f"Fallback member update failed for {member}: {str(e)}"
                 )
     
     def auto_allocate_by_oldest_due_date(self, bulk_payment_name: str) -> Dict:

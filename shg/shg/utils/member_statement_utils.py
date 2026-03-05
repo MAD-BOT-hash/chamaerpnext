@@ -7,77 +7,104 @@ import json
 @frappe.whitelist()
 def calculate_member_statement(member_id):
     """
-    Calculate financial statement for a specific member
-    Returns dictionary with all required financial data
+    Calculate financial statement for a specific member using SQL only.
+    This is a READ-ONLY function - does not modify any documents.
+    
+    Returns dictionary with all required financial data.
     """
     try:
-        # Get member details
-        member = frappe.get_doc("SHG Member", member_id)
+        # Get member details using SQL (read-only)
+        member_data = frappe.db.get_value(
+            "SHG Member", 
+            member_id, 
+            ["member_name", "email"],
+            as_dict=True
+        ) or {}
         
-        # Calculate total contributions
+        # Calculate totals using SQL (read-only)
         total_contributions = calculate_total_contributions(member_id)
-        
-        # Calculate unpaid contributions
         unpaid_contributions = calculate_unpaid_contributions(member_id)
-        
-        # Calculate unpaid fines
         unpaid_fines = calculate_unpaid_fines(member_id)
-        
-        # Calculate unpaid loans
         unpaid_loans = calculate_unpaid_loans(member_id)
         
+        # Calculate net balance
+        net_balance = flt(unpaid_contributions) + flt(unpaid_fines) + flt(unpaid_loans) - flt(total_contributions)
+        
         statement_data = {
-            "member_name": member.member_name or member.member_id,
-            "total_contributions": total_contributions,
-            "unpaid_contributions": unpaid_contributions,
-            "unpaid_fines": unpaid_fines,
-            "unpaid_loans": unpaid_loans,
+            "member_id": member_id,
+            "member_name": member_data.get("member_name") or member_id,
+            "total_contributions": flt(total_contributions, 2),
+            "unpaid_contributions": flt(unpaid_contributions, 2),
+            "unpaid_fines": flt(unpaid_fines, 2),
+            "unpaid_loans": flt(unpaid_loans, 2),
+            "net_balance": flt(net_balance, 2),
             "calculated_on": now(),
-            "member_email": member.email or ""
+            "member_email": member_data.get("email") or ""
         }
         
         return statement_data
     except Exception as e:
-        frappe.log_error(f"Error calculating member statement for {member_id}: {str(e)}")
+        frappe.log_error(
+            title="Member Statement Calc",
+            message=f"Error calculating for {member_id}: {str(e)}"
+        )
         raise
+
+
+@frappe.whitelist()
+def get_member_statement_for_report(member_id):
+    """
+    Get member financial statement for reports.
+    This is a READ-ONLY function - purely calculates values from database.
+    Does NOT update any documents.
+    
+    Use this function in reports instead of populate_member_statement.
+    """
+    return calculate_member_statement(member_id)
 
 @frappe.whitelist()
 def populate_member_statement(member_id):
     """
-    Populate member statement with calculated values
+    Populate member statement with calculated values.
+    Uses db_set for ERPNext compliance - does not call .save() on documents.
     """
     try:
-        # Get the member document
-        member_doc = frappe.get_doc("SHG Member", member_id)
-        
-        # Calculate the statement values
+        # Calculate the statement values using SQL (read-only)
         statement_data = calculate_member_statement(member_id)
         
-        # Update the member document with calculated values
-        member_doc.total_contributions = statement_data.get('total_contributions', 0)
-        member_doc.unpaid_contributions = statement_data.get('unpaid_contributions', 0)
-        member_doc.unpaid_fines = statement_data.get('unpaid_fines', 0)
-        member_doc.current_loan_balance = statement_data.get('unpaid_loans', 0)
-        
         # Calculate net balance
-        net_balance = (statement_data.get('unpaid_contributions', 0) + 
-                      statement_data.get('unpaid_fines', 0) + 
-                      statement_data.get('unpaid_loans', 0) - 
-                      statement_data.get('total_contributions', 0))
-        member_doc.net_balance = net_balance
+        net_balance = (
+            flt(statement_data.get('unpaid_contributions', 0)) + 
+            flt(statement_data.get('unpaid_fines', 0)) + 
+            flt(statement_data.get('unpaid_loans', 0)) - 
+            flt(statement_data.get('total_contributions', 0))
+        )
         
-        # Update timestamp
-        member_doc.statement_updated_on = now()
+        # Use db_set to update member document (ERPNext compliant - no .save())
+        update_values = {
+            "total_contributions": flt(statement_data.get('total_contributions', 0), 2),
+            "unpaid_contributions": flt(statement_data.get('unpaid_contributions', 0), 2),
+            "unpaid_fines": flt(statement_data.get('unpaid_fines', 0), 2),
+            "current_loan_balance": flt(statement_data.get('unpaid_loans', 0), 2),
+            "net_balance": flt(net_balance, 2),
+            "statement_updated_on": now()
+        }
         
-        # Save the document
-        member_doc.save(ignore_permissions=True)
+        frappe.db.set_value("SHG Member", member_id, update_values, update_modified=False)
+        
+        # Get member name for response
+        member_name = frappe.db.get_value("SHG Member", member_id, "member_name") or member_id
         
         return {
             "status": "success",
-            "message": f"Member statement updated for {member_doc.member_name or member_id}"
+            "message": f"Member statement updated for {member_name}",
+            "data": statement_data
         }
     except Exception as e:
-        frappe.log_error(f"Error populating member statement for {member_id}: {str(e)}")
+        frappe.log_error(
+            title="Member Statement Update",
+            message=f"Error updating member {member_id}: {str(e)}\n{frappe.get_traceback()}"
+        )
         return {
             "status": "error",
             "message": str(e)
