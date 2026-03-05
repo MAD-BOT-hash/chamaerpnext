@@ -185,25 +185,37 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment Item', {
                     loan_name: row.loan
                 },
                 callback: function(r) {
-                    if (r.message !== undefined && r.message !== null) {
-                        var balance = flt(r.message);
-                        frappe.model.set_value(cdt, cdn, 'loan_balance', balance);
-                        
-                        // Set repayment amount to loan balance by default
-                        frappe.model.set_value(cdt, cdn, 'repayment_amount', balance);
-                    } else {
-                        // Fallback: try to calculate from outstanding amounts
+                    var balance = flt(r.message || 0);
+                    
+                    // If balance is 0, try getting from loan document directly
+                    if (balance <= 0) {
                         frappe.call({
-                            method: "shg.loan_repayment_api.get_outstanding_amount",
-                            args: { loan: row.loan },
-                            callback: function(out_r) {
-                                if (out_r.message && out_r.message.success) {
-                                    var balance = flt(out_r.message.data);
-                                    frappe.model.set_value(cdt, cdn, 'loan_balance', balance);
-                                    frappe.model.set_value(cdt, cdn, 'repayment_amount', balance);
+                            method: "frappe.client.get_value",
+                            args: {
+                                doctype: "SHG Loan",
+                                fieldname: ["loan_amount", "total_repaid", "balance_amount"],
+                                filters: { name: row.loan }
+                            },
+                            callback: function(loan_r) {
+                                if (loan_r.message) {
+                                    // Try balance_amount first
+                                    if (flt(loan_r.message.balance_amount) > 0) {
+                                        balance = flt(loan_r.message.balance_amount);
+                                    } else {
+                                        // Calculate from loan_amount - total_repaid
+                                        balance = flt(loan_r.message.loan_amount) - flt(loan_r.message.total_repaid || 0);
+                                    }
+                                    
+                                    if (balance > 0) {
+                                        frappe.model.set_value(cdt, cdn, 'loan_balance', balance);
+                                        frappe.model.set_value(cdt, cdn, 'repayment_amount', balance);
+                                    }
                                 }
                             }
                         });
+                    } else {
+                        frappe.model.set_value(cdt, cdn, 'loan_balance', balance);
+                        frappe.model.set_value(cdt, cdn, 'repayment_amount', balance);
                     }
                 }
             });

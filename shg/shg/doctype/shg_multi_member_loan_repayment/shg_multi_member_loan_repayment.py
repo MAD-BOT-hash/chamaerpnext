@@ -28,10 +28,27 @@ class SHGMultiMemberLoanRepayment(Document):
         from shg.shg.doctype.shg_loan.shg_loan import get_loan_balance
         
         for row in self.loans:
-            # Auto-populate loan_balance if loan is set but balance is missing
-            if row.loan and not row.loan_balance:
+            # Auto-populate loan_balance if loan is set but balance is missing or zero
+            if row.loan and (not row.loan_balance or flt(row.loan_balance) <= 0):
                 try:
+                    # First try: get from repayment schedule
                     balance = get_loan_balance(row.loan)
+                    
+                    # Second try: if schedule balance is 0, get loan_amount minus total_repaid
+                    if flt(balance) <= 0:
+                        loan_data = frappe.db.get_value(
+                            "SHG Loan", row.loan, 
+                            ["loan_amount", "total_repaid", "balance_amount"],
+                            as_dict=True
+                        )
+                        if loan_data:
+                            # Try balance_amount first
+                            if flt(loan_data.balance_amount) > 0:
+                                balance = flt(loan_data.balance_amount)
+                            else:
+                                # Calculate from loan_amount - total_repaid
+                                balance = flt(loan_data.loan_amount) - flt(loan_data.total_repaid or 0)
+                    
                     row.loan_balance = flt(balance, 2)
                 except Exception:
                     pass
@@ -143,7 +160,13 @@ class SHGMultiMemberLoanRepayment(Document):
             
             # Validate Loan Balance
             if not row.loan_balance or flt(row.loan_balance) <= 0:
-                frappe.throw(_("Row {0}: Loan Balance must be greater than zero").format(row.idx))
+                # Try to provide helpful message
+                loan_name = row.loan or "Unknown"
+                frappe.throw(_(
+                    "Row {0}: Loan Balance must be greater than zero. "
+                    "Loan '{1}' may not have a repayment schedule or outstanding balance. "
+                    "Please verify the loan is disbursed and has a repayment schedule."
+                ).format(row.idx, loan_name))
             
             # Validate Repayment Amount
             if not row.repayment_amount or flt(row.repayment_amount) <= 0:
