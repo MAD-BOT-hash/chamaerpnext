@@ -120,7 +120,7 @@
    "fieldname": "processing_status",
    "fieldtype": "Select",
    "label": "Processing Status",
-   "options": "Draft\nProcessing\nProcessed\nPartially Processed\nFailed",
+   "options": "Draft\nProcessing\nProcessed\nPartially Processed\nFailed\nCancelled",
    "read_only": 1,
    "reqd": 1,
    "default": "Draft",

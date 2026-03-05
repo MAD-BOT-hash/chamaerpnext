@@ -42,7 +42,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Reference Type",
-   "options": "SHG Contribution Invoice\nSHG Contribution\nSHG Meeting Fine",
+   "options": "SHG Contribution Invoice\nSHG Contribution\nSHG Meeting Fine\nSHG Loan Repayment Schedule",
    "reqd": 1
   },
   {
@@ -89,7 +89,7 @@
    "fieldname": "processing_status",
    "fieldtype": "Select",
    "label": "Processing Status",
-   "options": "Pending\nProcessing\nProcessed\nPartially Processed\nFailed",
+   "options": "Pending\nProcessing\nProcessed\nPartially Processed\nFailed\nReversed",
    "read_only": 1,
    "default": "Pending",
    "allow_on_submit": 1

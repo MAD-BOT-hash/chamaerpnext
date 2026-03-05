@@ -107,19 +107,23 @@ def calculate_total_contributions(member_id):
 def calculate_unpaid_contributions(member_id):
     """Calculate unpaid contributions for a member"""
     try:
-        # Sum of all unpaid contributions
-        total_unpaid = frappe.db.sql("""
-            SELECT SUM(outstanding_amount) as total
+        # Canonical payable statuses
+        PAYABLE_STATUSES = ('Unpaid', 'Pending', 'Partially Paid', 'Overdue')
+        status_placeholders = ', '.join(['%s'] * len(PAYABLE_STATUSES))
+        
+        # Sum of all unpaid contributions from invoices
+        total_unpaid = frappe.db.sql(f"""
+            SELECT SUM(COALESCE(outstanding_amount, total_amount)) as total
             FROM `tabSHG Contribution Invoice`
-            WHERE member = %s AND docstatus = 1 AND status = 'Unpaid'
-        """, (member_id,), as_dict=True)[0].total or 0.0
+            WHERE member = %s AND docstatus = 1 AND status IN ({status_placeholders})
+        """, (member_id,) + PAYABLE_STATUSES, as_dict=True)[0].total or 0.0
         
         # Also check SHG Contribution records
-        contribution_unpaid = frappe.db.sql("""
-            SELECT SUM(total_amount) as total
+        contribution_unpaid = frappe.db.sql(f"""
+            SELECT SUM(COALESCE(unpaid_amount, total_amount)) as total
             FROM `tabSHG Contribution`
-            WHERE member = %s AND docstatus = 1 AND status = 'Unpaid'
-        """, (member_id,), as_dict=True)[0].total or 0.0
+            WHERE member = %s AND docstatus = 1 AND status IN ({status_placeholders})
+        """, (member_id,) + PAYABLE_STATUSES, as_dict=True)[0].total or 0.0
         
         return flt(total_unpaid) + flt(contribution_unpaid)
     except Exception:
@@ -128,26 +132,44 @@ def calculate_unpaid_contributions(member_id):
 def calculate_unpaid_fines(member_id):
     """Calculate unpaid fines for a member"""
     try:
+        # Canonical payable statuses for fines
+        PAYABLE_STATUSES = ('Pending', 'Partially Paid')
+        status_placeholders = ', '.join(['%s'] * len(PAYABLE_STATUSES))
+        
         # Sum of all unpaid fines
-        total_fines = frappe.db.sql("""
-            SELECT SUM(amount) as total
+        total_fines = frappe.db.sql(f"""
+            SELECT SUM(COALESCE(outstanding_amount, fine_amount)) as total
             FROM `tabSHG Meeting Fine`
-            WHERE member = %s AND docstatus = 1 AND status = 'Unpaid'
-        """, (member_id,), as_dict=True)[0].total or 0.0
+            WHERE member = %s AND docstatus = 1 AND status IN ({status_placeholders})
+        """, (member_id,) + PAYABLE_STATUSES, as_dict=True)[0].total or 0.0
         
         return flt(total_fines)
     except Exception:
         return 0.0
 
 def calculate_unpaid_loans(member_id):
-    """Calculate unpaid loans for a member"""
+    """Calculate unpaid loans for a member including installments"""
     try:
-        # Sum of all outstanding loan balances
+        # Sum of all outstanding loan balances (overall loan balance)
         total_loans = frappe.db.sql("""
             SELECT SUM(loan_balance) as total
             FROM `tabSHG Loan`
             WHERE member = %s AND docstatus = 1 AND status IN ('Disbursed', 'Partially Paid')
         """, (member_id,), as_dict=True)[0].total or 0.0
+        
+        # If no loan balance, check outstanding installments
+        if not total_loans:
+            # Get sum of unpaid installments from loan repayment schedules
+            installment_balance = frappe.db.sql("""
+                SELECT SUM(COALESCE(rs.outstanding_amount, rs.total_amount)) as total
+                FROM `tabSHG Loan Repayment Schedule` rs
+                JOIN `tabSHG Loan` l ON rs.parent = l.name
+                WHERE l.member = %s 
+                AND l.docstatus = 1 
+                AND rs.status IN ('Unpaid', 'Pending', 'Partially Paid', 'Overdue')
+            """, (member_id,), as_dict=True)[0].total or 0.0
+            
+            return flt(installment_balance)
         
         return flt(total_loans)
     except Exception:

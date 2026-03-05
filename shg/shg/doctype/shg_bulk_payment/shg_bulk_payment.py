@@ -245,6 +245,242 @@ class SHGBulkPayment(Document):
         # Process the payment (this will update the status internally)
         self.process_bulk_payment()
     
+    def on_cancel(self):
+        """
+        Reverse bulk payment on cancellation.
+        - Reverse status of all allocated items back to Unpaid/Pending
+        - Update member statements to reflect the reversal
+        """
+        self._reverse_allocations()
+        self._update_member_statements_on_cancel()
+        
+        # Update processing status
+        frappe.db.set_value(
+            "SHG Bulk Payment",
+            self.name,
+            "processing_status",
+            "Cancelled",
+            update_modified=False
+        )
+        
+        frappe.msgprint(
+            _("Bulk payment cancelled. All allocations have been reversed."),
+            alert=True,
+            indicator="orange"
+        )
+    
+    def _reverse_allocations(self):
+        """
+        Reverse all payment allocations back to unpaid status.
+        """
+        reversed_count = 0
+        errors = []
+        
+        for allocation in self.allocations:
+            if not allocation.is_processed:
+                continue
+                
+            try:
+                self._reverse_single_allocation(allocation)
+                reversed_count += 1
+            except Exception as e:
+                errors.append(f"{allocation.reference_name}: {str(e)}")
+                frappe.log_error(
+                    f"Failed to reverse allocation {allocation.reference_name}: {str(e)}",
+                    "Bulk Payment: Reverse Allocation Failed"
+                )
+        
+        if errors:
+            frappe.msgprint(
+                _("Some allocations could not be reversed: {0}").format(", ".join(errors[:5])),
+                indicator="red"
+            )
+        
+        if reversed_count > 0:
+            frappe.msgprint(
+                _("Reversed {0} allocation(s)").format(reversed_count),
+                alert=True
+            )
+    
+    def _reverse_single_allocation(self, allocation):
+        """
+        Reverse a single allocation back to unpaid status.
+        
+        Args:
+            allocation: SHG Bulk Payment Allocation row
+        """
+        doctype = allocation.reference_doctype
+        docname = allocation.reference_name
+        allocated_amount = allocation.allocated_amount
+        
+        try:
+            doc = frappe.get_doc(doctype, docname)
+            
+            # Handle based on doctype
+            if doctype == "SHG Loan Repayment Schedule":
+                self._reverse_loan_installment(doc, allocated_amount)
+            else:
+                self._reverse_standard_allocation(doc, doctype, allocated_amount)
+            
+            # Update allocation status
+            frappe.db.set_value(
+                "SHG Bulk Payment Allocation",
+                allocation.name,
+                {
+                    "processing_status": "Reversed",
+                    "is_processed": 0,
+                    "remarks": f"Reversed on {frappe.utils.now()}"
+                },
+                update_modified=False
+            )
+            
+        except Exception as e:
+            raise Exception(f"Failed to reverse {doctype} {docname}: {str(e)}")
+    
+    def _reverse_standard_allocation(self, doc, doctype, allocated_amount):
+        """
+        Reverse allocation for standard doctypes (Contribution Invoice, Contribution, Fine).
+        """
+        # Determine field names based on doctype
+        if doctype == "SHG Contribution":
+            paid_field = "amount_paid"
+            outstanding_field = "unpaid_amount"
+        else:
+            paid_field = "paid_amount"
+            outstanding_field = "outstanding_amount"
+        
+        # Get current values
+        current_paid = flt(getattr(doc, paid_field, 0) or 0)
+        current_outstanding = flt(getattr(doc, outstanding_field, 0) or 0)
+        
+        # Reverse the payment
+        new_paid = max(0, current_paid - allocated_amount)
+        new_outstanding = current_outstanding + allocated_amount
+        
+        # Determine new status
+        if new_paid <= 0:
+            new_status = "Pending" if doctype == "SHG Meeting Fine" else "Unpaid"
+        else:
+            new_status = "Partially Paid"
+        
+        # Update document
+        update_values = {
+            paid_field: new_paid,
+            outstanding_field: new_outstanding,
+            "status": new_status
+        }
+        
+        # Clear payment entry reference if fully reversed
+        if new_paid <= 0 and hasattr(doc, 'payment_entry'):
+            update_values["payment_entry"] = None
+        
+        frappe.db.set_value(doctype, doc.name, update_values, update_modified=False)
+    
+    def _reverse_loan_installment(self, schedule_row, allocated_amount):
+        """
+        Reverse allocation for loan repayment schedule installment.
+        """
+        # Get current values
+        current_paid = flt(schedule_row.actual_amount_paid or 0)
+        total_amount = flt(schedule_row.total_amount or 0)
+        
+        # Reverse the payment
+        new_paid = max(0, current_paid - allocated_amount)
+        new_outstanding = total_amount - new_paid
+        
+        # Determine new status
+        if new_paid <= 0:
+            new_status = "Unpaid"
+        elif new_paid < total_amount:
+            new_status = "Partially Paid"
+        else:
+            new_status = "Paid"
+        
+        # Update schedule row
+        frappe.db.set_value(
+            "SHG Loan Repayment Schedule",
+            schedule_row.name,
+            {
+                "actual_amount_paid": new_paid,
+                "outstanding_amount": new_outstanding,
+                "status": new_status,
+                "payment_entry": None if new_paid <= 0 else schedule_row.payment_entry
+            },
+            update_modified=False
+        )
+        
+        # Update parent loan balance
+        self._update_parent_loan_on_reversal(schedule_row)
+    
+    def _update_parent_loan_on_reversal(self, schedule_row):
+        """Update parent loan document after installment reversal."""
+        try:
+            if not schedule_row.parent:
+                return
+            
+            # Recalculate total outstanding from all installments
+            total_outstanding = frappe.db.sql("""
+                SELECT SUM(COALESCE(outstanding_amount, total_amount - COALESCE(actual_amount_paid, 0))) as total
+                FROM `tabSHG Loan Repayment Schedule`
+                WHERE parent = %s
+            """, (schedule_row.parent,), as_dict=True)[0].total or 0.0
+            
+            # Determine loan status
+            if total_outstanding <= 0:
+                loan_status = "Fully Paid"
+            else:
+                # Check if any payments made
+                total_paid = frappe.db.sql("""
+                    SELECT SUM(COALESCE(actual_amount_paid, 0)) as total
+                    FROM `tabSHG Loan Repayment Schedule`
+                    WHERE parent = %s
+                """, (schedule_row.parent,), as_dict=True)[0].total or 0.0
+                
+                loan_status = "Partially Paid" if total_paid > 0 else "Disbursed"
+            
+            frappe.db.set_value(
+                "SHG Loan",
+                schedule_row.parent,
+                {
+                    "loan_balance": flt(total_outstanding),
+                    "status": loan_status
+                },
+                update_modified=False
+            )
+        except Exception as e:
+            frappe.log_error(
+                f"Failed to update parent loan {schedule_row.parent}: {str(e)}",
+                "Bulk Payment: Parent Loan Update Failed"
+            )
+    
+    def _update_member_statements_on_cancel(self):
+        """
+        Update financial statements for all members after cancellation.
+        """
+        # Collect unique members from allocations
+        members = set()
+        for allocation in self.allocations:
+            if allocation.member:
+                members.add(allocation.member)
+        
+        updated_count = 0
+        for member in members:
+            try:
+                self._update_single_member_statement(member)
+                updated_count += 1
+            except Exception as e:
+                frappe.log_error(
+                    f"Failed to update member statement for {member} on cancel: {str(e)}",
+                    "Bulk Payment Cancel: Member Statement Update Failed"
+                )
+        
+        if updated_count > 0:
+            frappe.msgprint(
+                _("Updated financial statements for {0} member(s) after cancellation").format(updated_count),
+                alert=True,
+                indicator="blue"
+            )
+    
     def process_bulk_payment(self):
         """Process the bulk payment using service layer"""
         try:
@@ -258,6 +494,9 @@ class SHGBulkPayment(Document):
             
             # The service layer will have updated the database directly
             # No need to update self here as document is already submitted
+            
+            # Explicitly update member statements for all affected members
+            self._update_member_statements_on_submit()
             
             frappe.msgprint(
                 _("Bulk payment processed successfully. Payment Entry: {0}").format(result["payment_entry"]),
@@ -282,6 +521,60 @@ class SHGBulkPayment(Document):
             )
             
             frappe.throw(_("Bulk payment processing failed: {0}").format(str(e)))
+    
+    def _update_member_statements_on_submit(self):
+        """
+        Update financial statements for all members in this bulk payment.
+        Called after successful bulk payment processing.
+        """
+        # Collect unique members from allocations
+        members = set()
+        for allocation in self.allocations:
+            if allocation.member:
+                members.add(allocation.member)
+        
+        updated_count = 0
+        for member in members:
+            try:
+                self._update_single_member_statement(member)
+                updated_count += 1
+            except Exception as e:
+                frappe.log_error(
+                    f"Failed to update member statement for {member}: {str(e)}",
+                    "Bulk Payment: Member Statement Update Failed"
+                )
+        
+        if updated_count > 0:
+            frappe.msgprint(
+                _("Updated financial statements for {0} member(s)").format(updated_count),
+                alert=True,
+                indicator="green"
+            )
+    
+    def _update_single_member_statement(self, member: str):
+        """
+        Update financial statement for a single member.
+        
+        Args:
+            member: Member ID
+        """
+        try:
+            # Try using the member statement utility
+            from shg.shg.utils.member_statement_utils import populate_member_statement
+            populate_member_statement(member)
+        except ImportError:
+            # Fallback: update member document directly
+            try:
+                member_doc = frappe.get_doc("SHG Member", member)
+                if hasattr(member_doc, 'update_financial_summary'):
+                    member_doc.update_financial_summary()
+                elif hasattr(member_doc, 'update_member_statement'):
+                    member_doc.update_member_statement()
+            except Exception as e:
+                frappe.log_error(
+                    f"Fallback member update failed for {member}: {str(e)}",
+                    "Bulk Payment: Member Update Fallback Failed"
+                )
     
     @frappe.whitelist()
     def auto_allocate_by_oldest_due_date(self):
