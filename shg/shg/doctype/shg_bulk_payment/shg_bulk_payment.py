@@ -375,6 +375,65 @@ class SHGBulkPayment(Document):
             update_values["payment_entry"] = None
         
         frappe.db.set_value(doctype, doc.name, update_values, update_modified=False)
+        
+        # If this is a Contribution Invoice, also reverse the linked Contribution
+        if doctype == "SHG Contribution Invoice":
+            self._reverse_linked_contribution(doc, allocated_amount)
+    
+    def _reverse_linked_contribution(self, invoice_doc, allocated_amount):
+        """
+        Reverse the linked SHG Contribution when a Contribution Invoice is reversed.
+        
+        Args:
+            invoice_doc: SHG Contribution Invoice document
+            allocated_amount: Amount to reverse
+        """
+        linked_contribution = getattr(invoice_doc, 'linked_shg_contribution', None)
+        if not linked_contribution:
+            return
+        
+        try:
+            contribution = frappe.get_doc("SHG Contribution", linked_contribution)
+            
+            # Get current values
+            total_amount = flt(contribution.total_amount or 0)
+            current_paid = flt(getattr(contribution, 'amount_paid', 0) or 0)
+            
+            # Reverse the payment
+            new_paid = max(0, current_paid - allocated_amount)
+            new_unpaid = total_amount - new_paid
+            
+            # Determine new status
+            if new_paid <= 0:
+                new_status = "Unpaid"
+            elif new_paid < total_amount:
+                new_status = "Partially Paid"
+            else:
+                new_status = "Paid"
+            
+            # Update the contribution
+            update_values = {
+                "amount_paid": flt(new_paid, 2),
+                "unpaid_amount": flt(new_unpaid, 2),
+                "status": new_status
+            }
+            
+            # Clear payment entry if fully reversed
+            if new_paid <= 0:
+                update_values["payment_entry"] = None
+            
+            frappe.db.set_value(
+                "SHG Contribution",
+                linked_contribution,
+                update_values,
+                update_modified=False
+            )
+            
+        except Exception as e:
+            frappe.log_error(
+                f"Failed to reverse linked contribution {linked_contribution}: {str(e)}",
+                "Bulk Payment Cancel: Linked Contribution Reversal Failed"
+            )
     
     def _reverse_loan_installment(self, schedule_row, allocated_amount):
         """

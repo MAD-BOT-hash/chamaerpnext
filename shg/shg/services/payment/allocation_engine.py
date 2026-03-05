@@ -387,6 +387,10 @@ class AllocationEngine:
         if doctype == "SHG Loan Repayment Schedule":
             self._update_parent_loan(doc)
         
+        # Handle Contribution Invoice - sync linked contribution
+        if doctype == "SHG Contribution Invoice":
+            self._sync_linked_contribution(doc, allocation_amount, payment_entry_name)
+        
         # Build result
         result = {
             "doctype": doctype,
@@ -583,6 +587,86 @@ class AllocationEngine:
                     f"Failed to update loan summary for {schedule_row.parent}: {str(e)}",
                     "AllocationEngine: Loan Update Failed"
                 )
+    
+    def _sync_linked_contribution(
+        self,
+        invoice_doc: Document,
+        allocated_amount: float,
+        payment_entry_name: Optional[str] = None
+    ):
+        """
+        Sync payment status to the linked SHG Contribution when an invoice is paid.
+        
+        When SHG Contribution Invoice is paid via bulk payment:
+        1. Update the linked SHG Contribution's paid/unpaid amounts
+        2. Update the linked SHG Contribution's status
+        3. Track member for statement update
+        
+        Args:
+            invoice_doc: SHG Contribution Invoice document
+            allocated_amount: Amount allocated to the invoice
+            payment_entry_name: Optional Payment Entry reference
+        """
+        # Check if invoice has a linked contribution
+        linked_contribution = getattr(invoice_doc, 'linked_shg_contribution', None)
+        if not linked_contribution:
+            return
+        
+        try:
+            # Get the linked contribution document
+            contribution = frappe.get_doc("SHG Contribution", linked_contribution)
+            
+            # Get current values from contribution
+            total_amount = flt(contribution.total_amount or 0)
+            current_paid = flt(getattr(contribution, 'amount_paid', 0) or 0)
+            
+            # Calculate new values
+            new_paid = min(current_paid + allocated_amount, total_amount)
+            new_unpaid = max(total_amount - new_paid, 0)
+            
+            # Determine new status
+            if new_unpaid <= 0:
+                new_status = STATUS_PAID
+            elif new_paid > 0:
+                new_status = STATUS_PARTIALLY_PAID
+            else:
+                new_status = getattr(contribution, 'status', STATUS_UNPAID)
+            
+            # Update the contribution document
+            update_values = {
+                "amount_paid": flt(new_paid, 2),
+                "unpaid_amount": flt(new_unpaid, 2),
+                "status": new_status
+            }
+            
+            # Link payment entry if provided
+            if payment_entry_name:
+                update_values["payment_entry"] = payment_entry_name
+            
+            frappe.db.set_value(
+                "SHG Contribution",
+                linked_contribution,
+                update_values,
+                update_modified=False
+            )
+            
+            # Log the sync
+            frappe.log_error(
+                f"Synced Contribution Invoice {invoice_doc.name} → Contribution {linked_contribution}: "
+                f"Paid {allocated_amount}, New Status: {new_status}",
+                "AllocationEngine: Contribution Sync Success"
+            )
+            
+            # Track member for statement update
+            if hasattr(contribution, 'member') and contribution.member:
+                self._member_updates.add(contribution.member)
+                
+        except Exception as e:
+            frappe.log_error(
+                f"Failed to sync linked contribution {linked_contribution} "
+                f"for invoice {invoice_doc.name}: {str(e)}",
+                "AllocationEngine: Contribution Sync Failed"
+            )
     
     def update_member_statements(self):
         """
