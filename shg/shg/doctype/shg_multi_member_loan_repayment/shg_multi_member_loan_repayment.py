@@ -180,9 +180,15 @@ class SHGMultiMemberLoanRepayment(Document):
         """Validate all blocking conditions"""
         for row in self.loans:
             if row.loan:
-                # Check if member is active
+                # Check if member is active (with safe field access)
                 if row.member:
-                    member_status = frappe.db.get_value("SHG Member", row.member, "status")
+                    member_status = None
+                    if frappe.db.has_column("SHG Member", "status"):
+                        member_status = frappe.db.get_value("SHG Member", row.member, "status")
+                    elif frappe.db.has_column("SHG Member", "member_status"):
+                        member_status = frappe.db.get_value("SHG Member", row.member, "member_status")
+                    # If no status field exists, skip status check (allow processing)
+                    
                     if member_status and member_status != "Active":
                         frappe.throw(_("Row {0}: Member {1} is inactive and cannot post repayments").format(row.idx, row.member))
                 
