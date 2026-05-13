@@ -199,7 +199,9 @@ class SHGMultiMemberPayment(Document):
             if row.reference_doctype and row.reference_name:
                 # Check if member is active
                 if row.member:
-                    member_status = frappe.db.get_value("SHG Member", row.member, "status")
+                    if not frappe.db.exists("SHG Member", row.member):
+                        frappe.throw(_("Row {0}: Member {1} does not exist").format(row.idx, row.member))
+                    member_status = frappe.db.get_value("SHG Member", row.member, "membership_status")
                     if member_status and member_status != "Active":
                         frappe.throw(_("Row {0}: Member {1} is not active").format(row.idx, row.member))
                 
@@ -366,14 +368,11 @@ Remaining after payment: {3}""").format(
     
     @frappe.whitelist()
     def recalculate_totals(self):
-        """Recalculate totals"""
+        """Recalculate totals in-memory only - no save to avoid recursive cycle"""
         self.calculate_totals()
         self.validate_totals()
         
-        # Save the doc
-        self.save(ignore_permissions=True)
-        
-        # Return updated numbers as dict
+        # Return updated numbers as dict without saving
         return {
             "total_outstanding_before": self.total_outstanding_before,
             "total_payment_amount": self.total_payment_amount,

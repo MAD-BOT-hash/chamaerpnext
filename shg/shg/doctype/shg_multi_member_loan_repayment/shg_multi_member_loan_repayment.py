@@ -143,7 +143,9 @@ class SHGMultiMemberLoanRepayment(Document):
             if row.loan:
                 # Check if member is active
                 if row.member:
-                    member_status = frappe.db.get_value("SHG Member", row.member, "status")
+                    if not frappe.db.exists("SHG Member", row.member):
+                        frappe.throw(_("Row {0}: Member {1} does not exist").format(row.idx, row.member))
+                    member_status = frappe.db.get_value("SHG Member", row.member, "membership_status")
                     if member_status and member_status != "Active":
                         frappe.throw(_("Row {0}: Member {1} is inactive and cannot post repayments").format(row.idx, row.member))
                 
