@@ -258,7 +258,7 @@ class SHGMultiMemberLoanRepayment(Document):
 
     @frappe.whitelist()
     def recalculate_totals(self):
-        """Recalculate totals"""
+        """Recalculate totals in-memory only - no save to avoid recursive cycle"""
         total_repayment = 0.0
         total_loans = 0
         
@@ -271,10 +271,7 @@ class SHGMultiMemberLoanRepayment(Document):
         self.total_repayment_amount = total_repayment
         self.total_selected_loans = total_loans
         
-        # Save the doc
-        self.save(ignore_permissions=True)
-        
-        # Return updated numbers as dict
+        # Return updated numbers as dict without saving
         return {
             "total_repayment_amount": self.total_repayment_amount,
             "total_selected_loans": self.total_selected_loans
