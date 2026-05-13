@@ -173,12 +173,12 @@ class SHGMultiMemberPayment(Document):
         
         for row in self.invoices:
             if row.reference_doctype and row.reference_name:
-                # Check currency matching (assuming invoices have currency field)
-                # This would need to be customized based on your actual invoice doctypes
-                invoice_currency = frappe.db.get_value(row.reference_doctype, row.reference_name, "currency")
-                if invoice_currency and self.currency and invoice_currency != self.currency:
-                    frappe.throw(_("Row {0}: Invoice currency {1} does not match payment currency {2}").format(
-                        row.idx, invoice_currency, self.currency))
+                # Check currency matching only if currency field exists
+                if frappe.db.has_column(row.reference_doctype, "currency"):
+                    invoice_currency = frappe.db.get_value(row.reference_doctype, row.reference_name, "currency")
+                    if invoice_currency and self.currency and invoice_currency != self.currency:
+                        frappe.throw(_("Row {0}: Invoice currency {1} does not match payment currency {2}").format(
+                            row.idx, invoice_currency, self.currency))
                 
                 # Check for duplicate invoices in same batch
                 invoice_key = (row.reference_doctype, row.reference_name)
