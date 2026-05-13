@@ -174,15 +174,13 @@ class SHGLoanRepayment(Document):
 
         pe.paid_from = member_account
         pe.paid_from_account_type = "Receivable"
-        pe.paid_from_account_currency = frappe.db.get_value(
-            "Account", member_account, "account_currency"
-        )
+        # Single currency KES - no dynamic currency lookup needed
+        pe.paid_from_account_currency = "KES"
 
         pe.paid_to = paid_to
         pe.paid_to_account_type = "Cash"  # good default; ERPNext can adjust if bank
-        pe.paid_to_account_currency = frappe.db.get_value(
-            "Account", paid_to, "account_currency"
-        )
+        # Single currency KES - no dynamic currency lookup needed
+        pe.paid_to_account_currency = "KES"
 
         pe.paid_amount = flt(self.total_paid)
         pe.received_amount = flt(self.total_paid)
