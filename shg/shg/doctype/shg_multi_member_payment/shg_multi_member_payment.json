@@ -76,7 +76,7 @@
    "fieldtype": "Currency",
    "label": "Total Payment Amount",
    "read_only": 1,
-   "reqd": 1
+   "reqd": 0
   },
   {
    "fieldname": "total_remaining_after",
@@ -89,7 +89,7 @@
    "fieldtype": "Int",
    "label": "Total Documents Selected",
    "read_only": 1,
-   "reqd": 1
+   "reqd": 0
   },
   {
    "fieldname": "payment_summary",
@@ -128,7 +128,7 @@
    "fieldtype": "Table",
    "label": "Invoices",
    "options": "SHG Multi Member Payment Invoice",
-   "reqd": 1
+   "reqd": 0
   }
  ],
  "is_submittable": 1,
