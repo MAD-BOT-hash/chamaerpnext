@@ -257,6 +257,10 @@ class SHGContribution(Document):
             # Get customer for the member
             customer = frappe.db.get_value("SHG Member", self.member, "customer")
             
+            # Validate amount before creating journal entry
+            if not self.amount or flt(self.amount) <= 0:
+                frappe.throw(_("Contribution amount must be greater than zero"))
+
             # Create journal entry with proper accounts
             je = frappe.new_doc("Journal Entry")
             je.voucher_type = "Journal Entry"
@@ -269,7 +273,7 @@ class SHGContribution(Document):
                 "account": member_account,
                 "party_type": "Customer",
                 "party": customer,
-                "debit_in_account_currency": self.amount,
+                "debit_in_account_currency": flt(self.amount),
                 "credit_in_account_currency": 0,
                 "company": self.company
             })
@@ -278,7 +282,7 @@ class SHGContribution(Document):
             je.append("accounts", {
                 "account": income_account,
                 "debit_in_account_currency": 0,
-                "credit_in_account_currency": self.amount,
+                "credit_in_account_currency": flt(self.amount),
                 "company": self.company
             })
 
