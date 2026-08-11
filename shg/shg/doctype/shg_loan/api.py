@@ -45,31 +45,40 @@ def refresh_repayment_summary(loan_name: str):
         total_interest += flt(row.interest_component)
         total_paid += flt(row.amount_paid)
 
-        # Use a safer approach instead of hasattr for Server Script compatibility
+        # Check for overdue status and amount
         try:
             status = getattr(row, 'status', None)
-            has_status = status is not None
+            unpaid_balance = getattr(row, 'unpaid_balance', 0)
         except AttributeError:
-            has_status = False
             status = None
-        
-        if has_status and status and status.lower() == "overdue":
-            # Use a safer approach instead of hasattr for Server Script compatibility
-            try:
-                unpaid_balance = getattr(row, 'unpaid_balance', 0)
-                has_unpaid_balance = unpaid_balance is not None
-            except AttributeError:
-                has_unpaid_balance = False
-                unpaid_balance = 0
-            
-            if has_unpaid_balance:
-                overdue_amount += flt(unpaid_balance)
+            unpaid_balance = 0
+         
+        # Only add to overdue if status is overdue AND unpaid_balance is > 0
+        if status and status.lower() == "overdue" and flt(unpaid_balance) > 0:
+            overdue_amount += flt(unpaid_balance)
 
-    loan.total_principal = total_principal
-    loan.total_interest = total_interest
-    loan.total_paid = total_paid
-    loan.overdue_amount = overdue_amount
-    loan.balance_amount = (total_principal + total_interest) - total_paid
+    # Update loan fields using correct field names that exist in doctype
+    try:
+        loan.total_principal_payable = total_principal
+        loan.total_interest_payable = total_interest
+        loan.total_amount_paid = total_paid
+        loan.overdue_amount = overdue_amount
+        loan.outstanding_amount = (total_principal + total_interest) - total_paid
+    except AttributeError as e:
+        frappe.log_error(f"Field assignment error: {str(e)}", "Loan Summary Update Failed")
+        # Don't fail the whole update if some fields don't exist
+        try:
+            loan.total_principal_payable = total_principal
+        except:
+            pass
+        try:
+            loan.total_interest_payable = total_interest
+        except:
+            pass
+        try:
+            loan.total_amount_paid = total_paid
+        except:
+            pass
 
     # Allow updates on submitted loans
     loan.flags.ignore_validate_update_after_submit = True

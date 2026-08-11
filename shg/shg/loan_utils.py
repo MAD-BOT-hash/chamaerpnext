@@ -74,22 +74,33 @@ def update_loan_summary(loan_name):
         
         # Calculate next due date (first unpaid installment)
         next_due_date = None
-        for r in sorted(schedule, key=lambda x: getdate(x.due_date)):
+        valid_schedule = [r for r in schedule if r.due_date is not None]
+        for r in sorted(valid_schedule, key=lambda x: getdate(x.due_date)):
             if r.status not in ("Paid",) and flt(r.unpaid_balance or 0) > 0:
                 next_due_date = r.due_date
                 break
-        
-        # Calculate percentage repaid
+         
+        # Calculate percentage repaid (with division by zero protection)
         percent_repaid = 0
         if total_payable > 0:
             percent_repaid = flt((total_paid / total_payable) * 100, 2)
+        else:
+            percent_repaid = 0  # No payable amount, so 0% repaid
+        
+        # Calculate total interest paid from paid rows only
+        total_interest_paid = 0
+        for r in schedule:
+            if flt(r.amount_paid or 0) > 0:
+                # Sum the interest component from rows that have been paid
+                total_interest_paid += flt(r.interest_component or 0)
+        total_interest_paid = flt(total_interest_paid, 2)
         
         # Update loan document fields
         loan_doc.total_principal_payable = flt(total_principal_payable, 2)
         loan_doc.total_interest_payable = flt(total_interest_payable, 2)
         loan_doc.total_payable_amount = flt(total_payable, 2)
         loan_doc.total_amount_paid = flt(total_paid, 2)
-        loan_doc.total_interest_paid = flt(total_interest_payable - (outstanding_balance - (total_principal_payable - total_paid + total_interest_payable)), 2)  # Simplified calculation
+        loan_doc.total_interest_paid = total_interest_paid
         loan_doc.outstanding_amount = flt(outstanding_balance, 2)
         loan_doc.balance_amount = flt(outstanding_balance, 2)
         loan_doc.loan_balance = flt(outstanding_balance, 2)
