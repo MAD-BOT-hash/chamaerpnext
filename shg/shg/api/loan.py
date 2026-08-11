@@ -8,7 +8,7 @@ from shg.shg.loan_utils import allocate_payment_to_schedule, update_loan_summary
 @frappe.whitelist()
 def get_unpaid_installments(loan):
     rows = get_schedule(loan)
-    return [r for r in rows if (r.get("status") not in ("Paid",) and flt(r.get("remaining_amount") or (flt(r["total_payment"]) - flt(r.get("amount_paid") or 0))) > 0)]
+    return [r for r in rows if (r.get("status") not in ("Paid",) and flt(r.get("remaining_amount") or (flt(r.get("total_payment", 0)) - flt(r.get("amount_paid") or 0))) > 0)]
 
 @frappe.whitelist()
 def post_repayment_allocation(loan, amount):
