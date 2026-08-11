@@ -294,15 +294,26 @@ class SHGLoanRepayment(Document):
         # Find schedule rows that were affected by this repayment
         for row in loan_doc.get("repayment_schedule", []):
             if getattr(row, "repayment_reference", None) == self.name:
-                # Reverse this payment
-                row.amount_paid = flt(row.amount_paid or 0) - flt(self.total_paid or 0)
-                row.unpaid_balance = flt(row.total_payment) - flt(row.amount_paid or 0)
-                if row.unpaid_balance <= 0:
+                # Reverse ONLY the amount paid to THIS row (not the entire repayment)
+                # This row's amount_paid is what we need to reverse, not self.total_paid
+                row.amount_paid = 0
+                row.unpaid_balance = flt(row.total_payment or 0)
+                 
+                # Determine status based on current payment amount and unpaid balance
+                # More robust logic: check unpaid_balance first, then amount_paid
+                if flt(row.unpaid_balance or 0) <= 0:
                     row.status = "Paid"
-                elif row.amount_paid > 0:
+                elif flt(row.amount_paid or 0) > 0:
                     row.status = "Partially Paid"
                 else:
                     row.status = "Pending"
+                 
+                # Validate that amount_paid is never negative
+                if flt(row.amount_paid) < 0:
+                    frappe.log_warning(f"Negative amount_paid detected after reversal: {row.amount_paid}", {"row": row.name})
+                    row.amount_paid = 0
+                 
+                # Clear repayment references
                 row.repayment_reference = None
                 row.actual_payment_date = None
                 row.payment_entry = None
@@ -402,13 +413,32 @@ class SHGLoanRepayment(Document):
 
         # Get settings for penalty calculation
         settings = frappe.get_single("SHG Settings")
-        penalty_rate = flt(getattr(settings, "loan_penalty_rate", 5))  # Default 5%
+        penalty_rate = flt(getattr(settings, "loan_penalty_rate", None) or 5)  # Default 5%
+         
+        # Validate required fields before calculations
+        if not loan_doc.next_due_date:
+            frappe.log_warning("Loan next_due_date is not set", {"loan": loan_doc.name})
+            next_due_date_val = None
+        else:
+            next_due_date_val = getdate(loan_doc.next_due_date)
+         
+        if loan_doc.interest_rate is None or loan_doc.interest_rate == "":
+            frappe.log_warning("Loan interest_rate is not set", {"loan": loan_doc.name})
+            interest_rate = 0
+        else:
+            interest_rate = flt(loan_doc.interest_rate)
+         
+        if not loan_doc.loan_amount or flt(loan_doc.loan_amount) <= 0:
+            frappe.log_warning("Loan amount is invalid", {"loan": loan_doc.name})
+            loan_amount = 0
+        else:
+            loan_amount = flt(loan_doc.loan_amount)
 
         # Calculate penalty if repayment is late
         penalty_amount = 0
-        if loan_doc.next_due_date and getdate(self.repayment_date) > getdate(loan_doc.next_due_date):
+        if next_due_date_val and getdate(self.repayment_date) > next_due_date_val:
             # Calculate days overdue
-            days_overdue = (getdate(self.repayment_date) - getdate(loan_doc.next_due_date)).days
+            days_overdue = (getdate(self.repayment_date) - next_due_date_val).days
             if days_overdue > 0:
                 # Calculate penalty based on outstanding balance and days overdue
                 daily_penalty_rate = penalty_rate / 100 / 30  # Monthly rate converted to daily
@@ -418,13 +448,15 @@ class SHGLoanRepayment(Document):
         interest_amount = 0
         if loan_doc.interest_type == "Flat Rate":
             # For flat rate, interest is calculated on original principal
-            monthly_interest = (flt(loan_doc.loan_amount) * flt(loan_doc.interest_rate) / 100) / 12
-            interest_amount = min(monthly_interest, amount_paid)
+            if loan_amount > 0 and interest_rate > 0:
+                monthly_interest = (loan_amount * interest_rate / 100) / 12
+                interest_amount = min(monthly_interest, amount_paid)
         else:
             # For reducing balance, interest is calculated on current outstanding balance
-            monthly_interest_rate = flt(loan_doc.interest_rate) / 100 / 12
-            interest_amount = outstanding_balance * monthly_interest_rate
-
+            if interest_rate > 0:
+                monthly_interest_rate = interest_rate / 100 / 12
+                interest_amount = outstanding_balance * monthly_interest_rate
+         
         # Cap interest amount to the payment amount
         interest_amount = min(interest_amount, amount_paid)
 

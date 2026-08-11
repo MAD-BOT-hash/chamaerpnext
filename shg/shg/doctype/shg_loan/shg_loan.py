@@ -398,12 +398,29 @@ class SHGLoan(Document):
 
         if not self.loan_amount or flt(self.loan_amount) <= 0:
             frappe.throw(_("Loan Amount must be greater than zero."))
+         
+        # Add validation for maximum loan amount
+        max_loan_amount = frappe.db.get_single_value("SHG Settings", "max_loan_amount")
+        if max_loan_amount and flt(self.loan_amount) > flt(max_loan_amount):
+            frappe.throw(_("Loan Amount {0} exceeds maximum allowed amount {1}.").format(
+                self.loan_amount, max_loan_amount))
 
-        if self.interest_rate is None:
+        if self.interest_rate is None or self.interest_rate == "":
             frappe.throw(_("Interest Rate is required."))
+         
+        # Validate interest rate is between 0 and 100
+        interest_rate = flt(self.interest_rate)
+        if interest_rate < 0:
+            frappe.throw(_("Interest Rate cannot be negative."))
+        if interest_rate > 100:
+            frappe.throw(_("Interest Rate cannot exceed 100%."))
 
         if not self.loan_period_months:
             frappe.throw(_("Loan Period (Months) is required."))
+         
+        # Validate loan period is positive
+        if flt(self.loan_period_months) <= 0:
+            frappe.throw(_("Loan Period must be greater than zero."))
 
         if not getattr(self, "company", None):
             self.company = frappe.db.get_single_value("SHG Settings", "company")
