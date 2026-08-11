@@ -588,17 +588,28 @@ def _create_payment_entry_for_shg(company, mode_of_payment, member, posting_date
     default_bank_account = frappe.db.get_single_value("SHG Settings", "default_bank_account")
     if not default_bank_account:
         abbr = frappe.db.get_value("Company", company, "abbr")
+        if not abbr:
+            frappe.throw(_("Company {0} does not have an abbreviation. Please configure it before processing payments.").format(company))
         default_bank_account = f"Cash - {abbr}"
+        if not frappe.db.exists("Account", default_bank_account):
+            frappe.throw(_("Default cash account '{0}' does not exist. Please set default_bank_account in SHG Settings.").format(default_bank_account))
     
     # Determine accounts based on payment type (Receive)
     if member:
         # For individual member payments
         paid_from = get_or_create_member_receivable(member, company)
+        if not paid_from:
+            frappe.throw(_("Cannot create or find receivable account for member {0}").format(member))
         paid_to = default_bank_account
     else:
         # For bulk payments
         paid_from = default_bank_account
         paid_to = default_bank_account
+    
+    # Validate accounts exist
+    for account in [paid_from, paid_to]:
+        if not frappe.db.exists("Account", account):
+            frappe.throw(_("Account '{0}' does not exist in the chart of accounts.").format(account))
     
     # Create Payment Entry with correct ERPNext fields
     pe = frappe.new_doc("Payment Entry")

@@ -296,8 +296,8 @@ Remaining after payment: {3}""").format(
         """Validate that the posting date is not in a locked period"""
         from shg.shg.utils.posting_locks import validate_posting_date
         
-        # Use the posting date if available, otherwise use today
-        posting_date = self.posting_date or self.payment_date or frappe.utils.today()
+        # Use the payment_date if available, otherwise use today
+        posting_date = self.payment_date or frappe.utils.today()
         
         if posting_date:
             validate_posting_date(posting_date)

@@ -296,7 +296,7 @@ class SHGLoanRepayment(Document):
             if getattr(row, "repayment_reference", None) == self.name:
                 # Reverse this payment
                 row.amount_paid = flt(row.amount_paid or 0) - flt(self.total_paid or 0)
-                row.unpaid_balance = flt(row.total_due or row.total_payment) - flt(row.amount_paid or 0)
+                row.unpaid_balance = flt(row.total_payment) - flt(row.amount_paid or 0)
                 if row.unpaid_balance <= 0:
                     row.status = "Paid"
                 elif row.amount_paid > 0:
