@@ -2,16 +2,10 @@ import frappe
 from frappe.utils import today, getdate, flt
 
 def get_schedule(loan_name):
-    return frappe.get_all(
-        "SHG Loan Repayment Schedule",
-        filters={"parent": loan_name},
-        fields=[
-            "name", "idx", "due_date",
-            "principal_component", "interest_component",
-            "total_payment", "amount_paid", "unpaid_balance", "status"
-        ],
-        order_by="due_date asc, idx asc"
-    )
+    loan_doc = frappe.get_doc("SHG Loan", loan_name)
+    schedule = list(loan_doc.get("repayment_schedule") or [])
+    schedule.sort(key=lambda r: (getdate(r.due_date) if getattr(r, "due_date", None) else getdate(today()), getattr(r, "idx", 0)))
+    return schedule
 
 def compute_totals(schedule_rows):
     total_principal = sum(flt(r.principal_component) for r in schedule_rows)
@@ -43,16 +37,7 @@ def update_loan_summary(loan_name):
         # Get the loan document
         loan_doc = frappe.get_doc("SHG Loan", loan_name)
         
-        # Get repayment schedule rows
-        schedule = frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={"parent": loan_name},
-            fields=[
-                "name", "due_date", "principal_component", "interest_component",
-                "total_payment", "amount_paid", "unpaid_balance", "status"
-            ],
-            order_by="due_date asc"
-        )
+        schedule = get_schedule(loan_name)
         
         # Calculate totals
         total_principal_payable = sum(flt(r.principal_component) for r in schedule)

@@ -147,9 +147,9 @@ def send_monthly_statement_whatsapp(member_name):
                                       "repayment_date": ["like", f"{year}-{current_date.month:02d}%"],
                                       "docstatus": 1
                                   },
-                                  fields=["amount"])
+                                  fields=["total_paid"])
         
-        total_repayments = sum([r.amount for r in repayments])
+        total_repayments = sum([r.total_paid for r in repayments])
         
         # Get member's current loan balance
         member_doc = frappe.get_doc("SHG Member", member_name)

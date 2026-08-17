@@ -6,6 +6,11 @@ from shg.shg.utils.account_helpers import get_or_create_member_receivable
 from shg.shg.utils.schedule_math import generate_reducing_balance_schedule, generate_flat_rate_schedule
 from shg.shg.api.loan import get_unpaid_installments as get_unpaid_rows, post_repayment_allocation as allocate_payment, refresh_repayment_summary
 
+def _get_schedule_rows(loan_doc):
+    rows = list(loan_doc.get("repayment_schedule") or [])
+    rows.sort(key=lambda r: (getdate(r.due_date) if getattr(r, "due_date", None) else getdate(nowdate()), getattr(r, "idx", 0)))
+    return rows
+
 @frappe.whitelist()
 def get_loan_balance(loan_name):
     """
@@ -20,17 +25,10 @@ def get_loan_balance(loan_name):
     """
     try:
         # Get all repayment schedule rows
-        schedule_rows = frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={
-                "parent": loan_name,
-                "parenttype": "SHG Loan"
-            },
-            fields=["unpaid_balance"]
-        )
+        schedule_rows = _get_schedule_rows(frappe.get_doc("SHG Loan", loan_name))
         
         # Sum all unpaid balances
-        total_balance = sum(flt(row.get("unpaid_balance", 0)) for row in schedule_rows)
+        total_balance = sum(flt(getattr(row, "unpaid_balance", 0)) for row in schedule_rows)
         
         return flt(total_balance, 2)
         
@@ -51,14 +49,7 @@ def get_outstanding_balance(loan_name):
     """
     try:
         # Get all repayment schedule rows
-        schedule_rows = frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={
-                "parent": loan_name,
-                "parenttype": "SHG Loan"
-            },
-            fields=["unpaid_balance", "principal_component", "interest_component"]
-        )
+        schedule_rows = _get_schedule_rows(frappe.get_doc("SHG Loan", loan_name))
         
         # Calculate totals
         remaining_principal = 0
@@ -66,9 +57,9 @@ def get_outstanding_balance(loan_name):
         total_outstanding = 0
         
         for row in schedule_rows:
-            remaining_principal += flt(row.get("principal_component", 0))
-            remaining_interest += flt(row.get("interest_component", 0))
-            total_outstanding += flt(row.get("unpaid_balance", 0))
+            remaining_principal += flt(getattr(row, "principal_component", 0))
+            remaining_interest += flt(getattr(row, "interest_component", 0))
+            total_outstanding += flt(getattr(row, "unpaid_balance", 0))
         
         return {
             "remaining_principal": flt(remaining_principal, 2),
@@ -98,14 +89,7 @@ def get_remaining_balance(loan_name):
     """
     try:
         # Get all repayment schedule rows
-        schedule_rows = frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={
-                "parent": loan_name,
-                "parenttype": "SHG Loan"
-            },
-            fields=["unpaid_balance", "principal_component", "interest_component"]
-        )
+        schedule_rows = _get_schedule_rows(frappe.get_doc("SHG Loan", loan_name))
         
         # Calculate totals
         total_balance = 0
@@ -113,9 +97,9 @@ def get_remaining_balance(loan_name):
         interest_balance = 0
         
         for row in schedule_rows:
-            total_balance += flt(row.get("unpaid_balance", 0))
-            principal_balance += flt(row.get("principal_component", 0))
-            interest_balance += flt(row.get("interest_component", 0))
+            total_balance += flt(getattr(row, "unpaid_balance", 0))
+            principal_balance += flt(getattr(row, "principal_component", 0))
+            interest_balance += flt(getattr(row, "interest_component", 0))
         
         return {
             "total_balance": flt(total_balance, 2),
@@ -193,18 +177,13 @@ def debug_loan_balance(loan_name):
         loan_doc = frappe.get_doc("SHG Loan", loan_name)
         
         # Get repayment schedule
-        schedule = frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={"parent": loan_name},
-            fields=["*"],
-            order_by="due_date"
-        )
+        schedule = [row.as_dict() for row in _get_schedule_rows(loan_doc)]
         
         # Get repayments
         repayments = frappe.get_all(
             "SHG Loan Repayment",
-            filters={"parent": loan_name, "docstatus": 1},
-            fields=["*"],
+            filters={"loan": loan_name, "docstatus": 1},
+            fields=["name", "posting_date", "repayment_date", "total_paid", "payment_entry"],
             order_by="posting_date"
         )
         
@@ -445,15 +424,7 @@ class SHGLoan(Document):
                 
         # Ensure repayment schedule is properly loaded
         if self.docstatus == 1 and not self.get("repayment_schedule"):
-            # Try to load from database for submitted loans
-            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
-                                            filters={"parent": self.name, "parenttype": "SHG Loan"},
-                                            fields=["*"])  # Load all fields
-            if schedule_from_db:
-                # Populate the loan document with the schedule
-                self.repayment_schedule = []
-                for row_data in schedule_from_db:
-                    self.append("repayment_schedule", row_data)
+            self.reload()
 
     def update_loan_summary(self):
         """
@@ -466,11 +437,7 @@ class SHGLoan(Document):
         - loan_balance (same as outstanding_balance, principal+interest)
         """
         # Get schedule from child table
-        schedule = self.get("repayment_schedule") or frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={"parent": self.name},
-            fields=["total_payment", "amount_paid", "unpaid_balance", "status", "due_date"]
-        )
+        schedule = self.get("repayment_schedule") or _get_schedule_rows(self)
 
         # Calculate totals from schedule
         total_payable = sum(flt(r.get("total_payment")) for r in schedule)
@@ -503,11 +470,7 @@ class SHGLoan(Document):
         Recalculate loan summary fields based on repayment schedule.
         """
         # Get repayment schedule rows
-        schedule = self.get("repayment_schedule") or frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={"parent": self.name},
-            fields=["principal_component", "interest_component", "amount_paid", "unpaid_balance", "due_date", "status", "total_payment", "installment_no", "name"]
-        )
+        schedule = self.get("repayment_schedule") or _get_schedule_rows(self)
         
         now = frappe.utils.nowdate()
         log_entries = []
@@ -532,7 +495,7 @@ class SHGLoan(Document):
                 r.status = "Overdue"
                 r.unpaid_balance = total_payment
             else:
-                r.status = "Unpaid"
+                r.status = "Pending"
                 r.unpaid_balance = total_payment
                 
             # Log changes
@@ -558,20 +521,20 @@ class SHGLoan(Document):
                     row.unpaid_balance = schedule[i].unpaid_balance
         
         # Calculate totals
-        self.total_principal_payable = sum(flt(r.get("principal_component", 0)) for r in schedule)
-        self.total_interest_payable = sum(flt(r.get("interest_component", 0)) for r in schedule)
+        self.total_principal_payable = sum(flt(getattr(r, "principal_component", 0)) for r in schedule)
+        self.total_interest_payable = sum(flt(getattr(r, "interest_component", 0)) for r in schedule)
         self.total_payable_amount = flt(self.total_principal_payable) + flt(self.total_interest_payable)
-        self.total_amount_paid = sum(flt(r.get("amount_paid", 0)) for r in schedule)
+        self.total_amount_paid = sum(flt(getattr(r, "amount_paid", 0)) for r in schedule)
         self.outstanding_amount = flt(self.total_payable_amount) - flt(self.total_amount_paid)
         
         # Calculate overdue amount
         overdue_amount = 0
         today_date = getdate(nowdate())
         for r in schedule:
-            due_date = getdate(r.get("due_date")) if r.get("due_date") else today_date
+            due_date = getdate(getattr(r, "due_date", None)) if getattr(r, "due_date", None) else today_date
             # Overdue if not paid and due date is in the past
-            if r.get("status") != "Paid" and due_date < today_date and flt(r.get("unpaid_balance", 0)) > 0:
-                overdue_amount += flt(r.get("unpaid_balance", 0))
+            if getattr(r, "status", None) != "Paid" and due_date < today_date and flt(getattr(r, "unpaid_balance", 0)) > 0:
+                overdue_amount += flt(getattr(r, "unpaid_balance", 0))
         self.overdue_amount = flt(overdue_amount, 2)
         
         # Update loan status based on calculations
