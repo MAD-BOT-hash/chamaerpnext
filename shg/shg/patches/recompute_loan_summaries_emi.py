@@ -5,14 +5,14 @@ def execute():
     loans = frappe.get_all("SHG Loan", filters={"docstatus": ["!=", 2]}, pluck="name")
     for ln in loans:
         # Normalize schedule rows (ensure unpaid_balance filled)
-        rows = frappe.get_all("SHG Loan Repayment Schedule", filters={"parent": ln},
-                              fields=["name", "total_payment", "amount_paid", "unpaid_balance", "status"])
+        loan_doc = frappe.get_doc("SHG Loan", ln)
+        rows = loan_doc.get("repayment_schedule") or []
         for r in rows:
             amount_paid = float(r.get("amount_paid") or 0)
             total = float(r.get("total_payment") or 0)
             unpaid = total - amount_paid
             status = "Paid" if unpaid <= 0.00001 else ("Partially Paid" if amount_paid > 0 else "Pending")
-            frappe.db.set_value("SHG Loan Repayment Schedule", r["name"], {
+            frappe.db.set_value("SHG Loan Repayment Schedule", r.name, {
                 "unpaid_balance": max(unpaid, 0),
                 "status": status
             }, update_modified=False)

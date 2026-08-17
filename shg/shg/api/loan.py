@@ -32,18 +32,13 @@ def debug_loan_balance(loan_name):
         loan_doc = frappe.get_doc("SHG Loan", loan_name)
         
         # Get repayment schedule
-        schedule = frappe.get_all(
-            "SHG Loan Repayment Schedule",
-            filters={"parent": loan_name},
-            fields=["*"],
-            order_by="due_date"
-        )
+        schedule = frappe.get_doc("SHG Loan", loan_name).get("repayment_schedule") or []
         
         # Get repayments
         repayments = frappe.get_all(
             "SHG Loan Repayment",
-            filters={"parent": loan_name, "docstatus": 1},
-            fields=["*"],
+            filters={"loan": loan_name, "docstatus": 1},
+            fields=["name", "posting_date", "repayment_date", "total_paid", "payment_entry"],
             order_by="posting_date"
         )
         
@@ -199,22 +194,23 @@ def get_member_loan_statement(member=None, loan_name=None, date_from=None, date_
         else:
             filters["due_date"] = ["<=", date_to]
     
-    schedule = frappe.get_all(
-        "SHG Loan Repayment Schedule",
-        filters=filters,
-        fields=[
-            "installment_no",
-            "due_date",
-            "principal_component as principal_amount",
-            "interest_component as interest_amount",
-            "total_payment",
-            "amount_paid",
-            "unpaid_balance",
-            "status",
-            "actual_payment_date"
-        ],
-        order_by="installment_no asc"
-    )
+    schedule = []
+    for row in loan.get("repayment_schedule") or []:
+        if date_from and row.due_date and getdate(row.due_date) < getdate(date_from):
+            continue
+        if date_to and row.due_date and getdate(row.due_date) > getdate(date_to):
+            continue
+        schedule.append({
+            "installment_no": row.installment_no,
+            "due_date": row.due_date,
+            "principal_amount": getattr(row, "principal_component", None),
+            "interest_amount": getattr(row, "interest_component", None),
+            "total_payment": row.total_payment,
+            "amount_paid": row.amount_paid,
+            "unpaid_balance": row.unpaid_balance,
+            "status": row.status,
+            "actual_payment_date": getattr(row, "actual_payment_date", None),
+        })
     
     summary = {
         "loan_id": loan.name,
