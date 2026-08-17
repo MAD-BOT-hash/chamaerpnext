@@ -56,4 +56,4 @@ def get_outstanding_amount(loan):
         return 0.0
     
     loan_doc = frappe.get_doc("SHG Loan", loan)
-    return loan_doc.total_outstanding_amount or 0.0
+    return loan_doc.loan_balance or loan_doc.balance_amount or 0.0
