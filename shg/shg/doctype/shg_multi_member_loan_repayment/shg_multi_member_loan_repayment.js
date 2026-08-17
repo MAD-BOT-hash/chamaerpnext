@@ -85,6 +85,9 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment', {
                             callback: function(r) {
                                 if (r.message && r.message.success) {
                                     frappe.model.set_value(row.doctype, row.name, 'loan_balance', r.message.data);
+                                    if (!row.repayment_amount || row.repayment_amount <= 0 || row.repayment_amount > r.message.data) {
+                                        frappe.model.set_value(row.doctype, row.name, 'repayment_amount', r.message.data);
+                                    }
                                 }
                             }
                         });
@@ -151,11 +154,15 @@ frappe.ui.form.on('SHG Multi Member Loan Repayment Item', {
                         }
                         
                         // Set loan balance
-                        if (r.message.loan_balance !== undefined) {
-                            frappe.model.set_value(cdt, cdn, 'loan_balance', r.message.loan_balance);
-                            
+                        const current_balance = r.message.loan_balance !== undefined && r.message.loan_balance !== null
+                            ? r.message.loan_balance
+                            : (r.message.balance_amount || 0);
+
+                        if (current_balance !== undefined) {
+                            frappe.model.set_value(cdt, cdn, 'loan_balance', current_balance);
+                             
                             // Set repayment amount to loan balance by default
-                            frappe.model.set_value(cdt, cdn, 'repayment_amount', r.message.loan_balance);
+                            frappe.model.set_value(cdt, cdn, 'repayment_amount', current_balance);
                         }
                         
                         // Set installment due date
