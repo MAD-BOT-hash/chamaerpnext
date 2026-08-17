@@ -9,23 +9,32 @@ LOAN_DT = "SHG Loan"
 
 def _get_schedule_rows(loan_name: str):
     """Fetch ordered schedule rows for a loan from child table."""
-    return frappe.get_all(
-        SCHEDULE_DT,
-        filters={"parent": loan_name, "parenttype": LOAN_DT},
-        fields=[
-            "name",
-            "due_date",
-            "total_payment",
-            "amount_paid",
-            "unpaid_balance",
-            "status",
-            "loan_balance",
-            "actual_payment_date",
-            "payment_date",
-        ],
-        order_by="due_date asc, idx asc",
-        limit_page_length=5000,
-    )
+    loan = frappe.get_doc(LOAN_DT, loan_name)
+    table_field = None
+    for df in loan.meta.fields:
+        if df.fieldtype == "Table" and df.options == SCHEDULE_DT:
+            table_field = df.fieldname
+            break
+
+    if not table_field:
+        table_field = "repayment_schedule"
+
+    rows = []
+    for row in loan.get(table_field) or []:
+        rows.append({
+            "name": row.name,
+            "due_date": row.due_date,
+            "total_payment": row.total_payment,
+            "amount_paid": row.amount_paid,
+            "unpaid_balance": row.unpaid_balance,
+            "status": row.status,
+            "loan_balance": getattr(row, "loan_balance", None),
+            "actual_payment_date": getattr(row, "actual_payment_date", None),
+            "payment_date": getattr(row, "payment_date", None),
+        })
+
+    rows.sort(key=lambda r: (r.get("due_date") or "", r.get("name") or ""))
+    return rows
 
 
 def _compute_from_schedule(loan_doc) -> dict:
