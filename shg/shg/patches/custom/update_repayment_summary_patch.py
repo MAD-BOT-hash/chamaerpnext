@@ -28,15 +28,11 @@ def execute():
 
         def update_repayment_summary(self):
             """Recalculate repayment summary fields from schedule child table."""
-            schedule = self.get("repayment_schedule") or frappe.get_all(
-                "SHG Loan Repayment Schedule",
-                filters={"parent": self.name},
-                fields=["total_payment", "amount_paid", "unpaid_balance", "status"]
-            )
+            schedule = self.get("repayment_schedule") or []
 
-            total_payable = sum(flt(r.get("total_payment")) for r in schedule)
-            total_repaid = sum(flt(r.get("amount_paid")) for r in schedule)
-            overdue_amount = sum(flt(r.get("unpaid_balance")) for r in schedule if r.get("status") == "Overdue")
+            total_payable = sum(flt(getattr(r, "total_payment", 0)) for r in schedule)
+            total_repaid = sum(flt(getattr(r, "amount_paid", 0)) for r in schedule)
+            overdue_amount = sum(flt(getattr(r, "unpaid_balance", 0)) for r in schedule if getattr(r, "status", None) == "Overdue")
             balance = total_payable - total_repaid
 
             frappe.db.set_value(
