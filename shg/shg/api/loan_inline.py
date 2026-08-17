@@ -87,7 +87,7 @@ def post_inline_repayments(loan):
 
         row.amount_paid = float(row.amount_paid or 0) + amt
         new_remaining = _row_remaining(row)
-        row.status = "Paid" if new_remaining <= 1e-9 else "Partly Paid"
+        row.status = "Paid" if new_remaining <= 1e-9 else "Partially Paid"
         row.remaining_amount = new_remaining
 
         # reset inline inputs after posting

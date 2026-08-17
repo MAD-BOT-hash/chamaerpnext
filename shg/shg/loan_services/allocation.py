@@ -260,15 +260,7 @@ def handle_loan_repayment_submission(doc, method=None):
         
         # Ensure repayment schedule is loaded
         if not loan_doc.get("repayment_schedule"):
-            # Load schedule from database
-            schedule_from_db = frappe.get_all("SHG Loan Repayment Schedule", 
-                                            filters={"parent": doc.loan, "parenttype": "SHG Loan"},
-                                            fields=["*"])
-            if schedule_from_db:
-                # Populate the loan document with the schedule
-                loan_doc.repayment_schedule = []
-                for row_data in schedule_from_db:
-                    loan_doc.append("repayment_schedule", row_data)
+            loan_doc.reload()
         
         # Update the loan repayment schedule with the payment
         # This is handled in the SHG Loan Repayment document's on_submit method
