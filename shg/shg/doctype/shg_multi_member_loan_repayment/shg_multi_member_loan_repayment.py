@@ -215,26 +215,22 @@ class SHGMultiMemberLoanRepayment(Document):
 
     def process_bulk_loan_repayments(self):
         """Process all loan repayments in the batch"""
-        from shg.shg.utils.loan_repayment_utils import process_loan_repayment
-        
         for row in self.loans:
             if row.repayment_amount and flt(row.repayment_amount) > 0:
                 # Create loan repayment record
                 loan_repayment = frappe.new_doc("SHG Loan Repayment")
                 loan_repayment.loan = row.loan
                 loan_repayment.member = row.member
+                loan_repayment.member_name = row.member_name
                 loan_repayment.posting_date = self.posting_date
-                loan_repayment.amount = row.repayment_amount
-                loan_repayment.mode_of_payment = self.payment_mode
+                loan_repayment.repayment_date = self.posting_date
+                loan_repayment.total_paid = row.repayment_amount
+                loan_repayment.payment_method = self.payment_mode
                 loan_repayment.company = self.company
                 loan_repayment.multi_member_repayment_batch = self.name
                 loan_repayment.batch_number = self.batch_number
-                
-                # Calculate interest and principal portions (simplified)
-                loan_repayment.principal_amount = row.repayment_amount
-                loan_repayment.interest_amount = 0.0  # Will be calculated by the system
-                
-                loan_repayment.save()
+
+                loan_repayment.insert(ignore_permissions=True)
                 loan_repayment.submit()
                 
                 # Update the status in the child table row
