@@ -4,6 +4,18 @@ from frappe.model.document import Document
 from frappe.utils import flt
 from shg.shg.utils.company_utils import get_default_company
 
+
+def _get_reference_status(doctype, name):
+    if doctype == "SHG Payment Entry":
+        return frappe.db.get_value(doctype, name, "payment_status") or frappe.db.get_value(doctype, name, "status")
+    if doctype == "SHG Loan Repayment":
+        if frappe.db.has_column(doctype, "posted_to_gl") and frappe.db.get_value(doctype, name, "posted_to_gl"):
+            return "Posted"
+        docstatus = frappe.db.get_value(doctype, name, "docstatus")
+        return "Submitted" if docstatus == 1 else "Draft"
+    return frappe.db.get_value(doctype, name, "status")
+
+
 class SHGMultiMemberPayment(Document):
     def before_validate(self):
         """Auto-set company from SHG Settings and handle naming_series"""
@@ -201,7 +213,7 @@ class SHGMultiMemberPayment(Document):
                         frappe.throw(_("Row {0}: Member {1} is not active").format(row.idx, row.member))
                 
                 # Check if invoice is fully paid or cancelled
-                status = frappe.db.get_value(row.reference_doctype, row.reference_name, "status")
+                status = _get_reference_status(row.reference_doctype, row.reference_name)
                 if status in ["Paid", "Cancelled"]:
                     frappe.throw(_("Row {0}: Invoice {1} is {2} and cannot be processed").format(
                         row.idx, row.reference_name, status.lower()))
@@ -229,7 +241,7 @@ class SHGMultiMemberPayment(Document):
         for row in self.invoices:
             if row.reference_doctype and row.reference_name:
                 # Check if document is fully paid
-                status = frappe.db.get_value(row.reference_doctype, row.reference_name, "status")
+                status = _get_reference_status(row.reference_doctype, row.reference_name)
                 if status == "Paid":
                     frappe.logger().info(f"[SHG] Blocked payment for Paid document {row.reference_name}")
                     frappe.throw(_("Document {0} is already Paid and cannot be included in a new payment batch.").format(row.reference_name))

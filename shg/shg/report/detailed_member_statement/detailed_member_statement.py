@@ -305,7 +305,8 @@ def get_repayment_transactions(member, from_date=None, to_date=None):
             COALESCE(repayment_date, posting_date) AS date,
             total_paid,
             loan,
-            status,
+            docstatus,
+            posted_to_gl,
             outstanding_balance,
             balance_after_payment
         FROM `tabSHG Loan Repayment`
@@ -333,7 +334,7 @@ def get_repayment_transactions(member, from_date=None, to_date=None):
             "debit": 0,
             "credit": amount,
             "outstanding": 0,
-            "status": row.get("status") or "Submitted",
+            "status": "Posted" if row.get("posted_to_gl") else ("Submitted" if row.get("docstatus") == 1 else "Draft"),
         })
     return result
 

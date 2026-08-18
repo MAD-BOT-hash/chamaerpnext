@@ -5,6 +5,17 @@ from frappe.utils import flt
 from shg.shg.utils.company_utils import get_default_company
 
 
+def _get_reference_status(doctype, name):
+    if doctype == "SHG Payment Entry":
+        return frappe.db.get_value(doctype, name, "payment_status") or frappe.db.get_value(doctype, name, "status")
+    if doctype == "SHG Loan Repayment":
+        if frappe.db.has_column(doctype, "posted_to_gl") and frappe.db.get_value(doctype, name, "posted_to_gl"):
+            return "Posted"
+        docstatus = frappe.db.get_value(doctype, name, "docstatus")
+        return "Submitted" if docstatus == 1 else "Draft"
+    return frappe.db.get_value(doctype, name, "status")
+
+
 class SHGPaymentEntry(Document):
     def before_validate(self):
         """Pull company from SHG Settings and auto-fill member_name"""
@@ -83,7 +94,7 @@ class SHGPaymentEntry(Document):
         
         # Set payment status
         if self.reference_doctype and self.reference_name:
-            status = frappe.db.get_value(self.reference_doctype, self.reference_name, "status")
+            status = _get_reference_status(self.reference_doctype, self.reference_name)
             self.db_set("payment_status", status)
         
         # Set is_closed flag

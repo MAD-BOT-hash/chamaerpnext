@@ -92,13 +92,13 @@ def get_data(filters):
                 SUM(l.loan_balance) as total_loan_balance,
                 SUM(CASE WHEN l.next_due_date < CURDATE() THEN l.balance_amount ELSE 0 END) as unpaid_loans
             FROM `tabSHG Loan` l
-            WHERE l.docstatus = 1 AND l.status IN ('Disbursed', 'Active') {date_condition_loans}
+            WHERE l.docstatus = 1 AND l.status IN ('Disbursed', 'Closed') {date_condition_loans}
             GROUP BY l.member
         ) loans ON m.name = loans.member
         LEFT JOIN (
             SELECT 
                 pe.member,
-                SUM(pe.total_amount) as total_payments
+                SUM(pe.amount) as total_payments
             FROM `tabSHG Payment Entry` pe
             WHERE pe.docstatus = 1 {date_condition_payments}
             GROUP BY pe.member
