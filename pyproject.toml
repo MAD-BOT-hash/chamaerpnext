@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shg"
+dynamic = ["version"]
+description = "Comprehensive Self Help Group Management System for ERPNext with Kenyan localization, mobile integration, and financial automation"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "SHG Solutions", email = "support@shgsolutions.co.ke"}
+]
+keywords = ["erpnext", "shg", "kenya", "finance", "microfinance", "self-help-group", "mobile-app", "mpesa"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Office/Business :: Financial",
+    "Framework :: ERPNext",
+]
+
+dependencies = [
+    "frappe>=14.0.0",
+    "erpnext>=14.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=23.0",
+    "isort>=5.12",
+    "flake8>=6.0",
+    "mypy>=1.0",
+    "pytest>=7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/MAD-BOT-hash/chamaerpnext"
+Documentation = "https://github.com/MAD-BOT-hash/chamaerpnext/wiki"
+Repository = "https://github.com/MAD-BOT-hash/chamaerpnext.git"
+Issues = "https://github.com/MAD-BOT-hash/chamaerpnext/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "shg.__version__"}
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  | migrations
+  | patches
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_frappe = ["frappe", "erpnext"]
+sections = ["FUTURE", "STDLIB", "FRAPPE", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = [
+    "tests/",
+    "patches/",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]

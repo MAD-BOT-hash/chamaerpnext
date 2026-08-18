@@ -1,0 +1,12 @@
+include *.md
+include requirements.txt
+include LICENSE
+recursive-include shg *.json
+recursive-include shg *.py
+recursive-include shg *.js
+recursive-include shg *.css
+recursive-include docs *.md
+recursive-exclude shg __pycache__
+recursive-exclude shg *.pyc
+recursive-exclude tests __pycache__
+recursive-exclude tests *.pyc
