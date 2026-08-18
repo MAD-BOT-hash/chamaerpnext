@@ -136,19 +136,30 @@ class SHGContributionInvoice(Document):
         if not self.status or self.status == "Draft":
             self.db_set("status", "Unpaid")
         
-        # Check if auto-creation of SHG Contribution is enabled
-        auto_create_contribution = frappe.db.get_single_value("SHG Settings", "auto_create_contribution_on_invoice_submit")
-        
-        # Create SHG Contribution record if enabled
-        if auto_create_contribution:
-            contribution = create_contribution_from_invoice(self, None)
-            # Link the created contribution to this invoice
-            if contribution:
-                self.db_set("linked_shg_contribution", contribution.name)
-                
         # Ensure is_closed is set to 0 for new invoices
         if frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
             self.db_set("is_closed", 0)
+
+        # Auto-post to contribution if enabled and not already linked
+        auto_create_contribution = frappe.db.get_single_value("SHG Settings", "auto_create_contribution_on_invoice_submit")
+        if auto_create_contribution and not self.linked_shg_contribution:
+            # Check no duplicate already exists
+            existing = frappe.db.get_value(
+                "SHG Contribution", {"invoice_reference": self.name, "docstatus": ["!=", 2]}, "name"
+            )
+            if existing:
+                self.db_set("linked_shg_contribution", existing)
+                self.db_set("posted_to_contribution", 1)
+            else:
+                try:
+                    contribution = create_contribution_from_invoice(self, None)
+                    if contribution:
+                        self.db_set("linked_shg_contribution", contribution.name)
+                        self.db_set("posted_to_contribution", 1)
+                except Exception as e:
+                    frappe.log_error(f"Failed to create SHG Contribution: {str(e)}", "SHG Contribution Invoice Submission")
+                    frappe.msgprint(f"Warning: Could not create SHG Contribution automatically. Error: {str(e)}")
+                
                 
     def on_cancel(self):
         """Handle cancellation of SHG Contribution Invoice"""
@@ -800,60 +811,71 @@ def post_to_contribution(docname):
     doc = frappe.get_doc("SHG Contribution Invoice", docname)
 
     if doc.docstatus != 1:
-        frappe.throw("Only submitted invoices can be posted to contributions.")
+        frappe.throw(_("Only submitted invoices can be posted to contributions."))
 
-    # Check if already posted
-    if getattr(doc, "posted_to_contribution", 0):
-        frappe.throw("This invoice has already been posted to SHG Contributions.")
+    # Return existing contribution if already posted
+    if getattr(doc, "posted_to_contribution", 0) or doc.linked_shg_contribution:
+        existing = doc.linked_shg_contribution or frappe.db.get_value(
+            "SHG Contribution", {"invoice_reference": docname, "docstatus": ["!=", 2]}, "name"
+        )
+        if existing:
+            frappe.msgprint(_("This invoice is already linked to Contribution {0}.").format(existing))
+            return {"contribution": existing}
+        frappe.throw(_("This invoice has already been posted to SHG Contributions."))
 
-    # Ensure member account exists
-    member = frappe.get_doc("SHG Member", doc.member)
-    company = getattr(member, "company", None)
+    # Guard against duplicate — check by invoice_reference
+    existing = frappe.db.get_value(
+        "SHG Contribution", {"invoice_reference": docname, "docstatus": ["!=", 2]}, "name"
+    )
+    if existing:
+        # Link it back and mark posted
+        frappe.db.set_value("SHG Contribution Invoice", docname, {
+            "posted_to_contribution": 1,
+            "linked_shg_contribution": existing
+        })
+        frappe.msgprint(_("Linked to existing Contribution {0}.").format(existing))
+        return {"contribution": existing}
+
+    # Get company
+    company = frappe.db.get_single_value("SHG Settings", "company") or frappe.db.get_single_value("SHG Settings", "default_company")
     if not company:
-        # Try to get company from SHG Settings
-        company = frappe.db.get_single_value("SHG Settings", "company")
-    if not company:
-        frappe.throw(_("Company not found for member {0}. Please set company in SHG Settings.").format(member.name))
-
-    # Get or create the member ledger account
-    from shg.shg.utils.account_utils import get_or_create_member_account
-    account = get_or_create_member_account(member, company)
+        frappe.throw(_("Default company not set in SHG Settings."))
 
     # Determine contribution type
     contribution_type = doc.contribution_type
-    
-    # If we have a linked Sales Invoice, try to get contribution type from it
-    if doc.sales_invoice:
-        sales_invoice = frappe.get_doc("Sales Invoice", doc.sales_invoice)
-        if hasattr(sales_invoice, 'shg_contribution_type') and sales_invoice.shg_contribution_type:
-            contribution_type = sales_invoice.shg_contribution_type
-    
-    # Validate contribution type
-    if contribution_type:
-        # Check if it's a valid contribution type
-        if not frappe.db.exists("SHG Contribution Type", contribution_type):
-            # If invalid, fallback to default
-            contribution_type = "Regular Weekly"
-            frappe.msgprint(_(f"Invalid contribution type '{doc.contribution_type}' - using default 'Regular Weekly'"))
-    else:
-        # If no contribution type, use default
-        contribution_type = "Regular Weekly"
+    if not contribution_type or not frappe.db.exists("SHG Contribution Type", contribution_type):
+        contribution_type = frappe.db.get_single_value("SHG Settings", "default_contribution_type")
+    if not contribution_type or not frappe.db.exists("SHG Contribution Type", contribution_type):
+        contribution_type = frappe.db.get_value("SHG Contribution Type", {}, "name")
+    if not contribution_type:
+        frappe.throw(_("No valid Contribution Type found. Please configure one in SHG Settings."))
+
+    amount = flt(doc.amount or 0)
+    if amount <= 0:
+        frappe.throw(_("Invoice amount must be greater than zero."))
 
     # Create Contribution entry
     contribution = frappe.new_doc("SHG Contribution")
-    contribution.member = member.name
+    contribution.member = doc.member
+    contribution.member_name = doc.member_name
     contribution.company = company
-    contribution.amount = doc.amount or 0
-    contribution.posting_date = frappe.utils.nowdate()
-    contribution.reference_invoice = doc.name
+    contribution.amount = amount
+    contribution.expected_amount = amount
+    contribution.contribution_date = doc.invoice_date or today()
+    contribution.posting_date = doc.invoice_date or today()
+    contribution.invoice_reference = docname      # correct field name
     contribution.contribution_type = contribution_type
+    contribution.payment_method = doc.payment_method or "Mpesa"
     contribution.insert(ignore_permissions=True)
     contribution.submit()
 
-    # Mark invoice as posted
-    frappe.db.set_value("SHG Contribution Invoice", docname, "posted_to_contribution", 1)
+    # Mark invoice as posted and link contribution
+    frappe.db.set_value("SHG Contribution Invoice", docname, {
+        "posted_to_contribution": 1,
+        "linked_shg_contribution": contribution.name
+    })
 
     frappe.db.commit()
-    frappe.msgprint(_(f"Contribution recorded under type: {contribution_type}"))
+    frappe.msgprint(_("Contribution {0} recorded under type: {1}").format(contribution.name, contribution_type))
     return {"contribution": contribution.name}
 
