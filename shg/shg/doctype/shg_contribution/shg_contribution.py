@@ -161,20 +161,24 @@ class SHGContribution(Document):
             unpaid = flt(max(0, flt(expected) - flt(new_paid)))
             self.db_set("unpaid_amount", unpaid)
             
-            # Update status
+            # Determine new status
             if unpaid <= 0:
-                self.db_set("status", "Paid")
+                new_status = "Paid"
             elif new_paid > 0:
-                self.db_set("status", "Partially Paid")
+                new_status = "Partially Paid"
             else:
-                self.db_set("status", "Unpaid")
+                new_status = "Unpaid"
+
+            self.db_set("status", new_status)
                 
-            # Update the linked SHG Contribution Invoice if exists
-            if self.invoice_reference:
-                invoice = frappe.get_doc("SHG Contribution Invoice", self.invoice_reference)
-                if invoice:
-                    # Update invoice status based on contribution status
-                    invoice.db_set("status", self.status)
+            # Sync status to the linked SHG Contribution Invoice
+            if self.invoice_reference and frappe.db.exists("SHG Contribution Invoice", self.invoice_reference):
+                invoice_updates = {"status": new_status}
+                if new_status == "Paid":
+                    invoice_updates["posted_to_contribution"] = 1
+                if not frappe.db.get_value("SHG Contribution Invoice", self.invoice_reference, "linked_shg_contribution"):
+                    invoice_updates["linked_shg_contribution"] = self.name
+                frappe.db.set_value("SHG Contribution Invoice", self.invoice_reference, invoice_updates)
                     
             # Update member financial summary
             member = frappe.get_doc("SHG Member", self.member)
@@ -189,7 +193,23 @@ class SHGContribution(Document):
         if not self.get("posted_to_gl"):
             self.post_to_ledger()
         self.update_member_summary()
-        
+        # Mark the linked invoice as posted to contribution
+        self._mark_invoice_posted()
+
+    def _mark_invoice_posted(self):
+        """Mark the linked SHG Contribution Invoice as posted_to_contribution=1."""
+        try:
+            invoice_name = self.invoice_reference or frappe.db.get_value(
+                "SHG Contribution Invoice", {"linked_shg_contribution": self.name, "docstatus": 1}, "name"
+            )
+            if invoice_name and frappe.db.exists("SHG Contribution Invoice", invoice_name):
+                updates = {"posted_to_contribution": 1}
+                if not frappe.db.get_value("SHG Contribution Invoice", invoice_name, "linked_shg_contribution"):
+                    updates["linked_shg_contribution"] = self.name
+                frappe.db.set_value("SHG Contribution Invoice", invoice_name, updates)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "SHG Contribution - Mark Invoice Posted Failed")
+
     def on_cancel(self):
         self.cancel_journal_entry()
         self.update_member_summary()
