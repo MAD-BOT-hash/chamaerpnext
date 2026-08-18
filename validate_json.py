@@ -42,5 +42,7 @@ def validate_json_files(base_path):
     print(f"Total JSON files checked: {count}, Fixed: {fixed}")
 
 if __name__ == "__main__":
-    base_path = r"c:\Users\user\Downloads\shg-erpnext\shg\shg\doctype"
+    import sys
+
+    base_path = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__))
     validate_json_files(base_path)

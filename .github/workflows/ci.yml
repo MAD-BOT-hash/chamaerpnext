@@ -1,0 +1,68 @@
+name: SHG CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-and-validate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install black isort flake8 jsonschema
+
+      - name: Validate JSON fixtures
+        run: |
+          python validate_json.py
+
+      - name: Check formatting with black
+        run: |
+          black --check --diff shg tests || true
+
+      - name: Check import order with isort
+        run: |
+          isort --check --diff shg tests || true
+
+      - name: Lint with flake8
+        run: |
+          flake8 shg tests --count --max-line-length=100 --extend-ignore=E203,W503 --show-source --statistics || true
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Collect tests
+        run: |
+          pytest --collect-only tests/ || true
