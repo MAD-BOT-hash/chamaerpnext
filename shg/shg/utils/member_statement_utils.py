@@ -88,14 +88,14 @@ def calculate_total_contributions(member_id):
     try:
         # Sum of all paid contributions
         total_paid = frappe.db.sql("""
-            SELECT SUM(paid_amount) as total
+            SELECT SUM(amount) as total
             FROM `tabSHG Contribution Invoice`
             WHERE member = %s AND docstatus = 1 AND status = 'Paid'
         """, (member_id,), as_dict=True)[0].total or 0.0
         
         # Also check SHG Contribution records
         contribution_paid = frappe.db.sql("""
-            SELECT SUM(total_amount) as total
+            SELECT SUM(amount) as total
             FROM `tabSHG Contribution`
             WHERE member = %s AND docstatus = 1 AND status = 'Paid'
         """, (member_id,), as_dict=True)[0].total or 0.0
@@ -109,14 +109,14 @@ def calculate_unpaid_contributions(member_id):
     try:
         # Sum of all unpaid contributions
         total_unpaid = frappe.db.sql("""
-            SELECT SUM(outstanding_amount) as total
+            SELECT SUM(amount) as total
             FROM `tabSHG Contribution Invoice`
             WHERE member = %s AND docstatus = 1 AND status = 'Unpaid'
         """, (member_id,), as_dict=True)[0].total or 0.0
         
         # Also check SHG Contribution records
         contribution_unpaid = frappe.db.sql("""
-            SELECT SUM(total_amount) as total
+            SELECT SUM(unpaid_amount) as total
             FROM `tabSHG Contribution`
             WHERE member = %s AND docstatus = 1 AND status = 'Unpaid'
         """, (member_id,), as_dict=True)[0].total or 0.0
@@ -130,9 +130,9 @@ def calculate_unpaid_fines(member_id):
     try:
         # Sum of all unpaid fines
         total_fines = frappe.db.sql("""
-            SELECT SUM(amount) as total
+            SELECT SUM(fine_amount) as total
             FROM `tabSHG Meeting Fine`
-            WHERE member = %s AND docstatus = 1 AND status = 'Unpaid'
+            WHERE member = %s AND docstatus = 1 AND status = 'Pending'
         """, (member_id,), as_dict=True)[0].total or 0.0
         
         return flt(total_fines)
@@ -146,7 +146,7 @@ def calculate_unpaid_loans(member_id):
         total_loans = frappe.db.sql("""
             SELECT SUM(loan_balance) as total
             FROM `tabSHG Loan`
-            WHERE member = %s AND docstatus = 1 AND status IN ('Disbursed', 'Partially Paid')
+            WHERE member = %s AND docstatus = 1 AND status IN ('Disbursed', 'Closed')
         """, (member_id,), as_dict=True)[0].total or 0.0
         
         return flt(total_loans)

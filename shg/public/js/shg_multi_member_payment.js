@@ -179,7 +179,7 @@ function show_unpaid_items_dialog(frm, unpaid_items) {
             // Add selected items to child table
             selected_indices.forEach(index => {
                 const item = unpaid_items[index];
-                const row = frappe.model.add_child(frm.doc, 'SHG Bulk Payment Item', 'invoices');
+                const row = frappe.model.add_child(frm.doc, 'SHG Multi Member Payment Invoice', 'invoices');
                 row.reference_doctype = item.reference_doctype;
                 row.reference_name = item.reference_name;
                 row.member = item.member;
@@ -229,17 +229,17 @@ function format_currency(value) {
     return frappe.format(value, { fieldtype: 'Currency' });
 }
 
-frappe.ui.form.on('SHG Bulk Payment Item', {
+frappe.ui.form.on('SHG Multi Member Payment Invoice', {
     reference_doctype: function(frm, cdt, cdn) {
         var row = frappe.get_doc(cdt, cdn);
         
         // Set date label based on reference_doctype
         if (row.reference_doctype === "SHG Contribution Invoice") {
-            frappe.meta.get_docfield("SHG Bulk Payment Item", "date", frm.doc.name).label = "Invoice Date";
+            frappe.meta.get_docfield("SHG Multi Member Payment Invoice", "date", frm.doc.name).label = "Invoice Date";
         } else if (row.reference_doctype === "SHG Contribution") {
-            frappe.meta.get_docfield("SHG Bulk Payment Item", "date", frm.doc.name).label = "Contribution Date";
+            frappe.meta.get_docfield("SHG Multi Member Payment Invoice", "date", frm.doc.name).label = "Contribution Date";
         } else if (row.reference_doctype === "SHG Meeting Fine") {
-            frappe.meta.get_docfield("SHG Bulk Payment Item", "date", frm.doc.name).label = "Fine Date";
+            frappe.meta.get_docfield("SHG Multi Member Payment Invoice", "date", frm.doc.name).label = "Fine Date";
         }
         
         frm.refresh_field("invoices");
