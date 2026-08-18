@@ -31,32 +31,29 @@ def get_data(filters):
     from_date = filters.get("from_date")
     to_date = filters.get("to_date")
     show_only_outstanding = filters.get("show_only_with_outstanding")
-    
-    # Base query conditions
+
+    params = {}
     member_condition = ""
     if member_filter:
-        member_condition = f" AND m.name = '{member_filter}'"
-        
-    date_condition_contributions = ""
-    date_condition_fines = ""
-    date_condition_loans = ""
-    date_condition_payments = ""
-    
-    if from_date and to_date:
-        date_condition_contributions = f" AND c.contribution_date BETWEEN '{from_date}' AND '{to_date}'"
-        date_condition_fines = f" AND f.fine_date BETWEEN '{from_date}' AND '{to_date}'"
-        date_condition_loans = f" AND l.posting_date BETWEEN '{from_date}' AND '{to_date}'"
-        date_condition_payments = f" AND pe.payment_date BETWEEN '{from_date}' AND '{to_date}'"
-    elif from_date:
-        date_condition_contributions = f" AND c.contribution_date >= '{from_date}'"
-        date_condition_fines = f" AND f.fine_date >= '{from_date}'"
-        date_condition_loans = f" AND l.posting_date >= '{from_date}'"
-        date_condition_payments = f" AND pe.payment_date >= '{from_date}'"
-    elif to_date:
-        date_condition_contributions = f" AND c.contribution_date <= '{to_date}'"
-        date_condition_fines = f" AND f.fine_date <= '{to_date}'"
-        date_condition_loans = f" AND l.posting_date <= '{to_date}'"
-        date_condition_payments = f" AND pe.payment_date <= '{to_date}'"
+        member_condition = " AND m.name = %(member)s"
+        params["member"] = member_filter
+
+    def build_date_condition(alias, fieldname):
+        parts = []
+        if from_date:
+            key = f"{alias}_{fieldname}_from"
+            parts.append(f" AND {alias}.{fieldname} >= %({key})s")
+            params[key] = from_date
+        if to_date:
+            key = f"{alias}_{fieldname}_to"
+            parts.append(f" AND {alias}.{fieldname} <= %({key})s")
+            params[key] = to_date
+        return "".join(parts)
+
+    date_condition_contributions = build_date_condition("c", "contribution_date")
+    date_condition_fines = build_date_condition("f", "fine_date")
+    date_condition_loans = build_date_condition("l", "posting_date")
+    date_condition_payments = build_date_condition("pe", "payment_date")
     
     # Query to get members with their financial data
     query = f"""
@@ -106,11 +103,11 @@ def get_data(filters):
             WHERE pe.docstatus = 1 {date_condition_payments}
             GROUP BY pe.member
         ) payments ON m.name = payments.member
-        WHERE m.docstatus = 1 {member_condition}
+        WHERE m.docstatus < 2 {member_condition}
         ORDER BY m.member_name
     """
     
-    data = frappe.db.sql(query, as_dict=True)
+    data = frappe.db.sql(query, params, as_dict=True)
     
     # Apply "Show Only With Outstanding" filter
     if show_only_outstanding:

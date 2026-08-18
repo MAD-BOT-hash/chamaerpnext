@@ -55,18 +55,14 @@ class SHGContribution(Document):
     def validate_invoice_reference(self):
         """Validate that no other SHG Contribution exists with the same invoice_reference"""
         if self.invoice_reference:
-            try:
-                existing = frappe.db.exists("SHG Contribution", {
-                    "invoice_reference": self.invoice_reference,
-                    "docstatus": ["!=", 2],  # Not cancelled
-                    "name": ["!=", self.name]
-                })
-                if existing:
-                    frappe.logger().info(f"[SHG] Contribution validation blocked - invoice {self.invoice_reference} already used in another contribution")
-                    frappe.throw(_("A contribution already exists for invoice {0}. Only one contribution is allowed per invoice.").format(self.invoice_reference))
-            except Exception:
-                # If invoice_reference field doesn't exist yet, skip this check
-                pass
+            existing = frappe.db.exists("SHG Contribution", {
+                "invoice_reference": self.invoice_reference,
+                "docstatus": ["!=", 2],  # Not cancelled
+                "name": ["!=", self.name]
+            })
+            if existing:
+                frappe.logger().info(f"[SHG] Contribution validation blocked - invoice {self.invoice_reference} already used in another contribution")
+                frappe.throw(_("A contribution already exists for invoice {0}. Only one contribution is allowed per invoice.").format(self.invoice_reference))
 
     def validate_contribution_type(self):
         """Validate contribution type and handle 'Invoice Payment' translation"""
@@ -570,74 +566,65 @@ def create_contribution_from_invoice(doc, method=None):
     """
     Automatically create SHG Contribution when a Contribution Invoice is submitted
     """
-    try:
-        # Prevent duplicates
-        existing = frappe.db.exists("SHG Contribution", {"invoice_reference": doc.name})
-        if existing:
-            frappe.logger().info(f"SHG Contribution already exists for Invoice {doc.name}")
-            return frappe.get_doc("SHG Contribution", existing)
+    # Prevent duplicates
+    existing = frappe.db.exists("SHG Contribution", {"invoice_reference": doc.name})
+    if existing:
+        frappe.logger().info(f"SHG Contribution already exists for Invoice {doc.name}")
+        return frappe.get_doc("SHG Contribution", existing)
 
-        # Attempt to find related Payment Entry (if exists)
-        payment_entry = frappe.db.get_value(
-            "Payment Entry Reference",
-            {"reference_name": doc.name},
-            "parent"
-        )
-        payment_method = None
-        if payment_entry:
-            payment_method = frappe.db.get_value("Payment Entry", payment_entry, "mode_of_payment")
+    # Attempt to find related Payment Entry (if exists)
+    payment_entry = frappe.db.get_value(
+        "Payment Entry Reference",
+        {"reference_name": doc.name},
+        "parent"
+    )
+    payment_method = None
+    if payment_entry:
+        payment_method = frappe.db.get_value("Payment Entry", payment_entry, "mode_of_payment")
 
-        # Get default payment method from settings or default to Mpesa
-        default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
+    # Get default payment method from settings or default to Mpesa
+    default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
+    
+    # Safely handle numeric fields
+    amount = flt(doc.amount or 0)
+    expected_amount = flt(doc.amount or 0)
+    
+    # Validate amount
+    if amount <= 0:
+        if doc.contribution_type:
+            default_amount = frappe.db.get_value("SHG Contribution Type", doc.contribution_type, "default_amount")
+            amount = flt(default_amount or 0)
+            expected_amount = flt(default_amount or 0)
         
-        # Safely handle numeric fields
-        amount = flt(doc.amount or 0)
-        expected_amount = flt(doc.amount or 0)
-        
-        # Validate amount
         if amount <= 0:
-            # Try to get default amount from contribution type
-            if doc.contribution_type:
-                default_amount = frappe.db.get_value("SHG Contribution Type", doc.contribution_type, "default_amount")
-                amount = flt(default_amount or 0)
-                expected_amount = flt(default_amount or 0)
+            default_amount = frappe.db.get_single_value("SHG Settings", "default_contribution_amount")
+            amount = flt(default_amount or 0)
+            expected_amount = flt(default_amount or 0)
             
-            # If still no valid amount, try SHG Settings
-            if amount <= 0:
-                default_amount = frappe.db.get_single_value("SHG Settings", "default_contribution_amount")
-                amount = flt(default_amount or 0)
-                expected_amount = flt(default_amount or 0)
-                
-            # If still no valid amount, throw error
-            if amount <= 0:
-                frappe.throw(_("Contribution amount must be greater than zero. No valid amount found in invoice, contribution type, or SHG Settings."))
+        if amount <= 0:
+            frappe.throw(_("Contribution amount must be greater than zero. No valid amount found in invoice, contribution type, or SHG Settings."))
 
-        # Create new SHG Contribution
-        contribution = frappe.get_doc({
-            "doctype": "SHG Contribution",
-            "member": doc.member,                 # Link field
-            "member_name": doc.member_name,
-            "contribution_type": doc.contribution_type,
-            "contribution_date": doc.invoice_date or nowdate(),
-            "posting_date": doc.invoice_date or nowdate(),
-            "amount": amount,
-            "expected_amount": expected_amount,
-            "payment_method": payment_method or default_payment_method,
-            "invoice_reference": doc.name,
-            "status": "Unpaid"
-        })
-        
-        # Use flags before insert instead of passing parameters
-        contribution.flags.ignore_permissions = True
-        contribution.insert()
-        frappe.db.commit()
+    contribution = frappe.get_doc({
+        "doctype": "SHG Contribution",
+        "member": doc.member,
+        "member_name": doc.member_name,
+        "contribution_type": doc.contribution_type,
+        "contribution_date": doc.invoice_date or nowdate(),
+        "posting_date": doc.invoice_date or nowdate(),
+        "amount": amount,
+        "expected_amount": expected_amount,
+        "payment_method": payment_method or default_payment_method,
+        "invoice_reference": doc.name,
+        "status": "Unpaid"
+    })
+    
+    contribution.flags.ignore_permissions = True
+    contribution.insert()
+    if hasattr(doc, "db_set"):
+        doc.db_set("linked_shg_contribution", contribution.name, update_modified=False)
 
-        frappe.logger().info(f"[SHG] Created SHG Contribution {contribution.name} from Invoice {doc.name}")
-        return contribution
-
-    except Exception as e:
-        frappe.log_error(message=frappe.get_traceback(), title=f"Auto SHG Contribution Creation Failed for Member {doc.member} with Invoice {doc.name}")
-        return None
+    frappe.logger().info(f"[SHG] Created SHG Contribution {contribution.name} from Invoice {doc.name}")
+    return contribution
 
 def create_linked_contribution(invoice_doc):
     """

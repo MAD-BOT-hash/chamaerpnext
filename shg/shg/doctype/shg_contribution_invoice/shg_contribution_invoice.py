@@ -330,73 +330,66 @@ def create_contribution_from_invoice(doc, method=None):
     """
     Automatically create SHG Contribution when a Contribution Invoice is submitted
     """
-    try:
-        # Prevent duplicates
-        existing = frappe.db.exists("SHG Contribution", {"invoice_reference": doc.name})
-        if existing:
-            frappe.logger().info(f"SHG Contribution already exists for Invoice {doc.name}")
-            return frappe.get_doc("SHG Contribution", existing)
+    # Prevent duplicates
+    existing = frappe.db.exists("SHG Contribution", {"invoice_reference": doc.name})
+    if existing:
+        frappe.logger().info(f"SHG Contribution already exists for Invoice {doc.name}")
+        return frappe.get_doc("SHG Contribution", existing)
 
-        # Attempt to find related Payment Entry (if exists)
-        payment_entry = frappe.db.get_value(
-            "Payment Entry Reference",
-            {"reference_name": doc.name},
-            "parent"
-        )
-        payment_method = None
-        if payment_entry:
-            payment_method = frappe.db.get_value("Payment Entry", payment_entry, "mode_of_payment")
+    # Attempt to find related Payment Entry (if exists)
+    payment_entry = frappe.db.get_value(
+        "Payment Entry Reference",
+        {"reference_name": doc.name},
+        "parent"
+    )
+    payment_method = None
+    if payment_entry:
+        payment_method = frappe.db.get_value("Payment Entry", payment_entry, "mode_of_payment")
 
-        # Get default payment method from settings or default to Mpesa
-        default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
+    # Get default payment method from settings or default to Mpesa
+    default_payment_method = frappe.db.get_single_value("SHG Settings", "default_contribution_payment_method") or "Mpesa"
 
-        # Use invoice_date as the reference date
-        invoice_date = getdate(doc.invoice_date or today())
-        
-        # Determine contribution type
-        contribution_type = doc.contribution_type
-        
-        # If we have a linked Sales Invoice, try to get contribution type from it
-        if doc.sales_invoice:
-            sales_invoice = frappe.get_doc("Sales Invoice", doc.sales_invoice)
-            if hasattr(sales_invoice, 'shg_contribution_type') and sales_invoice.shg_contribution_type:
-                contribution_type = sales_invoice.shg_contribution_type
-        
-        # Validate contribution type
-        if contribution_type:
-            # Check if it's a valid contribution type
-            if not frappe.db.exists("SHG Contribution Type", contribution_type):
-                # If invalid, fallback to default
-                contribution_type = "Regular Weekly"
-                frappe.msgprint(_(f"Invalid contribution type '{doc.contribution_type}' - using default 'Regular Weekly'"))
-        else:
-            # If no contribution type, use default
+    # Use invoice_date as the reference date
+    invoice_date = getdate(doc.invoice_date or today())
+    
+    # Determine contribution type
+    contribution_type = doc.contribution_type
+    
+    # If we have a linked Sales Invoice, try to get contribution type from it
+    if doc.sales_invoice:
+        sales_invoice = frappe.get_doc("Sales Invoice", doc.sales_invoice)
+        if hasattr(sales_invoice, 'shg_contribution_type') and sales_invoice.shg_contribution_type:
+            contribution_type = sales_invoice.shg_contribution_type
+    
+    # Validate contribution type
+    if contribution_type:
+        if not frappe.db.exists("SHG Contribution Type", contribution_type):
             contribution_type = "Regular Weekly"
+            frappe.msgprint(_(f"Invalid contribution type '{doc.contribution_type}' - using default 'Regular Weekly'"))
+    else:
+        contribution_type = "Regular Weekly"
 
-        # Create new SHG Contribution
-        contribution = frappe.get_doc({
-            "doctype": "SHG Contribution",
-            "member": doc.member,                 # Link field
-            "member_name": doc.member_name,
-            "contribution_type": contribution_type,
-            "contribution_date": invoice_date,
-            "posting_date": invoice_date,
-            "amount": flt(doc.amount or 0),
-            "expected_amount": flt(doc.amount or 0),
-            "payment_method": payment_method or default_payment_method,
-            "invoice_reference": doc.name,
-            "status": "Unpaid"
-        })
-        
-        contribution.insert(ignore_permissions=True)
-        frappe.db.commit()
+    # Create new SHG Contribution
+    contribution = frappe.get_doc({
+        "doctype": "SHG Contribution",
+        "member": doc.member,                 # Link field
+        "member_name": doc.member_name,
+        "contribution_type": contribution_type,
+        "contribution_date": invoice_date,
+        "posting_date": invoice_date,
+        "amount": flt(doc.amount or 0),
+        "expected_amount": flt(doc.amount or 0),
+        "payment_method": payment_method or default_payment_method,
+        "invoice_reference": doc.name,
+        "status": "Unpaid"
+    })
+    
+    contribution.insert(ignore_permissions=True)
+    if hasattr(doc, "db_set"):
+        doc.db_set("linked_shg_contribution", contribution.name, update_modified=False)
 
-        frappe.logger().info(f"[SHG] Created SHG Contribution {contribution.name} from Invoice {doc.name}")
-        return contribution
-
-    except Exception as e:
-        frappe.log_error(message=frappe.get_traceback(), title=f"Auto SHG Contribution Creation Failed for {doc.name}")
-        return None
+    frappe.logger().info(f"[SHG] Created SHG Contribution {contribution.name} from Invoice {doc.name}")
+    return contribution
 
 @frappe.whitelist()
 def generate_multiple_contribution_invoices(contribution_type=None, amount=None, invoice_date=None, supplier_invoice_date=None, qty=None, rate=None):
@@ -863,5 +856,4 @@ def post_to_contribution(docname):
     frappe.db.commit()
     frappe.msgprint(_(f"Contribution recorded under type: {contribution_type}"))
     return {"contribution": contribution.name}
-
 
