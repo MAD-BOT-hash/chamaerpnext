@@ -1,0 +1,180 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "naming_series:",
+  "creation": "2025-10-20 10:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "naming_series",
+    "invoice_details_section",
+    "invoice_date",
+    "due_date",
+    "contribution_type",
+    "column_break_4",
+    "description",
+    "status",
+    "amount_section",
+    "default_rate",
+    "default_qty",
+    "members_section",
+    "members",
+    "totals_section",
+    "total_members",
+    "total_amount",
+    "buttons_section",
+    "workflow_section",
+    "posted_to_gl",
+    "posted_on"
+  ],
+  "fields": [
+    {
+      "fieldname": "naming_series",
+      "fieldtype": "Select",
+      "label": "Naming Series",
+      "options": "BULKCI-.YYYY.-.#####",
+      "reqd": 1
+    },
+    {
+      "fieldname": "invoice_details_section",
+      "fieldtype": "Section Break",
+      "label": "Invoice Details"
+    },
+    {
+      "fieldname": "invoice_date",
+      "fieldtype": "Date",
+      "label": "Invoice Date",
+      "reqd": 1,
+      "default": "Today"
+    },
+    {
+      "fieldname": "due_date",
+      "fieldtype": "Date",
+      "label": "Due Date",
+      "reqd": 1,
+      "default": "Today"
+    },
+    {
+      "fieldname": "contribution_type",
+      "fieldtype": "Link",
+      "label": "Contribution Type",
+      "options": "SHG Contribution Type",
+      "description": "Contribution type for all generated invoices"
+    },
+    {
+      "fieldname": "column_break_4",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Data",
+      "label": "Description",
+      "description": "Reason for bulk invoice generation (e.g., Monthly Contribution Run)"
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Draft\nInvoices Created\nCancelled",
+      "default": "Draft",
+      "read_only": 1
+    },
+    {
+      "fieldname": "amount_section",
+      "fieldtype": "Section Break",
+      "label": "Default Amount Settings"
+    },
+    {
+      "fieldname": "default_rate",
+      "fieldtype": "Currency",
+      "label": "Default Rate (per Member)",
+      "precision": 2,
+      "description": "Default amount per contribution invoice"
+    },
+    {
+      "fieldname": "default_qty",
+      "fieldtype": "Float",
+      "label": "Default Quantity",
+      "default": "1",
+      "precision": 2
+    },
+    {
+      "fieldname": "members_section",
+      "fieldtype": "Section Break",
+      "label": "Member Invoices"
+    },
+    {
+      "fieldname": "members",
+      "fieldtype": "Table",
+      "label": "Members",
+      "options": "SHG Bulk Contribution Invoice Item"
+    },
+    {
+      "fieldname": "totals_section",
+      "fieldtype": "Section Break",
+      "label": "Summary"
+    },
+    {
+      "fieldname": "total_members",
+      "fieldtype": "Int",
+      "label": "Total Members",
+      "read_only": 1,
+      "default": "0"
+    },
+    {
+      "fieldname": "total_amount",
+      "fieldtype": "Currency",
+      "label": "Total Amount",
+      "read_only": 1,
+      "precision": 2
+    },
+    {
+      "fieldname": "buttons_section",
+      "fieldtype": "Section Break",
+      "label": "Actions"
+    },
+    {
+      "fieldname": "workflow_section",
+      "fieldtype": "Section Break",
+      "label": "Workflow"
+    },
+    {
+      "fieldname": "posted_to_gl",
+      "fieldtype": "Check",
+      "label": "Posted to GL",
+      "read_only": 1
+    },
+    {
+      "fieldname": "posted_on",
+      "fieldtype": "Datetime",
+      "label": "Posted On",
+      "read_only": 1
+    }
+  ],
+  "links": [],
+  "modified": "2025-10-20 10:00:00",
+  "modified_by": "Administrator",
+  "module": "SHG",
+  "name": "SHG Bulk Contribution Invoice",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Administrator",
+      "share": 1,
+      "submit": 0,
+      "write": 1
+    }
+  ],
+  "show_name_in_global_search": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}
