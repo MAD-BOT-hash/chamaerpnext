@@ -1,0 +1,96 @@
+{
+  "doctype": "DocType",
+  "name": "SHG Bulk Contribution Invoice Item",
+  "module": "SHG",
+  "custom": 0,
+  "istable": 1,
+  "editable_grid": 1,
+  "track_changes": 1,
+  "engine": "InnoDB",
+  "autoname": "hash",
+  "fields": [
+    {
+      "fieldname": "member",
+      "label": "Member",
+      "fieldtype": "Link",
+      "options": "SHG Member",
+      "in_list_view": 1,
+      "reqd": 1,
+      "columns": 3
+    },
+    {
+      "fieldname": "member_name",
+      "label": "Member Name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "read_only": 1,
+      "fetch_from": "member.member_name",
+      "columns": 3
+    },
+    {
+      "fieldname": "selected",
+      "label": "Selected",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "default": 1,
+      "columns": 1
+    },
+    {
+      "fieldname": "qty",
+      "label": "Quantity",
+      "fieldtype": "Float",
+      "in_list_view": 0,
+      "columns": 2,
+      "precision": 2,
+      "default": "1"
+    },
+    {
+      "fieldname": "rate",
+      "label": "Rate",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "columns": 2,
+      "precision": 2
+    },
+    {
+      "fieldname": "amount",
+      "label": "Amount",
+      "fieldtype": "Currency",
+      "options": "KES",
+      "in_list_view": 1,
+      "columns": 2,
+      "precision": 2,
+      "read_only": 1
+    },
+    {
+      "fieldname": "generated_invoice",
+      "label": "Generated Invoice",
+      "fieldtype": "Link",
+      "options": "SHG Contribution Invoice",
+      "in_list_view": 1,
+      "columns": 3,
+      "read_only": 1
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "options": "\nPending\nCreated\nFailed",
+      "in_list_view": 1,
+      "columns": 2,
+      "default": "Pending"
+    },
+    {
+      "fieldname": "error_message",
+      "label": "Error Message",
+      "fieldtype": "Small Text",
+      "in_list_view": 0,
+      "columns": 4
+    }
+  ],
+  "links": [],
+  "modified": "2025-10-20 10:00:00",
+  "modified_by": "Administrator",
+  "owner": "Administrator"
+}

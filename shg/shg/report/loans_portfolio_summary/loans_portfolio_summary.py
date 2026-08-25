@@ -44,14 +44,14 @@ def get_columns():
             "width": 120
         },
         {
-            "label": _("Accrued Interest"),
-            "fieldname": "accrued_interest",
+            "label": _("Total Interest Payable"),
+            "fieldname": "total_interest_payable",
             "fieldtype": "Currency",
             "width": 120
         },
         {
-            "label": _("Accrued Penalty"),
-            "fieldname": "accrued_penalty",
+            "label": _("Interest Paid"),
+            "fieldname": "interest_paid",
             "fieldtype": "Currency",
             "width": 120
         },
@@ -70,7 +70,7 @@ def get_columns():
         {
             "label": _("Days Overdue"),
             "fieldname": "days_overdue",
-            "fieldtype": "Int",
+            "fieldtype": "Currency",
             "width": 100
         },
         {
@@ -114,18 +114,14 @@ def get_data(filters):
             l.member,
             l.member_name,
             l.loan_amount,
-            COALESCE(l.outstanding_principal, l.loan_amount) as outstanding_principal,
-            COALESCE(l.accrued_interest, 0) as accrued_interest,
-            COALESCE(l.accrued_penalty, 0) as accrued_penalty,
-            COALESCE(l.total_outstanding, l.loan_amount) as total_outstanding,
+            l.balance_amount as outstanding_principal,
+            l.total_interest_payable,
+            (l.total_interest_payable - COALESCE(l.total_amount_paid - l.total_repaid, 0)) as interest_paid,
+            (l.balance_amount + COALESCE(l.total_interest_payable, 0)) as total_outstanding,
             l.next_due_date,
             l.status,
             l.disbursement_date,
-            CASE 
-                WHEN l.next_due_date < CURDATE() AND COALESCE(l.total_outstanding, 0) > 0 
-                THEN DATEDIFF(CURDATE(), l.next_due_date)
-                ELSE 0
-            END as days_overdue
+            COALESCE(l.overdue_amount, 0) as days_overdue
         FROM `tabSHG Loan` l
         WHERE l.docstatus = 1 {conditions}
         ORDER BY l.disbursement_date DESC
