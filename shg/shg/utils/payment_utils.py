@@ -1,4 +1,4 @@
-import frappe
+﻿import frappe
 from frappe import _
 from frappe.utils import flt, today
 from shg.shg.utils.account_helpers import get_or_create_member_receivable
@@ -119,25 +119,34 @@ def _build_unpaid_invoice_query(member=None):
 
 
 def _build_unpaid_contribution_query(member=None):
-    conditions = ["docstatus = 1", "status IN ('Unpaid', 'Partially Paid')"]
+    conditions = ["c.docstatus = 1", "c.status IN ('Unpaid', 'Partially Paid')"]
     params = {}
     if member:
-        conditions.append("member = %(member)s")
+        conditions.append("c.member = %(member)s")
         params["member"] = member
+
+    # Exclude contributions whose linked invoice is already paid (anti-double-pay)
+    conditions.append(
+        "NOT EXISTS ("
+        "SELECT 1 FROM `tabSHG Contribution Invoice` inv"
+        " WHERE inv.name = c.invoice_reference"
+        " AND inv.docstatus = 1 AND inv.status = 'Paid'"
+        ")"
+    )
 
     query = f"""
         SELECT
-            name,
-            member,
-            member_name,
-            contribution_date AS date,
-            expected_amount,
-            amount,
-            amount_paid,
-            unpaid_amount,
-            status,
-            docstatus
-        FROM `tabSHG Contribution`
+            c.name,
+            c.member,
+            c.member_name,
+            c.contribution_date AS date,
+            c.expected_amount,
+            c.amount,
+            c.amount_paid,
+            c.unpaid_amount,
+            c.status,
+            c.docstatus
+        FROM `tabSHG Contribution` c
         WHERE {' AND '.join(conditions)}
     """
     return query, params
@@ -448,7 +457,13 @@ def _get_outstanding_amount(doctype, name):
     """
     if doctype == "SHG Contribution Invoice":
         doc = frappe.get_doc(doctype, name)
-        # For contribution invoices: amount (no amount_paid field exists)
+        if doc.status == "Paid":
+            return 0.0
+        if doc.linked_shg_contribution:
+            cs = frappe.db.get_value("SHG Contribution", doc.linked_shg_contribution, "status")
+            if cs == "Paid":
+                frappe.db.set_value("SHG Contribution Invoice", name, "status", "Paid")
+                return 0.0
         return flt(doc.amount or 0)
     
     elif doctype == "SHG Contribution":
@@ -725,7 +740,10 @@ def _apply_payment_to_document(doctype, name, amount, payment_entry_name):
         
         # Auto-close invoice after full payment
         mark_invoice_paid_and_closed(name, payment_entry_name)
-    
+
+        # Sync linked Contribution to prevent double-payment
+        _sync_linked_contribution_on_invoice_payment(doc, amount, payment_entry_name)
+
     elif doctype == "SHG Contribution":
         doc = frappe.get_doc(doctype, name)
         
@@ -751,6 +769,9 @@ def _apply_payment_to_document(doctype, name, amount, payment_entry_name):
         else:
             doc.db_set("status", "Unpaid")
         
+        # Sync linked Invoice to prevent double-payment
+        _sync_linked_invoice_on_contribution_payment(doc, new_paid, expected, payment_entry_name)
+
         # Update member financial summary
         try:
             member = frappe.get_doc("SHG Member", doc.member)
@@ -785,6 +806,70 @@ def mark_invoice_paid_and_closed(invoice_name, payment_entry_name=None):
         invoice.db_set("payment_reference", payment_entry_name)
     frappe.logger().info(f"[SHG] Invoice {invoice_name} marked Paid & closed via {payment_entry_name}")
 
+
+def _sync_linked_contribution_on_invoice_payment(invoice_doc, amount_paid, payment_entry_name):
+    """
+    When a Contribution Invoice is paid, mark its linked SHG Contribution as Paid too.
+    This prevents the linked Contribution from being paid a second time.
+    """
+    try:
+        contrib_name = invoice_doc.linked_shg_contribution or frappe.db.get_value(
+            "SHG Contribution", {"invoice_reference": invoice_doc.name, "docstatus": 1}, "name"
+        )
+        if not contrib_name:
+            return
+        if not frappe.db.exists("SHG Contribution", contrib_name):
+            return
+        contrib = frappe.get_doc("SHG Contribution", contrib_name)
+        if contrib.status == "Paid":
+            return  # Already settled — nothing to do
+        paid = flt(amount_paid)
+        expected = flt(contrib.expected_amount or contrib.amount or 0)
+        new_paid = flt(contrib.amount_paid or 0) + paid
+        unpaid = max(0, expected - new_paid)
+        status = "Paid" if unpaid <= 0 else ("Partially Paid" if new_paid > 0 else "Unpaid")
+        frappe.db.set_value("SHG Contribution", contrib_name, {
+            "amount_paid": new_paid,
+            "unpaid_amount": unpaid,
+            "status": status,
+            "payment_entry": payment_entry_name or contrib.payment_entry,
+        })
+        frappe.logger().info(
+            f"[SHG] Synced Contribution {contrib_name} to {status} after Invoice {invoice_doc.name} was paid"
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "SHG - Sync Contribution on Invoice Payment Failed")
+
+
+def _sync_linked_invoice_on_contribution_payment(contribution_doc, new_paid, expected, payment_entry_name):
+    """
+    When a SHG Contribution is paid, mark its linked SHG Contribution Invoice as Paid too.
+    This prevents the linked Invoice from being paid a second time.
+    """
+    try:
+        invoice_name = contribution_doc.invoice_reference or frappe.db.get_value(
+            "SHG Contribution Invoice", {"linked_shg_contribution": contribution_doc.name, "docstatus": 1}, "name"
+        )
+        if not invoice_name:
+            return
+        if not frappe.db.exists("SHG Contribution Invoice", invoice_name):
+            return
+        invoice_status = frappe.db.get_value("SHG Contribution Invoice", invoice_name, "status")
+        if invoice_status == "Paid":
+            return  # Already settled — nothing to do
+        unpaid = max(0, expected - new_paid)
+        status = "Paid" if unpaid <= 0 else ("Partially Paid" if new_paid > 0 else "Unpaid")
+        updates = {"status": status}
+        if payment_entry_name and frappe.db.has_column("SHG Contribution Invoice", "payment_reference"):
+            updates["payment_reference"] = payment_entry_name
+        if status == "Paid" and frappe.db.has_column("SHG Contribution Invoice", "is_closed"):
+            updates["is_closed"] = 1
+        frappe.db.set_value("SHG Contribution Invoice", invoice_name, updates)
+        frappe.logger().info(
+            f"[SHG] Synced Invoice {invoice_name} to {status} after Contribution {contribution_doc.name} was paid"
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "SHG - Sync Invoice on Contribution Payment Failed")
 
 def _validate_doc_exists(doctype, name):
     """
@@ -1006,3 +1091,4 @@ def prepare_child_row(doctype, name):
             "is_closed": is_closed,
             "posted_to_gl": posted_to_gl
         }
+

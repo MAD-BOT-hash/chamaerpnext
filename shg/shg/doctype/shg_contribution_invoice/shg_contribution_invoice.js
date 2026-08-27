@@ -42,20 +42,8 @@ frappe.ui.form.on('SHG Contribution Invoice', {
                 }
             }
 
-            // --- Make Payment button (only if not yet fully paid and contribution is posted) ---
-            if (frm.doc.status !== 'Paid' && frm.doc.posted_to_contribution && frm.doc.linked_shg_contribution) {
-                frm.add_custom_button(__('Make Payment'), function() {
-                    frappe.new_doc('SHG Payment Entry', {
-                        member: frm.doc.member,
-                        reference_doctype: 'SHG Contribution Invoice',
-                        reference_name: frm.doc.name,
-                        amount: flt(frm.doc.amount),
-                    });
-                }, __('Actions'));
-            }
-
-            // --- Make Payment button even before posting if invoice is submitted ---
-            if (frm.doc.status !== 'Paid' && !frm.doc.posted_to_contribution) {
+            // --- Make Payment (single button — Invoice is the canonical payment target) ---
+            if (frm.doc.status !== 'Paid') {
                 frm.add_custom_button(__('Make Payment'), function() {
                     frappe.new_doc('SHG Payment Entry', {
                         member: frm.doc.member,
