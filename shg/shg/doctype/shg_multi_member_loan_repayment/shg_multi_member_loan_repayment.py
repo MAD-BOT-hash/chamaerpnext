@@ -227,7 +227,7 @@ class SHGMultiMemberLoanRepayment(Document):
                 loan_repayment.total_paid = row.repayment_amount
                 loan_repayment.payment_method = self.payment_mode
                 loan_repayment.company = self.company
-                loan_repayment.batch_number = self.batch_number
+                loan_repayment.multi_member_repayment_batch = self.name
 
                 loan_repayment.insert(ignore_permissions=True)
                 loan_repayment.submit()

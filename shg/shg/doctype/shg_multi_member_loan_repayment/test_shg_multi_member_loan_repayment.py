@@ -46,7 +46,7 @@ class TestSHGMultiMemberLoanRepayment(FrappeTestCase):
         repayment.company = "Test Company"
         repayment.payment_mode = "Cash"
         repayment.payment_account = "Cash - TC"
-        repayment.batch_number = "TEST-BATCH-001"
+        repayment.multi_member_repayment_batch = "TEST-BATCH-001"
         
         # Add loan item with valid payment
         repayment.append("loans", {
@@ -73,7 +73,7 @@ class TestSHGMultiMemberLoanRepayment(FrappeTestCase):
         repayment.company = "Test Company"
         repayment.payment_mode = "Cash"
         repayment.payment_account = "Cash - TC"
-        repayment.batch_number = "TEST-BATCH-002"
+        repayment.multi_member_repayment_batch = "TEST-BATCH-002"
         
         # Add loan item with repayment exceeding outstanding
         repayment.append("loans", {
