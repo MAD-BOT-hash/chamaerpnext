@@ -700,14 +700,56 @@ def _create_payment_entry_for_shg(company, mode_of_payment, member, posting_date
         # This avoids the "Party is mandatory" error in ERPNext
         pass
     
+    def _safe_ref_amounts(ref_doctype, ref_name, alloc):
+        """Return (total_amount, outstanding_amount) without accessing grand_total on SHG docs."""
+        try:
+            if ref_doctype == "SHG Contribution Invoice":
+                total = flt(frappe.db.get_value(ref_doctype, ref_name, "amount") or alloc)
+                status = frappe.db.get_value(ref_doctype, ref_name, "status") or ""
+                outstanding = 0.0 if status == "Paid" else total
+                return total, outstanding
+            elif ref_doctype == "SHG Contribution":
+                total = flt(frappe.db.get_value(ref_doctype, ref_name, "expected_amount") or
+                            frappe.db.get_value(ref_doctype, ref_name, "amount") or alloc)
+                unpaid = flt(frappe.db.get_value(ref_doctype, ref_name, "unpaid_amount") or 0)
+                return total, unpaid
+            elif ref_doctype == "SHG Meeting Fine":
+                total = flt(frappe.db.get_value(ref_doctype, ref_name, "fine_amount") or alloc)
+                status = frappe.db.get_value(ref_doctype, ref_name, "status") or ""
+                outstanding = 0.0 if status == "Paid" else total
+                return total, outstanding
+            elif ref_doctype == "SHG Loan Repayment":
+                total = flt(frappe.db.get_value(ref_doctype, ref_name, "total_paid") or alloc)
+                outstanding = flt(frappe.db.get_value(ref_doctype, ref_name, "outstanding_balance") or 0)
+                return total, outstanding
+            elif ref_doctype == "Sales Invoice":
+                total = flt(frappe.db.get_value(ref_doctype, ref_name, "grand_total") or alloc)
+                outstanding = flt(frappe.db.get_value(ref_doctype, ref_name, "outstanding_amount") or 0)
+                return total, outstanding
+            else:
+                return flt(alloc), flt(alloc)
+        except Exception:
+            return flt(alloc), flt(alloc)
+
     # Add references
     if references:
         for ref in references:
+            if "total_amount" not in ref or not ref.get("total_amount"):
+                total, outstanding = _safe_ref_amounts(
+                    ref.get("reference_doctype", ""),
+                    ref.get("reference_name", ""),
+                    ref.get("allocated_amount", 0)
+                )
+                ref.setdefault("total_amount", total)
+                ref.setdefault("outstanding_amount", outstanding)
             pe.append("references", ref)
     elif reference_doctype and reference_name:
+        total, outstanding = _safe_ref_amounts(reference_doctype, reference_name, paid_amount)
         pe.append("references", {
             "reference_doctype": reference_doctype,
             "reference_name": reference_name,
+            "total_amount": total,
+            "outstanding_amount": outstanding,
             "allocated_amount": flt(paid_amount)
         })
     
