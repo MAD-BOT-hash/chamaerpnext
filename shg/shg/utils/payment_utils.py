@@ -167,6 +167,9 @@ def _build_unpaid_fine_query(member=None):
             fine_amount,
             meeting,
             fine_date,
+            fine_reason,
+            fine_description,
+            status,
             docstatus
         FROM `tabSHG Meeting Fine`
         WHERE {' AND '.join(conditions)}
@@ -175,20 +178,36 @@ def _build_unpaid_fine_query(member=None):
 
 
 def _map_invoice_row(invoice):
-    outstanding = flt(invoice.get("amount") or 0)
-    if outstanding <= 0:
+    total_amount = flt(invoice.get("amount") or 0)
+    if total_amount <= 0:
         return None
 
-    is_closed = _read_optional_value("SHG Contribution Invoice", invoice.get("name"), "is_closed", 0)
-    posted_to_gl = _read_optional_value("SHG Contribution Invoice", invoice.get("name"), "posted_to_gl", 0)
+    # Derive outstanding: check linked contribution for amount_paid
+    invoice_name = invoice.get("name")
+    linked_contrib = frappe.db.get_value(
+        "SHG Contribution",
+        {"invoice_reference": invoice_name, "docstatus": ["!=", 2]},
+        ["amount_paid", "unpaid_amount"],
+        as_dict=True,
+    )
+    if linked_contrib:
+        outstanding = flt(linked_contrib.get("unpaid_amount") or 0)
+        if outstanding <= 0:
+            # Linked contribution is fully paid — skip this invoice row
+            return None
+    else:
+        outstanding = total_amount
+
+    is_closed = _read_optional_value("SHG Contribution Invoice", invoice_name, "is_closed", 0)
+    posted_to_gl = _read_optional_value("SHG Contribution Invoice", invoice_name, "posted_to_gl", 0)
 
     return {
         "reference_doctype": "SHG Contribution Invoice",
-        "reference_name": invoice.get("name"),
+        "reference_name": invoice_name,
         "member": invoice.get("member"),
         "member_name": invoice.get("member_name"),
         "date": invoice.get("date"),
-        "amount": flt(invoice.get("amount")),
+        "amount": total_amount,
         "outstanding_amount": outstanding,
         "status": _normalize_document_status("SHG Contribution Invoice", invoice),
         "is_closed": is_closed,
@@ -229,6 +248,7 @@ def _map_fine_row(fine):
     if fine.get("meeting"):
         meeting_date = frappe.db.get_value("SHG Meeting", fine.get("meeting"), "meeting_date") or fine.get("fine_date")
 
+    reason = fine.get("fine_reason") or fine.get("fine_description") or ""
     return {
         "reference_doctype": "SHG Meeting Fine",
         "reference_name": fine.get("name"),
@@ -237,7 +257,8 @@ def _map_fine_row(fine):
         "date": meeting_date,
         "amount": flt(fine.get("fine_amount")),
         "outstanding_amount": outstanding,
-        "status": _normalize_document_status("SHG Meeting Fine", fine),
+        "status": fine.get("status") or _normalize_document_status("SHG Meeting Fine", fine),
+        "description": reason,
         "is_closed": is_closed,
         "posted_to_gl": posted_to_gl,
     }
@@ -459,11 +480,20 @@ def _get_outstanding_amount(doctype, name):
         doc = frappe.get_doc(doctype, name)
         if doc.status == "Paid":
             return 0.0
-        if doc.linked_shg_contribution:
-            cs = frappe.db.get_value("SHG Contribution", doc.linked_shg_contribution, "status")
-            if cs == "Paid":
+        # Check linked contribution for partial payments
+        linked_contrib = frappe.db.get_value(
+            "SHG Contribution",
+            {"invoice_reference": name, "docstatus": ["!=", 2]},
+            ["status", "unpaid_amount", "amount_paid"],
+            as_dict=True,
+        )
+        if linked_contrib:
+            if linked_contrib.get("status") == "Paid":
                 frappe.db.set_value("SHG Contribution Invoice", name, "status", "Paid")
                 return 0.0
+            unpaid = flt(linked_contrib.get("unpaid_amount") or 0)
+            if unpaid > 0:
+                return unpaid
         return flt(doc.amount or 0)
     
     elif doctype == "SHG Contribution":

@@ -185,8 +185,9 @@ class SHGContributionInvoice(Document):
         # Use invoice_date as the reference date for all date fields
         invoice_date = getdate(self.invoice_date or today())
         due_date = getdate(self.due_date or invoice_date)
-
-        # No date validation - allowing flexible date handling
+        # ERPNext requires due_date >= posting_date
+        if due_date < invoice_date:
+            due_date = invoice_date
         
         # Try to create the Sales Invoice with error handling
         try:
@@ -396,8 +397,10 @@ def create_contribution_from_invoice(doc, method=None):
     })
     
     contribution.insert(ignore_permissions=True)
+    contribution.submit()
     if hasattr(doc, "db_set"):
         doc.db_set("linked_shg_contribution", contribution.name, update_modified=False)
+        doc.db_set("posted_to_contribution", 1, update_modified=False)
 
     frappe.logger().info(f"[SHG] Created SHG Contribution {contribution.name} from Invoice {doc.name}")
     return contribution
